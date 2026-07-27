@@ -1,0 +1,24 @@
+import { useNativeVariable } from 'react-native-css';
+
+export {
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableHighlight,
+  View,
+} from 'react-native-css/components';
+
+export type {
+  PressableProps,
+  ScrollViewProps,
+  TextInputProps,
+  TextProps,
+  TouchableHighlightProps,
+  ViewProps,
+} from 'react-native';
+
+export const useCSSVariable =
+  process.env.EXPO_OS === 'web'
+    ? (variable: string) => `var(${variable})`
+    : useNativeVariable;
