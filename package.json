@@ -36,15 +36,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:android:development": "eas build --platform android --profile development",
-    "build:android:production": "eas build --platform android --profile production",
-    "build:ios:development": "eas build --platform ios --profile development",
-    "build:ios:production": "eas build --platform ios --profile production"
+    "build:android:development": "eas build --profile development --platform android",
+    "build:android:production": "eas build --profile production --platform android",
+    "build:ios:development": "eas build --profile development --platform ios --non-interactive",
+    "build:ios:production": "eas build --profile production --platform ios --non-interactive"
   },
-  "private": true,
-  "pnpm": {
-    "overrides": {
-      "lightningcss": "1.30.1"
-    }
-  }
+  "private": true
 }
