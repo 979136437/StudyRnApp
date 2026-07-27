@@ -41,5 +41,6 @@
     "build:ios:development": "eas build --profile development --platform ios --non-interactive",
     "build:ios:production": "eas build --profile production --platform ios --non-interactive"
   },
-  "private": true
+  "private": true,
+  "packageManager": "pnpm@10.33.0"
 }
