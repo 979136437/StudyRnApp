@@ -1,0 +1,41 @@
+workflows:
+  ios-dev-client-unsigned:
+    name: 🍏 iOS Dev Client (Unsigned True Bare Build)
+    instance_type: mac_mini_m2 # 强力赋能：调用 Codemagic 性能极悍的 Apple M2 芯片
+    max_build_duration: 30
+    environment:
+      node: 20.19.4
+      groups: [] # 不绑定任何保密环境变量组
+    scripts:
+      - name: ⚙️ 激活 pnpm 10 包管理器与依赖构建
+        script: |
+          corepack enable
+          corepack prepare pnpm@10.33.0 --activate
+          pnpm install --frozen-lockfile
+
+      - name: 🏗️ 驱动 Expo 引擎生成纯净 C++/Obj-C 原生工程
+        script: |
+          # 通过 prebuild 将你的 TS 路由转换出纯正的 /ios 物理目录
+          npx expo prebuild --platform ios --clean
+
+      - name: 🔨 强制调用 Xcode 物理引擎进行免签编译
+        script: |
+          cd ios
+          # 核心架构指令：CODE_SIGNING_ALLOWED=NO 彻底锁死并跳过苹果签名鉴权！
+          xcodebuild -workspace *.xcworkspace \
+            -scheme my-app \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath ../build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 📦 把二进制物理编译文件打入标准 Payload/IPA 容器
+        script: |
+          mkdir -p Payload
+          mv build/Build/Products/Debug-iphoneos/*.app Payload/
+          zip -r my-app-dev-client-unsigned.ipa Payload/
+    artifacts:
+      - my-app-dev-client-unsigned.ipa

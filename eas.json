@@ -13,7 +13,6 @@
      */
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
       "autoIncrement": true,
       // 核心安全护栏：锁死构建镜像的 Node 引擎，防范编译期 ABI 与 pnpm 错配！
       "node": "20.19.4",
