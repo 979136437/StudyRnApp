@@ -1,11 +1,19 @@
 workflows:
   ios-dev-client-unsigned:
-    name: 🍏 iOS Dev Client (Unsigned True Bare Build)
-    instance_type: mac_mini_m2 # 强力赋能：调用 Codemagic 性能极悍的 Apple M2 芯片
-    max_build_duration: 30
+    name: 🍏 iOS Dev Client (Master Hardened & Cached)
+    instance_type: mac_mini_m2
+    max_build_duration: 20
     environment:
       node: 20.19.4
-      groups: [] # 不绑定任何保密环境变量组
+      groups: []
+
+    # 🔥 多级物理缓存池：声明式锁死原生与前端依赖，提升二次构建速度
+    cache:
+      cache_paths:
+        - $HOME/.local/share/pnpm/store
+        - $HOME/.cocoapods/repos
+        - ios/Pods
+
     scripts:
       - name: ⚙️ 激活 pnpm 10 包管理器与依赖构建
         script: |
@@ -15,21 +23,64 @@ workflows:
 
       - name: 🏗️ 驱动 Expo 引擎生成纯净 C++/Obj-C 原生工程
         script: |
-          # 通过 prebuild 将你的 TS 路由转换出纯正的 /ios 物理目录
-          npx expo prebuild --platform ios --clean
+          npx expo prebuild --platform ios --clean=false
 
-      - name: 🔨 强制调用 Xcode 物理引擎进行免签编译
+      - name: 🛡️ 大师级自愈准备：破除 PATH 黑洞与 CocoaPods 签名叛乱
         script: |
           cd ios
-          # 核心架构指令：CODE_SIGNING_ALLOWED=NO 彻底锁死并跳过苹果签名鉴权！
-          xcodebuild -workspace *.xcworkspace \
-            -scheme my-app \
+          
+          # 1. PATH 沙盒突围：强制软链 Node 引擎，解决 PhaseScriptExecution 找不到 node 的异常
+          export PATH=$PATH:/usr/local/bin:~/.nvm/versions/node/$(node -v)/bin
+          echo "🔌 验证当前 Node 引擎执行路径: $(which node) (版本: $(node -v))"
+
+          # 2. 签署免签契约：使用严格缩进的嵌入式 Python 脚本修改 Podfile
+          # 注意：下方所有 Python 代码都必须保持至少 10 个空格的缩进，严禁顶格！
+          if [ -f "Podfile" ]; then
+            echo "💉 正在向 Podfile 注入底层全员免签契约..."
+            python3 -c "
+          with open('Podfile', 'r') as f: content = f.read()
+          hook = '''
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+                config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+                config.build_settings['CODE_SIGN_IDENTITY'] = ''
+                config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
+              end
+            end
+          end
+          '''
+          if 'post_install' not in content:
+              with open('Podfile', 'a') as f: f.write(hook)
+          "
+            pod install --repo-update
+          fi
+
+      - name: 🔨 动态探查工程蓝图并触发 Xcode 物理编译
+        script: |
+          cd ios
+          
+          # 3. 动态雷达探查：通过 Python 自适应抓取真正的 Workspace 和 Scheme 名称
+          WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          print(data['workspace']['schemes'][0])
+          ")
+          echo "🎯 自动锁定工程空间: $WORKSPACE | 精准命中构建 Scheme: $SCHEME"
+
+          # 4. 触发 ARM64 真机物理脱网免签编译
+          xcodebuild -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath ../build \
+            -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
       - name: 📦 把二进制物理编译文件打入标准 Payload/IPA 容器
@@ -37,5 +88,6 @@ workflows:
           mkdir -p Payload
           mv build/Build/Products/Debug-iphoneos/*.app Payload/
           zip -r my-app-dev-client-unsigned.ipa Payload/
+
     artifacts:
       - my-app-dev-client-unsigned.ipa
