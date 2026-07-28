@@ -1,13 +1,18 @@
 workflows:
   ios-dev-client-unsigned:
     name: 🍏 iOS Dev Client (Master Hardened & Cached)
+    # 强力赋能：调用 Codemagic 性能极悍的 Apple M2 芯片，提升 C++ 编译吞吐量
     instance_type: mac_mini_m2
+    # 核心安全契约：强制把最大超时锁死在 20 分钟，严格捍卫你的 500 分钟免费额度
     max_build_duration: 20
     environment:
+      # 锁死构建宿主引擎，保证 ABI 与底层依赖编译期绝对契约一致
       node: 20.19.4
       groups: []
 
-    # 🔥 多级物理缓存池：声明式锁死原生与前端依赖，提升二次构建速度
+    # 🔥 多级物理缓存池 (Caching Strategy)
+    # 只要 package.json 和 Podfile.lock 未发生破坏性改变，
+    # 容器将直接复用 S3 云端已炼好并下载完毕的 C++/Obj-C 依赖，把二次构建压缩至 2~3 分钟！
     cache:
       cache_paths:
         - $HOME/.local/share/pnpm/store
@@ -17,24 +22,29 @@ workflows:
     scripts:
       - name: ⚙️ 激活 pnpm 10 包管理器与依赖构建
         script: |
+          set -e
           corepack enable
           corepack prepare pnpm@10.33.0 --activate
           pnpm install --frozen-lockfile
 
       - name: 🏗️ 驱动 Expo 引擎生成纯净 C++/Obj-C 原生工程
         script: |
+          set -e
+          # 核心策略：开启缓存复用后必须显式关闭 clean，允许 Xcode 触发高效的增量编译 (Incremental Build)
           npx expo prebuild --platform ios --clean=false
 
       - name: 🛡️ 大师级自愈准备：破除 PATH 黑洞与 CocoaPods 签名叛乱
         script: |
+          set -e
           cd ios
           
-          # 1. PATH 沙盒突围：强制软链 Node 引擎，解决 PhaseScriptExecution 找不到 node 的异常
+          # 1. PATH 沙盒突围：将当前 Node 路径硬链接注入全局环境变量栈
+          # 彻底解决 Xcode 执行 PhaseScriptExecution (打包 JS Bundle) 时报 "node: command not found" 的 65 异常
           export PATH=$PATH:/usr/local/bin:~/.nvm/versions/node/$(node -v)/bin
           echo "🔌 验证当前 Node 引擎执行路径: $(which node) (版本: $(node -v))"
 
-          # 2. 签署免签契约：使用严格缩进的嵌入式 Python 脚本修改 Podfile
-          # 注意：下方所有 Python 代码都必须保持至少 10 个空格的缩进，严禁顶格！
+          # 2. 签署免签契约：使用严格缩进的 Python 脚本深入 Pods 底层
+          # 强制抹除所有第三方原生库 (如 Firebase、Reanimated、地图等) 硬编码的签名和团队授权需求！
           if [ -f "Podfile" ]; then
             echo "💉 正在向 Podfile 注入底层全员免签契约..."
             python3 -c "
@@ -57,37 +67,65 @@ workflows:
             pod install --repo-update
           fi
 
-      - name: 🔨 动态探查工程蓝图并触发 Xcode 物理编译
+      - name: 🔨 动态探查应用蓝图并触发 Xcode 物理编译
         script: |
+          set -e
           cd ios
           
-          # 3. 动态雷达探查：通过 Python 自适应抓取真正的 Workspace 和 Scheme 名称
+          export PATH=$PATH:/usr/local/bin:~/.nvm/versions/node/$(node -v)/bin
+          
+          # 3. 🔥 大师级防劫持雷达：改向纯净的原生 .xcodeproj 索取构建 Scheme！
+          # 彻底避开 .xcworkspace 蓝图中第三方插件 (如 EXApplication) 按字母排序第一引发的伪编译劫持！
           WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | python3 -c "
+          PROJECT=$(ls -d *.xcodeproj | head -n 1)
+          APP_NAME=$(basename "$PROJECT" .xcodeproj)
+          
+          # 用 Python 过滤掉单元测试 (Tests) 和 Apple TV (-tvOS) 蓝图，100% 精准锁定你的真机 App 蓝图
+          SCHEME=$(xcodebuild -project "$PROJECT" -list -json | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
-          print(data['workspace']['schemes'][0])
+          schemes = [s for s in data['project']['schemes'] if not s.endswith('Tests') and not s.endswith('-tvOS')]
+          print(schemes[0] if schemes else '$APP_NAME')
           ")
-          echo "🎯 自动锁定工程空间: $WORKSPACE | 精准命中构建 Scheme: $SCHEME"
+          
+          echo "🎯 锁定工程空间: $WORKSPACE | 排除 Pods 干扰，精准锁定真正的应用 Scheme: $SCHEME"
 
           # 4. 触发 ARM64 真机物理脱网免签编译
+          # 注入 COMPILER_INDEX_STORE_ENABLE=NO 停止生成无用的 IDE 语法索引，大幅节约 CI 内存与 CPU
           xcodebuild -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath ../build \
-            -destination "generic/platform=iOS" \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY='' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
       - name: 📦 把二进制物理编译文件打入标准 Payload/IPA 容器
         script: |
+          set -e
           mkdir -p Payload
-          mv build/Build/Products/Debug-iphoneos/*.app Payload/
+          
+          # 5. 🔥 智能实体捕获：利用 find 指令在 build/ 派生目录里动态嗅探新出炉的原生 .app
+          APP_PATH=$(find build/ -name "*.app" -type d | head -n 1)
+          
+          # 🛡️ 物理断言防线：如果 Xcode 未生成合法 .app，立刻标红砸停，严防 166 Bytes 幽灵空包！
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ 致命断言错误：在 build/ 目录中未搜寻到任何生成的 .app 二进制应用！"
+            echo "💡 请立刻点开上一步 [🔨 动态探查应用蓝图] 的具体编译输出，排查底层的 Xcode C++ 语法报错！"
+            exit 1
+          fi
+          
+          echo "🎯 成功捕获到纯净原生应用，实体物理路径: $APP_PATH"
+          mv "$APP_PATH" Payload/
           zip -r my-app-dev-client-unsigned.ipa Payload/
+          
+          # 打印真实物理体积，验明正身
+          IPA_SIZE=$(du -sh my-app-dev-client-unsigned.ipa | awk '{print $1}')
+          echo "🎉 IPA 容器打包全链路完工！真正产物体积: $IPA_SIZE"
 
     artifacts:
       - my-app-dev-client-unsigned.ipa
