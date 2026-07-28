@@ -2,6 +2,12 @@
 @import 'tailwindcss/preflight.css' layer(base);
 @import 'tailwindcss/utilities.css';
 
+@import "nativewind/theme";
+
+:root {
+  font-size: 16px;
+}
+
 @media android {
   :root {
     --font-mono: monospace;
@@ -19,3 +25,9 @@
     --font-rounded: ui-rounded;
   }
 }
+
+@theme {
+  --spacing-safe-top: var(--safe-top);
+  --spacing-safe-bottom: var(--safe-bottom);
+}
+

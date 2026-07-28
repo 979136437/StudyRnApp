@@ -1,5 +1,7 @@
 import { useNativeVariable } from 'react-native-css';
 
+export { Image } from './hoc';
+
 export {
   Pressable,
   ScrollView,
