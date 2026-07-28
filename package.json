@@ -52,16 +52,21 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:dev": "expo start --dev-client",
+    "start:clean": "expo start --dev-client --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:android:development": "eas build --profile development --platform android",
-    "build:android:production": "eas build --profile production --platform android",
+    "typecheck": "tsc --noEmit",
+    "build:android:development": "eas build --profile development --platform android --non-interactive",
+    "build:android:production": "eas build --profile production --platform android --non-interactive",
     "build:ios:development": "eas build --profile development --platform ios --non-interactive",
     "build:ios:production": "eas build --profile production --platform ios --non-interactive",
-    "build:development": "eas build --profile development --platform all",
-    "build:production": "eas build --profile production --platform all"
+    "build:development": "eas build --profile development --platform all --non-interactive",
+    "build:production": "eas build --profile production --platform all --non-interactive",
+    "run:android": "expo run:android --device",
+    "run:ios": "expo run:ios --device"
   },
   "private": true,
   "packageManager": "pnpm@10.33.0"
