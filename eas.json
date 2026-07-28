@@ -1,22 +1,43 @@
 {
   "cli": {
+    // 强制锁死客户端最低版本，确保构建契约一致
     "version": ">= 16.0.1",
+    // 开启云端托管版本号自增，消灭 Git 冲突
     "appVersionSource": "remote"
   },
   "build": {
+    /**
+     * 【基础开发底座 profile】 - 面向物理真机与 Windows 开发团队
+     * @description 执行 eas build --profile development 时触发。
+     * 输出标准的 .ipa / .apk，可以直接侧载装入真机进行硬件验证和 Metro 调试。
+     */
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "autoIncrement": true,
+      // 核心安全护栏：锁死构建镜像的 Node 引擎，防范编译期 ABI 与 pnpm 错配！
+      "node": "20.18.0",
+      "env": {
+        // 关闭非必要的 git 钩子，加速 CI 安装进度
+        "HUSKY": "0"
+      },
       "ios": {
-        "simulator": true
+        // 显式声明为真机架构 (ARM64 Physical Device)
+        "simulator": false
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        // 针对安卓真机优化，使用更高速的增量构建配置（可选）
+        "gradleCommand": ":app:assembleDebug"
       }
     },
+    /**
+     * 【生产发布 profile】 - 面向应用商店与灰度测试
+     */
     "production": {
-      "autoIncrement": true
+      "distribution": "store",
+      "autoIncrement": true,
+      "node": "20.18.0"
     }
   },
   "submit": {
