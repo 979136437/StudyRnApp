@@ -27,7 +27,58 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-image",
+      "expo-video",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
+          "microphonePermission": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 $(PRODUCT_NAME) 访问照片和视频，以便选择、导入和处理媒体",
+          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
+          "microphonePermission": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "允许 $(PRODUCT_NAME) 访问照片和视频，以便选择、导入和处理媒体",
+          "savePhotosPermission": "允许 $(PRODUCT_NAME) 将处理后的照片和视频保存到媒体库",
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
+        }
+      ],
+      "expo-splash-screen",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "允许 $(PRODUCT_NAME) 在使用期间获取位置，以提供基于位置的功能",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
