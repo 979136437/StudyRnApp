@@ -16,7 +16,7 @@
       "distribution": "internal",
       "autoIncrement": true,
       // 核心安全护栏：锁死构建镜像的 Node 引擎，防范编译期 ABI 与 pnpm 错配！
-      "node": "20.18.0",
+      "node": "20.19.4",
       "env": {
         // 关闭非必要的 git 钩子，加速 CI 安装进度
         "HUSKY": "0"
@@ -37,7 +37,7 @@
     "production": {
       "distribution": "store",
       "autoIncrement": true,
-      "node": "20.18.0"
+      "node": "20.19.4"
     }
   },
   "submit": {
