@@ -70,6 +70,27 @@ const BASE_ITEMS: ActivityItem[] = [
     time: '18:20',
     accent: '#785c48',
   },
+  {
+    id: 8,
+    title: '开发构建归档',
+    category: '交付',
+    time: '18:20',
+    accent: '#785c48',
+  },
+  {
+    id: 9,
+    title: '开发构建归档',
+    category: '交付',
+    time: '18:20',
+    accent: '#785c48',
+  },
+  {
+    id: 10,
+    title: '开发构建归档',
+    category: '交付',
+    time: '18:20',
+    accent: '#785c48',
+  },
 ];
 
 const PHASE_LABEL: Record<RefreshPhase, string> = {
