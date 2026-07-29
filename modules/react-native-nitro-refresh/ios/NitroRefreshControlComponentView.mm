@@ -1,6 +1,8 @@
 #import "NitroRefreshControlComponentView.h"
 
-#import <NitroRefresh/NitroRefresh-Swift.h>
+// Swift 兼容头由当前 NitroRefresh Pod 目标生成在 DerivedSources，而不是公开头目录。
+// 使用同目标导入可让 Xcode 通过 generated-files/DerivedSources 搜索路径解析该文件。
+#import "NitroRefresh-Swift.h"
 #import <React/RCTConversions.h>
 #import <React/RCTFabricComponentsPlugins.h>
 #import <React/RCTScrollViewComponentView.h>
