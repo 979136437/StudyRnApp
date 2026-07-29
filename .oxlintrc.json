@@ -35,7 +35,8 @@
       "error",
       {
         "vars": "all",
-        "args": "none",
+        "args": "all",
+        "argsIgnorePattern": "^_",
         "ignoreRestSiblings": true,
         "caughtErrors": "all",
         "caughtErrorsIgnorePattern": "^_",

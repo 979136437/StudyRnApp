@@ -4,25 +4,22 @@
   "oxc.fmt.configPath": ".oxfmtrc.json",
   "oxc.path.oxfmt": "./node_modules/.bin/oxfmt",
   "editor.defaultFormatter": "oxc.oxc-vscode",
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false,
   "[javascript]": {
-    "editor.defaultFormatter": "oxc.oxc-vscode",
-    "editor.formatOnSave": true
+    "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "[javascriptreact]": {
-    "editor.defaultFormatter": "oxc.oxc-vscode",
-    "editor.formatOnSave": true
+    "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "[typescript]": {
-    "editor.defaultFormatter": "oxc.oxc-vscode",
-    "editor.formatOnSave": true
+    "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "[typescriptreact]": {
-    "editor.defaultFormatter": "oxc.oxc-vscode",
-    "editor.formatOnSave": true
+    "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "editor.codeActionsOnSave": {
-    "source.fixAll.oxc": "explicit",
+    "source.format.oxc": "always",
+    "source.fixAll.oxc": "always",
     "source.organizeImports": "never"
   }
 }
