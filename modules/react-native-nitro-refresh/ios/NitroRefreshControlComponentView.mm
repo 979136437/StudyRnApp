@@ -1,8 +1,9 @@
 #import "NitroRefreshControlComponentView.h"
 
-// Swift 兼容头由当前 NitroRefresh Pod 目标生成在 DerivedSources，而不是公开头目录。
-// 使用同目标导入可让 Xcode 通过 generated-files/DerivedSources 搜索路径解析该文件。
-#import "NitroRefresh-Swift.h"
+// Nitrogen 的伞头会先声明 Swift 兼容头所引用的 C++ 类型与 margelo 命名空间，
+// 再从当前 NitroRefresh Pod 的 DerivedSources 中包含 NitroRefresh-Swift.h。
+// 不可直接包含 Swift 兼容头，否则 Swift C++ 互操作生成的类型会缺少前置声明。
+#import "NitroRefresh-Swift-Cxx-Umbrella.hpp"
 #import <React/RCTConversions.h>
 #import <React/RCTFabricComponentsPlugins.h>
 #import <React/RCTScrollViewComponentView.h>

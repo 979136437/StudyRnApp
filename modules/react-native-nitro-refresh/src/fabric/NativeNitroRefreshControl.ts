@@ -1,10 +1,10 @@
 import type { HostComponent, ViewProps } from 'react-native';
+import { codegenNativeComponent } from 'react-native';
 import type {
   DirectEventHandler,
   Double,
   WithDefault,
 } from 'react-native/Libraries/Types/CodegenTypes';
-import codegenNativeComponent from 'react-native/Libraries/Utilities/codegenNativeComponent';
 
 /**
  * 原生逐帧下拉事件。
