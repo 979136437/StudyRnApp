@@ -356,25 +356,26 @@ export default function Home(): React.JSX.Element {
         </View>
       </View>
 
-      <RefreshControl
-        ref={refreshControlRef}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        onStateChange={onStateChange}
-        pullDistance={96}
-        maxPullDistance={176}
-        resultDuration={800}
-        renderHeader={(context) => <DemoRefreshHeader {...context} />}
-        style={styles.refreshControl}
-      >
-        <FlashList
-          data={data}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={Separator}
-        />
-      </RefreshControl>
+      <FlashList
+        style={styles.list}
+        data={data}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={Separator}
+        refreshControl={
+          <RefreshControl
+            ref={refreshControlRef}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            onStateChange={onStateChange}
+            pullDistance={96}
+            maxPullDistance={176}
+            resultDuration={800}
+            renderHeader={(context) => <DemoRefreshHeader {...context} />}
+          />
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -460,8 +461,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 14,
   },
-  refreshControl: {
+  list: {
     backgroundColor: '#f3f5f1',
+    flex: 1,
   },
   refreshCopy: {
     gap: 6,

@@ -15,18 +15,22 @@ import {
 const refreshRef = useRef<RefreshControlRef>(null);
 const [refreshing, setRefreshing] = useState(false);
 
-<RefreshControl
-  ref={refreshRef}
-  refreshing={refreshing}
-  onRefresh={() => setRefreshing(true)}
-  pullDistance={96}
-  resultDuration={800}
-  renderHeader={({ progress, offset, phase }) => (
-    <CustomHeader progress={progress} offset={offset} phase={phase} />
-  )}
->
-  <FlashList data={data} renderItem={renderItem} />
-</RefreshControl>;
+<FlashList
+  data={data}
+  renderItem={renderItem}
+  refreshControl={
+    <RefreshControl
+      ref={refreshRef}
+      refreshing={refreshing}
+      onRefresh={() => setRefreshing(true)}
+      pullDistance={96}
+      resultDuration={800}
+      renderHeader={({ progress, offset, phase }) => (
+        <CustomHeader progress={progress} offset={offset} phase={phase} />
+      )}
+    />
+  }
+/>;
 
 // 程序化触发，与用户下拉一样调用 onRefresh。
 refreshRef.current?.beginRefresh();
@@ -54,4 +58,15 @@ setRefreshing(false);
 
 `pullDistance`、`maxPullDistance`、`dragRate` 与 `resultDuration` 均可省略，默认值依次为 `80`、`pullDistance * 2`、`0.5` 和 `800` 毫秒。`resultDuration={0}` 会在结果阶段后立即开始回弹。
 
-Web 平台保持无操作降级：滚动子组件原样渲染，所有命令均无操作，`getState()` 固定返回空闲快照。原生功能需要包含本模块的 Expo 开发构建，无法在 Expo Go 中运行。
+组件必须通过纵向、非倒置滚动组件的 `refreshControl` 属性传入，不支持包裹滚动组件。`ScrollView`、`FlatList`、`SectionList` 和 FlashList 2 均使用相同方式：
+
+```tsx
+<ScrollView refreshControl={<RefreshControl {...refreshProps} />} />
+<FlatList refreshControl={<RefreshControl {...refreshProps} />} />
+<SectionList refreshControl={<RefreshControl {...refreshProps} />} />
+<FlashList refreshControl={<RefreshControl {...refreshProps} />} />
+```
+
+使用自定义 `refreshControl` 后，不要再给列表同时传入顶层 `refreshing` 和 `onRefresh`；受控状态与刷新回调统一传给 Nitro `RefreshControl`。
+
+Web 平台保持无操作降级：滚动组件原样渲染，所有命令均无操作，`getState()` 固定返回空闲快照。原生功能需要包含本模块的 Expo 开发构建，无法在 Expo Go 中运行。

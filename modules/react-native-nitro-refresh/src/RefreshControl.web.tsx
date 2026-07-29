@@ -1,4 +1,9 @@
-import { Children, forwardRef, useImperativeHandle } from 'react';
+import {
+  Children,
+  forwardRef,
+  type ReactElement,
+  useImperativeHandle,
+} from 'react';
 
 import {
   RefreshPhase,
@@ -15,7 +20,11 @@ import {
 export const RefreshControl = forwardRef<
   RefreshControlRef,
   RefreshControlProps
->(function RefreshControl({ children }, ref): React.JSX.Element {
+>(function RefreshControl(props, ref): React.JSX.Element | null {
+  const { children } = props as RefreshControlProps & {
+    children?: ReactElement | null;
+  };
+
   useImperativeHandle(
     ref,
     () => ({
@@ -31,5 +40,15 @@ export const RefreshControl = forwardRef<
     }),
     [],
   );
+
+  if (children == null) {
+    if (__DEV__) {
+      console.error(
+        '[react-native-nitro-refresh] RefreshControl 必须通过滚动组件的 refreshControl 属性使用。',
+      );
+    }
+    return null;
+  }
+
   return Children.only(children);
 });

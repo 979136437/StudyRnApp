@@ -1,5 +1,4 @@
 import {
-  Children,
   cloneElement,
   forwardRef,
   type ReactElement,
@@ -38,10 +37,12 @@ const AnimatedNativeRefreshControl = Animated.createAnimatedComponent(
 );
 
 type ScrollableProps = {
-  alwaysBounceVertical?: boolean;
   horizontal?: boolean | null;
   inverted?: boolean | null;
-  refreshControl?: React.ReactElement | null;
+};
+
+type InjectedRefreshControlProps = RefreshControlProps & {
+  children?: ReactElement<ScrollableProps> | null;
 };
 
 /**
@@ -90,9 +91,9 @@ function nonNegativeOrDefault(
 export const RefreshControl = forwardRef<
   RefreshControlRef,
   RefreshControlProps
->(function RefreshControl(
-  {
-    children,
+>(function RefreshControl(props, ref): React.JSX.Element | null {
+  const { children } = props as InjectedRefreshControlProps;
+  const {
     refreshing,
     onRefresh,
     renderHeader,
@@ -103,12 +104,7 @@ export const RefreshControl = forwardRef<
     resultDuration: resultDurationProp,
     style,
     onStateChange,
-  },
-  ref,
-): React.JSX.Element {
-  // `refreshControl` 是滚动组件的单一插槽，因此只接受一个直接子元素。
-  const child = Children.only(children) as ReactElement<ScrollableProps>;
-  const childProps = child.props;
+  } = props;
   const pullDistance = positiveOrDefault(
     'pullDistance',
     pullDistanceProp,
@@ -220,26 +216,44 @@ export const RefreshControl = forwardRef<
       pullDistance={pullDistance}
     />
   );
+  const buildHeader = renderHeader ?? DefaultRefreshHeader;
+  const header = buildHeader(headerContext);
 
-  if (__DEV__ && childProps.refreshControl != null) {
-    console.warn(
-      '[react-native-nitro-refresh] 子滚动组件已有 refreshControl，将由 Nitro RefreshControl 接管。',
+  if (Platform.OS === 'ios') {
+    if (__DEV__ && children != null) {
+      console.error(
+        '[react-native-nitro-refresh] RefreshControl 只能通过滚动组件的 refreshControl 属性使用，不能包裹子元素。',
+      );
+    }
+
+    return cloneElement(
+      nativeControl,
+      {
+        style: [style, styles.iosControl],
+      },
+      <View
+        pointerEvents="none"
+        style={[styles.iosHeader, { height: pullDistance, top: -pullDistance }]}
+      >
+        {header}
+      </View>,
     );
   }
-  if (__DEV__ && (childProps.horizontal || childProps.inverted)) {
+
+  if (children == null) {
+    if (__DEV__) {
+      console.error(
+        '[react-native-nitro-refresh] RefreshControl 必须通过滚动组件的 refreshControl 属性使用。',
+      );
+    }
+    return null;
+  }
+
+  if (__DEV__ && (children.props.horizontal || children.props.inverted)) {
     console.warn(
       '[react-native-nitro-refresh] 首版仅支持纵向、非倒置滚动组件。',
     );
   }
-
-  // RN 的 ScrollView 系列会把 refreshControl 作为原生滚动视图外层包装器挂载。
-  const scrollable = cloneElement(child, {
-    ...childProps,
-    alwaysBounceVertical:
-      Platform.OS === 'ios' ? true : childProps.alwaysBounceVertical,
-    refreshControl: nativeControl,
-  });
-  const buildHeader = renderHeader ?? DefaultRefreshHeader;
 
   return (
     <View style={[styles.container, style]}>
@@ -247,9 +261,9 @@ export const RefreshControl = forwardRef<
         pointerEvents="none"
         style={[styles.header, { height: pullDistance }, headerStyle]}
       >
-        {buildHeader(headerContext)}
+        {header}
       </Animated.View>
-      {scrollable}
+      {cloneElement(nativeControl, { style: styles.nativeControl }, children)}
     </View>
   );
 });
@@ -265,5 +279,22 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10,
+  },
+  iosControl: {
+    height: 0,
+    left: 0,
+    overflow: 'visible',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 10,
+  },
+  iosHeader: {
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  nativeControl: {
+    flex: 1,
   },
 });

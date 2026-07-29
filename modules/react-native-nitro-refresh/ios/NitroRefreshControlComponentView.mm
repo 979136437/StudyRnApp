@@ -5,6 +5,7 @@
 // 不可直接包含 Swift 兼容头，否则 Swift C++ 互操作生成的类型会缺少前置声明。
 #import "NitroRefresh-Swift-Cxx-Umbrella.hpp"
 #import <React/RCTConversions.h>
+#import <React/RCTCustomPullToRefreshViewProtocol.h>
 #import <React/RCTFabricComponentsPlugins.h>
 #import <React/RCTScrollViewComponentView.h>
 #import <react/renderer/components/NitroRefreshSpec/ComponentDescriptors.h>
@@ -14,7 +15,7 @@
 
 using namespace facebook::react;
 
-@interface NitroRefreshControlComponentView () <NitroRefreshViewBinding>
+@interface NitroRefreshControlComponentView () <NitroRefreshViewBinding, RCTCustomPullToRefreshViewProtocol>
 - (void)beginRefreshingAndNotify:(BOOL)notify;
 - (void)finishRefreshingWithResult:(NSString *)result resultDuration:(double)resultDuration;
 - (void)pullToMax;
@@ -25,8 +26,7 @@ using namespace facebook::react;
 - (void)updatePhase:(NSString *)phase offset:(CGFloat)offset progress:(CGFloat)progress;
 @end
 
-// 隐藏的 Fabric ComponentView。它不直接绘制刷新头，只监听所属 UIScrollView，
-// 实际刷新头由 React/Reanimated 绝对定位渲染。
+// Fabric ComponentView 直接挂载为 UIScrollView 的刷新控件子视图，并承载 React 刷新头。
 @implementation NitroRefreshControlComponentView {
   // RN 0.86 的 Fabric ScrollView 宿主；弱引用避免形成 UIKit 视图环。
   __weak RCTScrollViewComponentView *_scrollViewComponentView;
@@ -52,6 +52,8 @@ using namespace facebook::react;
   // contentInset 改变后 adjustedContentInset.top 也会改变；动画位移必须始终相对原基线。
   CGFloat _originalAdjustedTop;
   BOOL _hasOriginalContentInset;
+  BOOL _originalAlwaysBounceVertical;
+  BOOL _hasOriginalAlwaysBounceVertical;
 }
 
 + (void)load
@@ -62,7 +64,9 @@ using namespace facebook::react;
 - (instancetype)initWithFrame:(CGRect)frame
 {
   if (self = [super initWithFrame:frame]) {
-    self.hidden = YES;
+    self.backgroundColor = UIColor.clearColor;
+    self.clipsToBounds = NO;
+    self.userInteractionEnabled = NO;
     _props = NitroRefreshControlViewShadowNode::defaultSharedProps();
     _enabled = YES;
     _pullDistance = 80;
@@ -110,6 +114,12 @@ using namespace facebook::react;
   }
 
   [super updateProps:props oldProps:oldProps];
+  self.userInteractionEnabled = NO;
+
+  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
+  if (scrollView != nil && _hasOriginalAlwaysBounceVertical) {
+    scrollView.alwaysBounceVertical = _enabled ? YES : _originalAlwaysBounceVertical;
+  }
 }
 
 - (void)didMoveToSuperview
@@ -154,6 +164,9 @@ using namespace facebook::react;
   _originalContentInset = scrollView.contentInset;
   _originalAdjustedTop = scrollView.adjustedContentInset.top;
   _hasOriginalContentInset = YES;
+  _originalAlwaysBounceVertical = scrollView.alwaysBounceVertical;
+  _hasOriginalAlwaysBounceVertical = YES;
+  scrollView.alwaysBounceVertical = _enabled ? YES : _originalAlwaysBounceVertical;
   [scrollView.panGestureRecognizer addTarget:self action:@selector(handlePan:)];
 }
 
@@ -167,9 +180,13 @@ using namespace facebook::react;
     if (_hasOriginalContentInset) {
       scrollView.contentInset = _originalContentInset;
     }
+    if (_hasOriginalAlwaysBounceVertical) {
+      scrollView.alwaysBounceVertical = _originalAlwaysBounceVertical;
+    }
   }
   _scrollViewComponentView = nil;
   _hasOriginalContentInset = NO;
+  _hasOriginalAlwaysBounceVertical = NO;
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)gesture

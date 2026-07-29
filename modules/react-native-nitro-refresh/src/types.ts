@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -93,13 +93,6 @@ export interface RefreshHeaderContext {
 /** `RefreshControl` 的公共属性。 */
 export interface RefreshControlProps {
   /**
-   * 唯一的纵向滚动子组件。
-   *
-   * 支持 `ScrollView`、`FlatList`、`SectionList` 和 FlashList 2。
-   * 组件会克隆该元素并接管它的 `refreshControl` 属性。
-   */
-  children: ReactElement;
-  /**
    * 受控刷新状态。
    *
    * `true` 会以编程方式进入或维持刷新；只有父组件传入 `false` 才会结束刷新。
@@ -119,7 +112,7 @@ export interface RefreshControlProps {
   dragRate?: number;
   /** 成功或失败结果的停留时长，单位为毫秒，默认 `800`；设为 `0` 时立即回弹。 */
   resultDuration?: number;
-  /** 应用于最外层刷新容器的样式。 */
+  /** 刷新控件宿主样式；通常由滚动组件自动注入。 */
   style?: StyleProp<ViewStyle>;
   /** 离散阶段发生变化时调用；逐帧动画请使用刷新头上下文中的 SharedValue。 */
   onStateChange?: (phase: RefreshPhase) => void;
