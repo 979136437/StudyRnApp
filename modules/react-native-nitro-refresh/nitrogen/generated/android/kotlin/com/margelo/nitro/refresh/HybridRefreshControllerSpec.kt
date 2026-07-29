@@ -54,6 +54,26 @@ abstract class HybridRefreshControllerSpec: HybridObject() {
   
   @DoNotStrip
   @Keep
+  abstract fun beginRefresh(): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun cancelRefresh(): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun finishRefresh(result: RefreshResult, resultDuration: Double): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun getState(): RefreshStateSnapshot
+  
+  @DoNotStrip
+  @Keep
+  abstract fun pullToMax(): Unit
+  
+  @DoNotStrip
+  @Keep
   abstract fun setRefreshing(refreshing: Boolean): Unit
 
   // Default implementation of `HybridObject.toString()`

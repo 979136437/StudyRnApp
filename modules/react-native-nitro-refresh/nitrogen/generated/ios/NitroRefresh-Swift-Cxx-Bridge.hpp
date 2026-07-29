@@ -12,6 +12,8 @@
 namespace margelo::nitro::refresh { class HybridRefreshControllerSpec; }
 // Forward declaration of `RefreshPhase` to properly resolve imports.
 namespace margelo::nitro::refresh { enum class RefreshPhase; }
+// Forward declaration of `RefreshStateSnapshot` to properly resolve imports.
+namespace margelo::nitro::refresh { struct RefreshStateSnapshot; }
 
 // Forward declarations of Swift defined types
 // Forward declaration of `HybridRefreshControllerSpec_cxx` to properly resolve imports.
@@ -20,6 +22,7 @@ namespace NitroRefresh { class HybridRefreshControllerSpec_cxx; }
 // Include C++ defined types
 #include "HybridRefreshControllerSpec.hpp"
 #include "RefreshPhase.hpp"
+#include "RefreshStateSnapshot.hpp"
 #include <NitroModules/Result.hpp>
 #include <exception>
 #include <functional>
@@ -94,6 +97,15 @@ namespace margelo::nitro::refresh::bridge::swift {
   }
   inline Result_void_ create_Result_void_(const std::exception_ptr& error) noexcept {
     return Result<void>::withError(error);
+  }
+  
+  // pragma MARK: Result<RefreshStateSnapshot>
+  using Result_RefreshStateSnapshot_ = Result<RefreshStateSnapshot>;
+  inline Result_RefreshStateSnapshot_ create_Result_RefreshStateSnapshot_(const RefreshStateSnapshot& value) noexcept {
+    return Result<RefreshStateSnapshot>::withValue(value);
+  }
+  inline Result_RefreshStateSnapshot_ create_Result_RefreshStateSnapshot_(const std::exception_ptr& error) noexcept {
+    return Result<RefreshStateSnapshot>::withError(error);
   }
 
 } // namespace margelo::nitro::refresh::bridge::swift

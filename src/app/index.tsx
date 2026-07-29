@@ -1,10 +1,13 @@
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
-import { memo, useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   RefreshControl,
   RefreshPhase,
+  RefreshResult,
+  type RefreshControlRef,
   type RefreshHeaderContext,
+  type RefreshStateSnapshot,
 } from 'react-native-nitro-refresh';
 import Animated, {
   interpolate,
@@ -98,8 +101,49 @@ const PHASE_LABEL: Record<RefreshPhase, string> = {
   [RefreshPhase.PULLING]: '继续下拉',
   [RefreshPhase.READY]: '松开同步',
   [RefreshPhase.REFRESHING]: '同步中',
+  [RefreshPhase.SUCCESS]: '同步成功',
+  [RefreshPhase.FAILURE]: '同步失败',
   [RefreshPhase.SETTLING]: '已同步',
 };
+
+type CommandTone = 'neutral' | 'primary' | 'success' | 'failure';
+
+function CommandButton({
+  disabled = false,
+  label,
+  onPress,
+  tone = 'neutral',
+}: {
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+  tone?: CommandTone;
+}): React.JSX.Element {
+  const toneStyle =
+    tone === 'primary'
+      ? styles.commandPrimary
+      : tone === 'success'
+        ? styles.commandSuccess
+        : tone === 'failure'
+          ? styles.commandFailure
+          : styles.commandNeutral;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.commandButton,
+        toneStyle,
+        pressed && !disabled && styles.commandPressed,
+        disabled && styles.commandDisabled,
+      ]}
+    >
+      <Text style={styles.commandLabel}>{label}</Text>
+    </Pressable>
+  );
+}
 
 const ActivityRow = memo(function ActivityRow({
   item,
@@ -148,8 +192,15 @@ function DemoRefreshHeader({
 }
 
 export default function Home(): React.JSX.Element {
+  const refreshControlRef = useRef<RefreshControlRef>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
+  const [snapshot, setSnapshot] = useState<RefreshStateSnapshot>({
+    offset: 0,
+    phase: RefreshPhase.IDLE,
+    refreshing: false,
+  });
 
   const data = useMemo(
     () =>
@@ -163,13 +214,54 @@ export default function Home(): React.JSX.Element {
     [refreshCount],
   );
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshCount((count) => count + 1);
-      setRefreshing(false);
-    }, 1100);
+  const clearPendingRefresh = useCallback(() => {
+    if (refreshTimerRef.current !== null) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
   }, []);
+
+  const readSnapshot = useCallback(() => {
+    const nextSnapshot = refreshControlRef.current?.getState();
+    if (nextSnapshot !== undefined) {
+      setSnapshot(nextSnapshot);
+    }
+  }, []);
+
+  const finishRefresh = useCallback(
+    (result: RefreshResult) => {
+      clearPendingRefresh();
+      refreshControlRef.current?.finishRefresh(result);
+      if (result === RefreshResult.SUCCESS) {
+        setRefreshCount((count) => count + 1);
+      }
+      setRefreshing(false);
+    },
+    [clearPendingRefresh],
+  );
+
+  const onRefresh = useCallback(() => {
+    clearPendingRefresh();
+    setRefreshing(true);
+    refreshTimerRef.current = setTimeout(() => {
+      finishRefresh(RefreshResult.SUCCESS);
+    }, 1600);
+  }, [clearPendingRefresh, finishRefresh]);
+
+  const cancelRefresh = useCallback(() => {
+    clearPendingRefresh();
+    refreshControlRef.current?.cancelRefresh();
+    setRefreshing(false);
+  }, [clearPendingRefresh]);
+
+  const onStateChange = useCallback(
+    (_phase: RefreshPhase) => {
+      readSnapshot();
+    },
+    [readSnapshot],
+  );
+
+  useEffect(() => clearPendingRefresh, [clearPendingRefresh]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<ActivityItem>) => <ActivityRow item={item} />,
@@ -203,11 +295,75 @@ export default function Home(): React.JSX.Element {
         </View>
       </View>
 
+      <View style={styles.commandBand}>
+        <View style={styles.commandHeadingRow}>
+          <Text style={styles.commandTitle}>命令控制</Text>
+          <Text style={styles.commandHint}>Nitro 同步通道</Text>
+        </View>
+        <View style={styles.commandGrid}>
+          <CommandButton
+            disabled={refreshing || snapshot.phase === RefreshPhase.PULLING}
+            label="开始刷新"
+            onPress={() => refreshControlRef.current?.beginRefresh()}
+            tone="primary"
+          />
+          <CommandButton
+            disabled={snapshot.phase !== RefreshPhase.IDLE}
+            label="拉至最大"
+            onPress={() => refreshControlRef.current?.pullToMax()}
+          />
+          <CommandButton
+            disabled={!refreshing && snapshot.phase === RefreshPhase.IDLE}
+            label="取消"
+            onPress={cancelRefresh}
+          />
+          <CommandButton
+            disabled={!refreshing}
+            label="成功结束"
+            onPress={() => finishRefresh(RefreshResult.SUCCESS)}
+            tone="success"
+          />
+          <CommandButton
+            disabled={!refreshing}
+            label="失败结束"
+            onPress={() => finishRefresh(RefreshResult.FAILURE)}
+            tone="failure"
+          />
+          <CommandButton label="读取状态" onPress={readSnapshot} />
+        </View>
+      </View>
+
+      <View style={styles.snapshotBand}>
+        <View style={styles.snapshotItem}>
+          <Text style={styles.snapshotLabel}>阶段</Text>
+          <Text selectable style={styles.snapshotValue}>
+            {PHASE_LABEL[snapshot.phase]}
+          </Text>
+        </View>
+        <View style={styles.snapshotDivider} />
+        <View style={styles.snapshotItem}>
+          <Text style={styles.snapshotLabel}>偏移</Text>
+          <Text selectable style={styles.snapshotValue}>
+            {snapshot.offset.toFixed(1)}
+          </Text>
+        </View>
+        <View style={styles.snapshotDivider} />
+        <View style={styles.snapshotItem}>
+          <Text style={styles.snapshotLabel}>刷新</Text>
+          <Text selectable style={styles.snapshotValue}>
+            {snapshot.refreshing ? '是' : '否'}
+          </Text>
+        </View>
+      </View>
+
       <RefreshControl
+        ref={refreshControlRef}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        onStateChange={onStateChange}
         pullDistance={96}
         maxPullDistance={176}
+        resultDuration={800}
         renderHeader={(context) => <DemoRefreshHeader {...context} />}
         style={styles.refreshControl}
       >
@@ -232,6 +388,66 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     height: 34,
     width: 4,
+  },
+  commandBand: {
+    backgroundColor: '#ffffff',
+    borderBottomColor: '#dfe3de',
+    borderBottomWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  commandButton: {
+    alignItems: 'center',
+    borderCurve: 'continuous',
+    borderRadius: 5,
+    flexBasis: '31%',
+    flexGrow: 1,
+    justifyContent: 'center',
+    minHeight: 38,
+    paddingHorizontal: 8,
+  },
+  commandDisabled: {
+    opacity: 0.38,
+  },
+  commandFailure: {
+    backgroundColor: '#c84f45',
+  },
+  commandGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  commandHeadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+  },
+  commandHint: {
+    color: '#708078',
+    fontSize: 11,
+  },
+  commandLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  commandNeutral: {
+    backgroundColor: '#4f615a',
+  },
+  commandPressed: {
+    opacity: 0.72,
+  },
+  commandPrimary: {
+    backgroundColor: '#315f74',
+  },
+  commandSuccess: {
+    backgroundColor: '#147d64',
+  },
+  commandTitle: {
+    color: '#17211e',
+    fontSize: 13,
+    fontWeight: '800',
   },
   eyebrow: {
     color: '#147d64',
@@ -322,6 +538,33 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 10,
+  },
+  snapshotBand: {
+    alignItems: 'center',
+    backgroundColor: '#e7ece8',
+    flexDirection: 'row',
+    minHeight: 50,
+    paddingHorizontal: 18,
+  },
+  snapshotDivider: {
+    backgroundColor: '#cbd4cf',
+    height: 24,
+    width: 1,
+  },
+  snapshotItem: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 2,
+  },
+  snapshotLabel: {
+    color: '#708078',
+    fontSize: 10,
+  },
+  snapshotValue: {
+    color: '#24332e',
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
   },
   summaryBand: {
     alignItems: 'center',

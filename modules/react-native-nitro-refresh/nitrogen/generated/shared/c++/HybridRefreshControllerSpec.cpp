@@ -18,6 +18,11 @@ namespace margelo::nitro::refresh {
       prototype.registerHybridMethod("setOnRefresh", &HybridRefreshControllerSpec::setOnRefresh);
       prototype.registerHybridMethod("setOnStateChange", &HybridRefreshControllerSpec::setOnStateChange);
       prototype.registerHybridMethod("clearCallbacks", &HybridRefreshControllerSpec::clearCallbacks);
+      prototype.registerHybridMethod("beginRefresh", &HybridRefreshControllerSpec::beginRefresh);
+      prototype.registerHybridMethod("cancelRefresh", &HybridRefreshControllerSpec::cancelRefresh);
+      prototype.registerHybridMethod("finishRefresh", &HybridRefreshControllerSpec::finishRefresh);
+      prototype.registerHybridMethod("getState", &HybridRefreshControllerSpec::getState);
+      prototype.registerHybridMethod("pullToMax", &HybridRefreshControllerSpec::pullToMax);
       prototype.registerHybridMethod("setRefreshing", &HybridRefreshControllerSpec::setRefreshing);
     });
   }

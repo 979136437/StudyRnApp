@@ -11,7 +11,18 @@ export type RefreshPhase =
   | 'pulling'
   | 'ready'
   | 'refreshing'
+  | 'success'
+  | 'failure'
   | 'settling';
+
+export type RefreshResult = 'success' | 'failure';
+
+/** 原生刷新视图在同一时刻的只读快照。 */
+export interface RefreshStateSnapshot {
+  phase: RefreshPhase;
+  offset: number;
+  refreshing: boolean;
+}
 
 export interface RefreshController extends HybridObject<{
   ios: 'swift';
@@ -26,6 +37,16 @@ export interface RefreshController extends HybridObject<{
   setOnStateChange(callback: (phase: RefreshPhase) => void): void;
   /** 清理 JS 回调及原生注册表引用；组件卸载时必须调用。 */
   clearCallbacks(): void;
+  /** 程序化进入刷新，并像用户下拉一样请求一次业务刷新。 */
+  beginRefresh(): void;
+  /** 取消当前下拉、刷新、结果展示或回弹，并复位到空闲状态。 */
+  cancelRefresh(): void;
+  /** 以成功或失败结果结束当前刷新，并在指定时长后自动收起。 */
+  finishRefresh(result: RefreshResult, resultDuration: number): void;
+  /** 同步读取原生视图最近一次发布的完整状态快照。 */
+  getState(): RefreshStateSnapshot;
+  /** 程序化拉到最大距离并停留在 ready，等待开始或取消命令。 */
+  pullToMax(): void;
   /** 将 React 的受控 `refreshing` 状态同步到原生刷新容器。 */
   setRefreshing(refreshing: boolean): void;
 }

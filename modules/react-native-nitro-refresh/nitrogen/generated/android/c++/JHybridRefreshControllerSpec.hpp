@@ -57,6 +57,11 @@ namespace margelo::nitro::refresh {
     void setOnRefresh(const std::function<void()>& callback) override;
     void setOnStateChange(const std::function<void(RefreshPhase /* phase */)>& callback) override;
     void clearCallbacks() override;
+    void beginRefresh() override;
+    void cancelRefresh() override;
+    void finishRefresh(RefreshResult result, double resultDuration) override;
+    RefreshStateSnapshot getState() override;
+    void pullToMax() override;
     void setRefreshing(bool refreshing) override;
 
   private:

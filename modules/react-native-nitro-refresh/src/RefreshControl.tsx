@@ -1,8 +1,10 @@
 import {
   Children,
   cloneElement,
+  forwardRef,
   type ReactElement,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -24,11 +26,13 @@ import type { RefreshController } from './specs/RefreshController.nitro';
 import {
   RefreshPhase,
   type RefreshControlProps,
+  type RefreshControlRef,
   type RefreshHeaderContext,
 } from './types';
 
 const DEFAULT_PULL_DISTANCE = 80;
 const DEFAULT_DRAG_RATE = 0.5;
+const DEFAULT_RESULT_DURATION = 800;
 const AnimatedNativeRefreshControl = Animated.createAnimatedComponent(
   NativeNitroRefreshControl,
 );
@@ -63,18 +67,45 @@ function positiveOrDefault(
   return fallback;
 }
 
-export function RefreshControl({
-  children,
-  refreshing,
-  onRefresh,
-  renderHeader,
-  enabled = true,
-  pullDistance: pullDistanceProp,
-  maxPullDistance: maxPullDistanceProp,
-  dragRate: dragRateProp,
-  style,
-  onStateChange,
-}: RefreshControlProps): React.JSX.Element {
+/** 校验允许为 0 的持续时间参数。 */
+function nonNegativeOrDefault(
+  name: string,
+  value: number | undefined,
+  fallback: number,
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (__DEV__) {
+    console.warn(
+      `[react-native-nitro-refresh] ${name} 必须是大于等于 0 的有限数值，已回退为 ${fallback}。`,
+    );
+  }
+  return fallback;
+}
+
+export const RefreshControl = forwardRef<
+  RefreshControlRef,
+  RefreshControlProps
+>(function RefreshControl(
+  {
+    children,
+    refreshing,
+    onRefresh,
+    renderHeader,
+    enabled = true,
+    pullDistance: pullDistanceProp,
+    maxPullDistance: maxPullDistanceProp,
+    dragRate: dragRateProp,
+    resultDuration: resultDurationProp,
+    style,
+    onStateChange,
+  },
+  ref,
+): React.JSX.Element {
   // `refreshControl` 是滚动组件的单一插槽，因此只接受一个直接子元素。
   const child = Children.only(children) as ReactElement<ScrollableProps>;
   const childProps = child.props;
@@ -92,6 +123,11 @@ export function RefreshControl({
   const dragRate = Math.min(
     1,
     positiveOrDefault('dragRate', dragRateProp, DEFAULT_DRAG_RATE),
+  );
+  const resultDuration = nonNegativeOrDefault(
+    'resultDuration',
+    resultDurationProp,
+    DEFAULT_RESULT_DURATION,
   );
 
   // 控制器在组件整个生命周期内保持同一实例，id 才能稳定关联原生 Fabric 视图。
@@ -131,6 +167,19 @@ export function RefreshControl({
     // 禁用优先级高于 refreshing，确保运行中切换 enabled=false 也会可靠复位。
     controller.setRefreshing(enabled && refreshing);
   }, [controller, enabled, refreshing]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      beginRefresh: () => controller.beginRefresh(),
+      cancelRefresh: () => controller.cancelRefresh(),
+      finishRefresh: (result) =>
+        controller.finishRefresh(result, resultDuration),
+      getState: () => controller.getState(),
+      pullToMax: () => controller.pullToMax(),
+    }),
+    [controller, resultDuration],
+  );
 
   // Fabric 直接事件在 UI runtime 中更新 SharedValue，不经过 React state。
   const pullEventHandler = useEvent<RefreshPullEvent>(
@@ -203,7 +252,7 @@ export function RefreshControl({
       {scrollable}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

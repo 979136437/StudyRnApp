@@ -1,3 +1,8 @@
 export { RefreshControl } from './RefreshControl';
-export { RefreshPhase } from './types';
-export type { RefreshControlProps, RefreshHeaderContext } from './types';
+export { RefreshPhase, RefreshResult } from './types';
+export type {
+  RefreshControlProps,
+  RefreshControlRef,
+  RefreshHeaderContext,
+  RefreshStateSnapshot,
+} from './types';

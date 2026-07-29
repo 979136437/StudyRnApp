@@ -7,16 +7,18 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Nitro HybridObject 的 Android 实现。
  *
- * 该对象保存 React 的受控刷新意图和离散回调；实际手势、位移与动画由
- * [NitroRefreshLayout] 处理。注册表使用 UUID 配对两者，并只持有弱引用，
- * 防止 Fabric 视图或 JS HostObject 卸载后被静态对象意外保活。
+ * 该对象保存 React 的受控刷新意图、离散回调和最新原生快照；实际手势、位移与动画由
+ * [NitroRefreshLayout] 处理。逐帧快照只在原生对象之间传递，只有 JS 主动调用
+ * [getState] 时才跨越 JSI。
  */
 class HybridRefreshController : HybridRefreshControllerSpec() {
   override val id: String = UUID.randomUUID().toString()
 
   private var onRefresh: (() -> Unit)? = null
   private var onStateChange: ((RefreshPhase) -> Unit)? = null
-  private var requestedRefreshing = false
+  @Volatile private var requestedRefreshing = false
+  @Volatile private var latestState =
+    RefreshStateSnapshot(RefreshPhase.IDLE, 0.0, false)
   private var binding = WeakReference<NitroRefreshLayout>(null)
 
   init {
@@ -37,10 +39,29 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
   override fun clearCallbacks() {
     onRefresh = null
     onStateChange = null
-    // 仅删除仍指向当前实例的条目，避免极端情况下误删同 id 的新实例。
     controllers.computeIfPresent(id) { _, reference ->
       if (reference.get() === this) null else reference
     }
+  }
+
+  override fun beginRefresh() {
+    binding.get()?.beginRefreshFromController()
+  }
+
+  override fun cancelRefresh() {
+    requestedRefreshing = false
+    binding.get()?.cancelRefreshFromController()
+  }
+
+  override fun finishRefresh(result: RefreshResult, resultDuration: Double) {
+    requestedRefreshing = false
+    binding.get()?.finishRefreshFromController(result, resultDuration)
+  }
+
+  override fun getState(): RefreshStateSnapshot = latestState
+
+  override fun pullToMax() {
+    binding.get()?.pullToMaxFromController()
   }
 
   override fun setRefreshing(refreshing: Boolean) {
@@ -51,6 +72,7 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
 
   internal fun attach(view: NitroRefreshLayout) {
     binding = WeakReference(view)
+    view.publishStateToController()
     view.setRefreshingFromController(requestedRefreshing)
   }
 
@@ -61,7 +83,7 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
   }
 
   internal fun requestRefresh() {
-    // 原生手势先进入 refreshing，再通知 JS；父组件随后通过受控属性决定何时结束。
+    // 用户手势和 beginRefresh 都先进入 refreshing，再通知 JS。
     requestedRefreshing = true
     onRefresh?.invoke()
   }
@@ -70,12 +92,15 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
     onStateChange?.invoke(phase)
   }
 
+  internal fun updateSnapshot(phase: RefreshPhase, offset: Double, refreshing: Boolean) {
+    latestState = RefreshStateSnapshot(phase, offset, refreshing)
+  }
+
   companion object {
     /** 所有控制器的进程内弱引用索引，键与 Fabric 的 controllerId 属性一致。 */
     private val controllers = ConcurrentHashMap<String, WeakReference<HybridRefreshController>>()
 
     internal fun find(id: String): HybridRefreshController? {
-      // 顺便清理已被 GC 回收的陈旧条目。
       val controller = controllers[id]?.get()
       if (controller == null) {
         controllers.remove(id)

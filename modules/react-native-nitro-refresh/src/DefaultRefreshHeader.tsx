@@ -11,6 +11,8 @@ const PHASE_LABELS = {
   [RefreshPhase.PULLING]: '继续下拉',
   [RefreshPhase.READY]: '松开刷新',
   [RefreshPhase.REFRESHING]: '正在刷新',
+  [RefreshPhase.SUCCESS]: '刷新成功',
+  [RefreshPhase.FAILURE]: '刷新失败',
   [RefreshPhase.SETTLING]: '刷新完成',
 } as const;
 
@@ -23,6 +25,8 @@ export function DefaultRefreshHeader({
   phase,
   progress,
 }: RefreshHeaderContext): React.JSX.Element {
+  const isResult =
+    phase === RefreshPhase.SUCCESS || phase === RefreshPhase.FAILURE;
   const indicatorStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.25, 1], [0, 0.5, 1]),
     transform: [{ rotate: `${progress.value * 180}deg` }],
@@ -32,6 +36,15 @@ export function DefaultRefreshHeader({
     <View style={styles.content}>
       {phase === RefreshPhase.REFRESHING ? (
         <ActivityIndicator color="#147d64" size="small" />
+      ) : isResult ? (
+        <View
+          style={[
+            styles.resultIndicator,
+            phase === RefreshPhase.SUCCESS
+              ? styles.resultSuccess
+              : styles.resultFailure,
+          ]}
+        />
       ) : (
         <Animated.View style={[styles.indicator, indicatorStyle]} />
       )}
@@ -62,5 +75,16 @@ const styles = StyleSheet.create({
     color: '#36514a',
     fontSize: 13,
     fontWeight: '600',
+  },
+  resultFailure: {
+    backgroundColor: '#c84f45',
+  },
+  resultIndicator: {
+    borderRadius: 8,
+    height: 16,
+    width: 16,
+  },
+  resultSuccess: {
+    backgroundColor: '#147d64',
   },
 });

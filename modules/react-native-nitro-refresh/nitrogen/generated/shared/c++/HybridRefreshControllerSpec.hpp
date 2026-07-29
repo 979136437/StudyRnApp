@@ -15,10 +15,16 @@
 
 // Forward declaration of `RefreshPhase` to properly resolve imports.
 namespace margelo::nitro::refresh { enum class RefreshPhase; }
+// Forward declaration of `RefreshResult` to properly resolve imports.
+namespace margelo::nitro::refresh { enum class RefreshResult; }
+// Forward declaration of `RefreshStateSnapshot` to properly resolve imports.
+namespace margelo::nitro::refresh { struct RefreshStateSnapshot; }
 
 #include <string>
 #include <functional>
 #include "RefreshPhase.hpp"
+#include "RefreshResult.hpp"
+#include "RefreshStateSnapshot.hpp"
 
 namespace margelo::nitro::refresh {
 
@@ -54,6 +60,11 @@ namespace margelo::nitro::refresh {
       virtual void setOnRefresh(const std::function<void()>& callback) = 0;
       virtual void setOnStateChange(const std::function<void(RefreshPhase /* phase */)>& callback) = 0;
       virtual void clearCallbacks() = 0;
+      virtual void beginRefresh() = 0;
+      virtual void cancelRefresh() = 0;
+      virtual void finishRefresh(RefreshResult result, double resultDuration) = 0;
+      virtual RefreshStateSnapshot getState() = 0;
+      virtual void pullToMax() = 0;
       virtual void setRefreshing(bool refreshing) = 0;
 
     protected:

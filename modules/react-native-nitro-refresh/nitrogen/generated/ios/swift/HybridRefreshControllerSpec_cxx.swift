@@ -173,6 +173,62 @@ open class HybridRefreshControllerSpec_cxx {
   }
   
   @inline(__always)
+  public final func beginRefresh() -> bridge.Result_void_ {
+    do {
+      try self.__implementation.beginRefresh()
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func cancelRefresh() -> bridge.Result_void_ {
+    do {
+      try self.__implementation.cancelRefresh()
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func finishRefresh(result: Int32, resultDuration: Double) -> bridge.Result_void_ {
+    do {
+      try self.__implementation.finishRefresh(result: margelo.nitro.refresh.RefreshResult(rawValue: result)!, resultDuration: resultDuration)
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func getState() -> bridge.Result_RefreshStateSnapshot_ {
+    do {
+      let __result = try self.__implementation.getState()
+      let __resultCpp = __result
+      return bridge.create_Result_RefreshStateSnapshot_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_RefreshStateSnapshot_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func pullToMax() -> bridge.Result_void_ {
+    do {
+      try self.__implementation.pullToMax()
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
   public final func setRefreshing(refreshing: Bool) -> bridge.Result_void_ {
     do {
       try self.__implementation.setRefreshing(refreshing: refreshing)

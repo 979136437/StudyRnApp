@@ -33,7 +33,9 @@ namespace margelo::nitro::refresh {
     PULLING      SWIFT_NAME(pulling) = 1,
     READY      SWIFT_NAME(ready) = 2,
     REFRESHING      SWIFT_NAME(refreshing) = 3,
-    SETTLING      SWIFT_NAME(settling) = 4,
+    SUCCESS      SWIFT_NAME(success) = 4,
+    FAILURE      SWIFT_NAME(failure) = 5,
+    SETTLING      SWIFT_NAME(settling) = 6,
   } CLOSED_ENUM;
 
 } // namespace margelo::nitro::refresh
@@ -50,6 +52,8 @@ namespace margelo::nitro {
         case hashString("pulling"): return margelo::nitro::refresh::RefreshPhase::PULLING;
         case hashString("ready"): return margelo::nitro::refresh::RefreshPhase::READY;
         case hashString("refreshing"): return margelo::nitro::refresh::RefreshPhase::REFRESHING;
+        case hashString("success"): return margelo::nitro::refresh::RefreshPhase::SUCCESS;
+        case hashString("failure"): return margelo::nitro::refresh::RefreshPhase::FAILURE;
         case hashString("settling"): return margelo::nitro::refresh::RefreshPhase::SETTLING;
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert \"" + unionValue + "\" to enum RefreshPhase - invalid value!");
@@ -61,6 +65,8 @@ namespace margelo::nitro {
         case margelo::nitro::refresh::RefreshPhase::PULLING: return JSIConverter<std::string>::toJSI(runtime, "pulling");
         case margelo::nitro::refresh::RefreshPhase::READY: return JSIConverter<std::string>::toJSI(runtime, "ready");
         case margelo::nitro::refresh::RefreshPhase::REFRESHING: return JSIConverter<std::string>::toJSI(runtime, "refreshing");
+        case margelo::nitro::refresh::RefreshPhase::SUCCESS: return JSIConverter<std::string>::toJSI(runtime, "success");
+        case margelo::nitro::refresh::RefreshPhase::FAILURE: return JSIConverter<std::string>::toJSI(runtime, "failure");
         case margelo::nitro::refresh::RefreshPhase::SETTLING: return JSIConverter<std::string>::toJSI(runtime, "settling");
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert RefreshPhase to JS - invalid value: "
@@ -77,6 +83,8 @@ namespace margelo::nitro {
         case hashString("pulling"):
         case hashString("ready"):
         case hashString("refreshing"):
+        case hashString("success"):
+        case hashString("failure"):
         case hashString("settling"):
           return true;
         default:

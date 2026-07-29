@@ -15,24 +15,22 @@ import com.facebook.react.uimanager.UIManagerHelper
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToLong
 
 /**
  * Android 下拉刷新原生容器。
  *
- * React Native 的 ScrollView 会把 `refreshControl` 渲染为滚动内容外层的 ViewGroup，
- * 因而本类始终只管理一个滚动子视图。只有子视图已经到顶且手势主要向下时，
- * 容器才接管触摸序列；正常纵向滚动、点击和横向手势继续交给子视图处理。
- *
- * 连续位移通过 Fabric `topPull` 事件发送给 Reanimated，离散阶段及刷新请求则经
- * Nitro 控制器发送到 JS。两条通道分离可以避免拖拽期间逐帧触发 React 渲染。
+ * 连续位移通过 Fabric 事件发送给 Reanimated，离散阶段及命令通过 Nitro 控制器传递。
+ * 程序化拉满、结果停留和回弹均在主线程内完成，不会逐帧调用 JavaScript。
  */
 internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   /** 禁用时立即取消当前刷新或下拉动画，并把内容恢复到原位。 */
   var refreshEnabled = true
     set(value) {
       field = value
-      if (!value) settleToIdle()
+      if (!value) cancelCurrentAction()
     }
+
   /** 触发阈值和刷新保持高度，单位为 dp。 */
   var pullDistanceDp = 80.0
 
@@ -42,41 +40,42 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   /** 原始手指距离转换为内容位移时使用的阻尼系数。 */
   var dragRate = 0.5
 
-  // touchSlop 用来过滤点击抖动，避免轻微移动被误判为下拉手势。
   private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
   private var initialX = 0f
   private var initialY = 0f
   private var dragging = false
+  private var programmaticPull = false
   private var offsetPx = 0f
   private var phase = RefreshPhase.IDLE
   private var controller: HybridRefreshController? = null
   private var animator: ValueAnimator? = null
+  private var resultDismissRunnable: Runnable? = null
 
   private val pullDistancePx: Float
     get() = PixelUtil.toPixelFromDIP(pullDistanceDp)
   private val maxPullDistancePx: Float
     get() = PixelUtil.toPixelFromDIP(maxPullDistanceDp)
 
-  /**
-   * 通过 JS 传入的 controllerId 查找对应 HybridObject。
-   * 控制器和 Fabric 视图的创建顺序不固定，因此关联逻辑允许任意一端先创建。
-   */
   fun attachController(controllerId: String) {
     controller?.detach(this)
     controller = HybridRefreshController.find(controllerId)
     controller?.attach(this)
   }
 
+  internal fun publishStateToController() {
+    publishSnapshot()
+  }
+
   override fun onDetachedFromWindow() {
-    // Fabric 视图可能被回收；必须停止动画并释放双向关联，避免继续更新旧 viewTag。
+    cancelResultDismiss()
     animator?.cancel()
+    animator = null
     controller?.detach(this)
     controller = null
     super.onDetachedFromWindow()
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-    // 作为 refreshControl 包装器，尺寸必须与外层滚动区域完全一致。
     setMeasuredDimension(
       MeasureSpec.getSize(widthMeasureSpec),
       MeasureSpec.getSize(heightMeasureSpec),
@@ -93,7 +92,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
-    if (!refreshEnabled || phase == RefreshPhase.REFRESHING || childCount == 0) {
+    if (!refreshEnabled || isInteractionLocked() || childCount == 0) {
       return false
     }
     when (event.actionMasked) {
@@ -105,7 +104,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       MotionEvent.ACTION_MOVE -> {
         val dx = event.x - initialX
         val dy = event.y - initialY
-        // 同时检查方向、系统触摸阈值和子视图顶部，尽量不干扰横向及普通滚动。
         if (dy > touchSlop && dy > abs(dx) && !canChildScrollUp()) {
           dragging = true
           parent?.requestDisallowInterceptTouchEvent(true)
@@ -118,7 +116,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   override fun onTouchEvent(event: MotionEvent): Boolean {
-    if (!refreshEnabled) return false
+    if (!refreshEnabled || isInteractionLocked()) return false
     when (event.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
         initialX = event.x
@@ -131,7 +129,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
           if (dy > touchSlop && !canChildScrollUp()) dragging = true
         }
         if (dragging) {
-          // 先扣除 touchSlop，再应用阻尼和最大距离，避免接管瞬间出现位置跳变。
           val rawDistance = max(0f, event.y - initialY - touchSlop)
           val resisted = min(maxPullDistancePx, rawDistance * dragRate.toFloat())
           setOffset(resisted)
@@ -146,7 +143,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       }
       MotionEvent.ACTION_UP -> {
         if (dragging) {
-          // 只有正常抬手且超过阈值才触发刷新；取消事件始终回弹。
           if (offsetPx >= pullDistancePx) {
             beginRefreshing(true)
           } else {
@@ -161,22 +157,80 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   fun setRefreshingFromController(refreshing: Boolean) {
-    // Nitro 方法可能从任意线程调用，所有 View 状态修改统一投递到主线程。
     post {
-      if (refreshing) beginRefreshing(false) else settleToIdle()
+      if (refreshing) {
+        beginRefreshing(false)
+      } else if (!isResultPhase()) {
+        settleToIdle()
+      }
     }
   }
 
-  private fun beginRefreshing(notifyJs: Boolean) {
-    if (phase == RefreshPhase.REFRESHING) return
+  fun beginRefreshFromController() {
+    post { beginRefreshing(true) }
+  }
+
+  fun cancelRefreshFromController() {
+    post { cancelCurrentAction() }
+  }
+
+  fun finishRefreshFromController(result: RefreshResult, resultDuration: Double) {
+    post { finishRefreshing(result, resultDuration) }
+  }
+
+  fun pullToMaxFromController() {
+    post { pullToMax() }
+  }
+
+  private fun beginRefreshing(notifyJs: Boolean): Boolean {
+    if (!refreshEnabled || dragging || phase == RefreshPhase.REFRESHING) return false
+    if (programmaticPull && phase != RefreshPhase.READY) return false
+
+    cancelResultDismiss()
+    programmaticPull = false
     setPhase(RefreshPhase.REFRESHING)
-    // 超拉后回到固定保持高度；程序化刷新则从当前位置展开到该高度。
     animateOffsetTo(pullDistancePx)
-    // 程序化 refreshing=true 不应再次触发 onRefresh，防止受控状态形成回路。
     if (notifyJs) controller?.requestRefresh()
+    return true
+  }
+
+  private fun finishRefreshing(result: RefreshResult, resultDuration: Double) {
+    if (phase != RefreshPhase.REFRESHING) return
+
+    cancelResultDismiss()
+    programmaticPull = false
+    setPhase(
+      if (result == RefreshResult.SUCCESS) RefreshPhase.SUCCESS else RefreshPhase.FAILURE,
+    )
+    animateOffsetTo(pullDistancePx) {
+      scheduleResultDismiss(resultDuration)
+    }
+  }
+
+  private fun pullToMax() {
+    if (!refreshEnabled || dragging) return
+    if (phase != RefreshPhase.IDLE && phase != RefreshPhase.SETTLING) return
+
+    cancelResultDismiss()
+    programmaticPull = true
+    setPhase(RefreshPhase.PULLING)
+    animateOffsetTo(maxPullDistancePx) {
+      if (programmaticPull && phase == RefreshPhase.PULLING) {
+        setPhase(RefreshPhase.READY)
+      }
+    }
+  }
+
+  private fun cancelCurrentAction() {
+    cancelResultDismiss()
+    programmaticPull = false
+    dragging = false
+    settleToIdle()
   }
 
   private fun settleToIdle() {
+    cancelResultDismiss()
+    programmaticPull = false
     if (offsetPx == 0f && phase == RefreshPhase.IDLE) return
     setPhase(RefreshPhase.SETTLING)
     animateOffsetTo(0f) {
@@ -184,9 +238,36 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     }
   }
 
+  private fun scheduleResultDismiss(resultDuration: Double) {
+    cancelResultDismiss()
+    val durationMs =
+      if (resultDuration.isFinite()) resultDuration.coerceAtLeast(0.0).roundToLong() else 800L
+    val runnable = Runnable {
+      resultDismissRunnable = null
+      if (isResultPhase()) settleToIdle()
+    }
+    resultDismissRunnable = runnable
+    if (durationMs == 0L) {
+      runnable.run()
+    } else {
+      postDelayed(runnable, durationMs)
+    }
+  }
+
+  private fun cancelResultDismiss() {
+    resultDismissRunnable?.let(::removeCallbacks)
+    resultDismissRunnable = null
+  }
+
   private fun animateOffsetTo(target: Float, completion: (() -> Unit)? = null) {
-    // 新命令会取代旧动画；被取消的动画不得执行旧 completion 并错误进入 idle。
     animator?.cancel()
+    if (abs(offsetPx - target) < 0.5f) {
+      animator = null
+      setOffset(target)
+      completion?.invoke()
+      return
+    }
+
     animator = ValueAnimator.ofFloat(offsetPx, target).apply {
       duration = 220
       interpolator = DecelerateInterpolator()
@@ -199,6 +280,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         }
 
         override fun onAnimationEnd(animation: Animator) {
+          if (animator === animation) animator = null
           if (!cancelled) completion?.invoke()
         }
       })
@@ -207,7 +289,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   private fun setOffset(value: Float) {
-    // 内部布局使用 px；发给 JS 前才转换为 dp，保持公共 API 与 RN 尺寸单位一致。
     offsetPx = value.coerceIn(0f, maxPullDistancePx)
     if (childCount > 0) getChildAt(0).translationY = offsetPx
     emitPull()
@@ -216,15 +297,17 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private fun setPhase(next: RefreshPhase) {
     if (phase == next) return
     phase = next
-    controller?.notifyPhase(next)
     emitPull()
+    controller?.notifyPhase(next)
   }
 
   private fun emitPull() {
-    val reactContext = context as? ThemedReactContext ?: return
     val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
-    val progress = if (pullDistanceDp == 0.0) 0.0 else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0)
-    // 使用 surfaceId + viewTag 构造 Fabric 直接事件，以兼容多个 React Surface。
+    val progress =
+      if (pullDistanceDp == 0.0) 0.0 else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0)
+    publishSnapshot(offsetDp)
+
+    val reactContext = context as? ThemedReactContext ?: return
     UIManagerHelper.getEventDispatcher(reactContext)?.dispatchEvent(
       RefreshPullEvent(
         UIManagerHelper.getSurfaceId(this),
@@ -236,8 +319,23 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     )
   }
 
+  private fun publishSnapshot(
+    offsetDp: Double = PixelUtil.toDIPFromPixel(offsetPx).toDouble(),
+  ) {
+    controller?.updateSnapshot(
+      phase,
+      offsetDp,
+      phase == RefreshPhase.REFRESHING,
+    )
+  }
+
+  private fun isInteractionLocked(): Boolean =
+    programmaticPull || phase == RefreshPhase.REFRESHING || isResultPhase()
+
+  private fun isResultPhase(): Boolean =
+    phase == RefreshPhase.SUCCESS || phase == RefreshPhase.FAILURE
+
   private fun canChildScrollUp(): Boolean {
-    // canScrollVertically(-1) 同时覆盖短内容、长列表以及不同 RN 滚动实现。
     val child = if (childCount > 0) getChildAt(0) else null
     return child?.canScrollVertically(-1) ?: false
   }

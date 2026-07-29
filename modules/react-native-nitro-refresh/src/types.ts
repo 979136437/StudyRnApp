@@ -2,7 +2,11 @@ import type { ReactElement, ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { RefreshPhase as NativeRefreshPhase } from './specs/RefreshController.nitro';
+import type {
+  RefreshPhase as NativeRefreshPhase,
+  RefreshResult as NativeRefreshResult,
+  RefreshStateSnapshot as NativeRefreshStateSnapshot,
+} from './specs/RefreshController.nitro';
 
 /**
  * 刷新状态的运行时常量。
@@ -20,12 +24,45 @@ export const RefreshPhase = {
   READY: 'ready',
   /** 刷新已触发，等待外部把 `refreshing` 设置为 `false`。 */
   REFRESHING: 'refreshing',
+  /** 刷新成功，正在展示结果。 */
+  SUCCESS: 'success',
+  /** 刷新失败，正在展示结果。 */
+  FAILURE: 'failure',
   /** 正在恢复内容位置，结束后进入 `idle`。 */
   SETTLING: 'settling',
 } as const satisfies Record<Uppercase<NativeRefreshPhase>, NativeRefreshPhase>;
 
 /** `RefreshPhase` 运行时对象中所有值组成的字符串字面量联合。 */
 export type RefreshPhase = (typeof RefreshPhase)[keyof typeof RefreshPhase];
+
+/** 命令式结束刷新时可使用的结果常量。 */
+export const RefreshResult = {
+  SUCCESS: 'success',
+  FAILURE: 'failure',
+} as const satisfies Record<
+  Uppercase<NativeRefreshResult>,
+  NativeRefreshResult
+>;
+
+/** `RefreshResult` 运行时对象中所有值组成的字符串字面量联合。 */
+export type RefreshResult = (typeof RefreshResult)[keyof typeof RefreshResult];
+
+/** 原生刷新视图在同一时刻的只读状态快照。 */
+export type RefreshStateSnapshot = NativeRefreshStateSnapshot;
+
+/** `RefreshControl` 通过 ref 暴露的命令式控制接口。 */
+export interface RefreshControlRef {
+  /** 程序化进入刷新，并触发一次 `onRefresh`。 */
+  beginRefresh(): void;
+  /** 取消当前动作，不展示成功或失败结果。 */
+  cancelRefresh(): void;
+  /** 以成功或失败结果结束当前刷新。 */
+  finishRefresh(result: RefreshResult): void;
+  /** 同步读取原生视图最近一次发布的完整状态。 */
+  getState(): RefreshStateSnapshot;
+  /** 动画拉至 `maxPullDistance` 并停留，等待开始或取消。 */
+  pullToMax(): void;
+}
 
 /** 传递给自定义刷新头的状态与界面线程动画数据。 */
 export interface RefreshHeaderContext {
@@ -80,6 +117,8 @@ export interface RefreshControlProps {
   maxPullDistance?: number;
   /** 拖拽位移阻尼系数，范围为 `(0, 1]`，默认 `0.5`。 */
   dragRate?: number;
+  /** 成功或失败结果的停留时长，单位为毫秒，默认 `800`；设为 `0` 时立即回弹。 */
+  resultDuration?: number;
   /** 应用于最外层刷新容器的样式。 */
   style?: StyleProp<ViewStyle>;
   /** 离散阶段发生变化时调用；逐帧动画请使用刷新头上下文中的 SharedValue。 */

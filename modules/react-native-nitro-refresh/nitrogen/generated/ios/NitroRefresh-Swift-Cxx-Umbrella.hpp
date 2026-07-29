@@ -12,10 +12,16 @@
 namespace margelo::nitro::refresh { class HybridRefreshControllerSpec; }
 // Forward declaration of `RefreshPhase` to properly resolve imports.
 namespace margelo::nitro::refresh { enum class RefreshPhase; }
+// Forward declaration of `RefreshResult` to properly resolve imports.
+namespace margelo::nitro::refresh { enum class RefreshResult; }
+// Forward declaration of `RefreshStateSnapshot` to properly resolve imports.
+namespace margelo::nitro::refresh { struct RefreshStateSnapshot; }
 
 // Include C++ defined types
 #include "HybridRefreshControllerSpec.hpp"
 #include "RefreshPhase.hpp"
+#include "RefreshResult.hpp"
+#include "RefreshStateSnapshot.hpp"
 #include <NitroModules/Result.hpp>
 #include <exception>
 #include <functional>
