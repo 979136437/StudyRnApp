@@ -1,6 +1,6 @@
 import { Image, Text, View } from '@/tw';
 
-export default function Index() {
+export default function Home() {
   return (
     <View className="flex-1 flex flex-col gap-2 px-2 bg-red-500">
       <View className="bg-blue-500/50 w-full border border-solid border-red-500 pt-safe-top">

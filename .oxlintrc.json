@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "import"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "browser": true
+  },
+  "globals": {
+    "__DEV__": "readonly",
+    "ErrorUtils": "readonly",
+    "process": "readonly",
+    "shared-node-browser": "writable"
+  },
+  "ignorePatterns": [
+    ".agents/**",
+    ".claude/**",
+    ".codegraph/**",
+    "android/app/build/**",
+    "dist/**"
+  ],
+  "rules": {
+    "eqeqeq": ["warn", "smart"],
+    "import/first": "warn",
+    "no-extend-native": "warn",
+    "no-unused-expressions": [
+      "warn",
+      {
+        "allowShortCircuit": true,
+        "enforceForJSX": true
+      }
+    ],
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "none",
+        "ignoreRestSiblings": true,
+        "caughtErrors": "all",
+        "caughtErrorsIgnorePattern": "^_",
+        "fix": {
+          "imports": "safe-fix",
+          "variables": "suggestion"
+        }
+      }
+    ],
+    "no-var": "error",
+    "react/exhaustive-deps": "warn",
+    "react/jsx-no-target-blank": "off",
+    "react/no-this-in-sfc": "warn",
+    "react/no-unknown-property": "warn",
+    "react/react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error",
+    "react/self-closing-comp": [
+      "error",
+      { "component": true, "html": true }
+    ],
+    "typescript/array-type": ["warn", { "default": "array" }],
+    "typescript/consistent-type-assertions": [
+      "warn",
+      {
+        "assertionStyle": "as",
+        "objectLiteralTypeAssertions": "allow"
+      }
+    ],
+    "typescript/no-empty-object-type": "warn",
+    "typescript/no-extra-non-null-assertion": "warn",
+    "typescript/no-wrapper-object-types": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["metro.config.js"],
+      "env": {
+        "node": true
+      }
+    }
+  ]
+}
