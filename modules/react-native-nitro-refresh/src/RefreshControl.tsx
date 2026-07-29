@@ -136,6 +136,8 @@ export function RefreshControl({
   const pullEventHandler = useEvent<RefreshPullEvent>(
     (event) => {
       'worklet';
+      // 拖拽和松手动画都由原生逐帧发送真实可见位移。这里直接赋值，确保自定义头、
+      // iOS contentOffset 和 Android translationY 始终使用同一条运动轨迹。
       offset.value = event.offset;
       progress.value = Math.max(0, Math.min(1, event.progress));
       phaseValue.value = event.phase as RefreshPhase;

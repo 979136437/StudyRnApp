@@ -29,9 +29,16 @@ using namespace facebook::react;
   CGFloat _maxPullDistance;
   CGFloat _dragRate;
   CGFloat _currentOffset;
+  CGFloat _currentProgress;
   NSString *_phase;
+  BOOL _readyToRefresh;
+  CADisplayLink *_transitionDisplayLink;
+  CGFloat _transitionStartOffset;
+  CGFloat _transitionStartProgress;
   // 刷新期间会临时修改 contentInset，必须保存业务原值并在结束或回收时恢复。
   UIEdgeInsets _originalContentInset;
+  // contentInset 改变后 adjustedContentInset.top 也会改变；动画位移必须始终相对原基线。
+  CGFloat _originalAdjustedTop;
   BOOL _hasOriginalContentInset;
 }
 
@@ -52,6 +59,12 @@ using namespace facebook::react;
     _phase = @"idle";
   }
   return self;
+}
+
+- (void)dealloc
+{
+  // CADisplayLink 强持有 target；即使 ComponentView 未走正常回收路径也必须主动断开。
+  [_transitionDisplayLink invalidate];
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
@@ -105,6 +118,7 @@ using namespace facebook::react;
   }
   _controllerId = nil;
   _phase = @"idle";
+  _readyToRefresh = NO;
   _currentOffset = 0;
   [super prepareForRecycle];
 }
@@ -120,12 +134,14 @@ using namespace facebook::react;
   }
   // 只保存未进入刷新状态时的业务 inset，后续结束刷新时精确恢复。
   _originalContentInset = scrollView.contentInset;
+  _originalAdjustedTop = scrollView.adjustedContentInset.top;
   _hasOriginalContentInset = YES;
   [scrollView.panGestureRecognizer addTarget:self action:@selector(handlePan:)];
 }
 
 - (void)detachFromScrollView
 {
+  [self stopTrackingTransition];
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView != nil) {
     [scrollView.panGestureRecognizer removeTarget:self action:@selector(handlePan:)];
@@ -148,19 +164,26 @@ using namespace facebook::react;
     return;
   }
 
-  // adjustedContentInset 同时考虑 safe area 和业务 inset；只有越过真实顶部才得到正值。
-  CGFloat rawOffset = MAX(0, -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top));
-  // UIScrollView 提供系统橡皮筋物理，本模块在其基础上应用可配置阻尼与最大距离。
-  CGFloat offset = MIN(_maxPullDistance, rawOffset * _dragRate);
+  // 始终相对挂载时的顶部基线计算，避免刷新期间 contentInset 改变后坐标系跳变。
+  CGFloat rawOffset = MAX(0, -(scrollView.contentOffset.y + _originalAdjustedTop));
+  // UIScrollView 已经把手指位移转换成带系统阻尼的可见内容位移。offset 必须使用这个
+  // 实际位移，刷新头才能紧贴列表；再次乘 dragRate 会让刷新头只移动列表的一部分。
+  CGFloat offset = MIN(_maxPullDistance, rawOffset);
+  // dragRate 仍用于调节触发灵敏度。默认 0.5 表示系统可见位移达到阈值两倍时触发，
+  // 但不会破坏刷新头和列表之间的一比一视觉关系。
+  CGFloat triggerOffset = MIN(_maxPullDistance, rawOffset * _dragRate);
 
   if (gesture.state == UIGestureRecognizerStateChanged && offset > 0) {
-    NSString *phase = offset >= _pullDistance ? @"ready" : @"pulling";
-    [self updatePhase:phase offset:offset];
+    _readyToRefresh = triggerOffset >= _pullDistance;
+    NSString *phase = _readyToRefresh ? @"ready" : @"pulling";
+    [self updatePhase:phase offset:offset progress:(triggerOffset / _pullDistance)];
   } else if (gesture.state == UIGestureRecognizerStateEnded ||
              gesture.state == UIGestureRecognizerStateCancelled ||
              gesture.state == UIGestureRecognizerStateFailed) {
     // cancelled/failed 永远不触发刷新，只有正常松手且达到阈值才进入 refreshing。
-    if (offset >= _pullDistance && gesture.state == UIGestureRecognizerStateEnded) {
+    BOOL shouldRefresh = _readyToRefresh && gesture.state == UIGestureRecognizerStateEnded;
+    _readyToRefresh = NO;
+    if (shouldRefresh) {
       [self beginRefreshingAndNotify:YES];
     } else {
       [self settleToIdle];
@@ -186,23 +209,43 @@ using namespace facebook::react;
     return;
   }
   _refreshing = YES;
-  [self updatePhase:@"refreshing" offset:_pullDistance];
+  _readyToRefresh = NO;
 
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView != nil) {
     if (!_hasOriginalContentInset) {
       _originalContentInset = scrollView.contentInset;
+      _originalAdjustedTop = scrollView.adjustedContentInset.top;
       _hasOriginalContentInset = YES;
     }
+    CGFloat initialOffset = [self visibleOffsetForScrollView:scrollView];
+    [self updatePhase:@"refreshing" offset:initialOffset progress:1];
+
     // 增加顶部 inset 形成刷新保持区域，并把 offset 对齐到新 inset 的顶部。
     UIEdgeInsets inset = _originalContentInset;
     inset.top += _pullDistance;
-    [UIView animateWithDuration:0.22 animations:^{
-      scrollView.contentInset = inset;
-      CGPoint point = scrollView.contentOffset;
-      point.y = -scrollView.adjustedContentInset.top;
-      scrollView.contentOffset = point;
-    }];
+    [self startTrackingTransition];
+    [UIView animateWithDuration:0.28
+        delay:0
+        options:UIViewAnimationOptionBeginFromCurrentState |
+                UIViewAnimationOptionCurveEaseOut |
+                UIViewAnimationOptionAllowUserInteraction
+        animations:^{
+          scrollView.contentInset = inset;
+          CGPoint point = scrollView.contentOffset;
+          point.y = -(self->_originalAdjustedTop + self->_pullDistance);
+          scrollView.contentOffset = point;
+        }
+        completion:^(BOOL finished) {
+          if (!finished || !self->_refreshing ||
+              self->_scrollViewComponentView.scrollView != scrollView) {
+            return;
+          }
+          [self stopTrackingTransition];
+          [self updatePhase:@"refreshing" offset:self->_pullDistance progress:1];
+        }];
+  } else {
+    [self updatePhase:@"refreshing" offset:_pullDistance progress:1];
   }
 
   // 程序化 refreshing=true 不回调 onRefresh，防止 React 受控更新形成通知回路。
@@ -217,27 +260,100 @@ using namespace facebook::react;
     return;
   }
   _refreshing = NO;
-  [self updatePhase:@"settling" offset:_currentOffset];
+  _readyToRefresh = NO;
 
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   UIEdgeInsets targetInset = _hasOriginalContentInset ? _originalContentInset : UIEdgeInsetsZero;
-  // 先发布 settling，动画完成后才清零连续位移并发布 idle。
-  [UIView animateWithDuration:0.22
-      animations:^{
-        if (scrollView != nil && self->_hasOriginalContentInset) {
-          scrollView.contentInset = targetInset;
+  CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
+  [self updatePhase:@"settling"
+             offset:initialOffset
+           progress:_currentProgress];
+
+  if (scrollView != nil) {
+    // 显式动画 contentInset 和 contentOffset，避免系统回弹与另一条补间动画叠加。
+    // CADisplayLink 会读取这条动画的呈现位置，自定义刷新头无需猜测 UIKit 曲线。
+    [self startTrackingTransition];
+    [UIView animateWithDuration:0.28
+        delay:0
+        options:UIViewAnimationOptionBeginFromCurrentState |
+                UIViewAnimationOptionCurveEaseOut |
+                UIViewAnimationOptionAllowUserInteraction
+        animations:^{
+          if (self->_hasOriginalContentInset) {
+            scrollView.contentInset = targetInset;
+          }
+          CGPoint point = scrollView.contentOffset;
+          point.y = -self->_originalAdjustedTop;
+          scrollView.contentOffset = point;
         }
-      }
-      completion:^(__unused BOOL finished) {
-        [self updatePhase:@"idle" offset:0];
-      }];
+        completion:^(BOOL finished) {
+          if (!finished || self->_refreshing ||
+              self->_scrollViewComponentView.scrollView != scrollView) {
+            return;
+          }
+          [self stopTrackingTransition];
+          [self updatePhase:@"idle" offset:0 progress:0];
+        }];
+  } else {
+    [self updatePhase:@"idle" offset:0 progress:0];
+  }
 }
 
-- (void)updatePhase:(NSString *)phase offset:(CGFloat)offset
+- (CGFloat)visibleOffsetForScrollView:(UIScrollView *)scrollView
+{
+  // UIView 动画开始后模型层会立即持有目标 contentOffset，只有 presentationLayer
+  // 的 bounds.origin 才是当前屏幕实际显示的位置。
+  CALayer *presentationLayer = scrollView.layer.presentationLayer;
+  CGFloat contentOffsetY = presentationLayer != nil
+      ? presentationLayer.bounds.origin.y
+      : scrollView.contentOffset.y;
+  CGFloat offset = MAX(0, -(contentOffsetY + _originalAdjustedTop));
+  return MIN(_maxPullDistance, offset);
+}
+
+- (void)startTrackingTransition
+{
+  [self stopTrackingTransition];
+  _transitionStartOffset = _currentOffset;
+  _transitionStartProgress = _currentProgress;
+  _transitionDisplayLink = [CADisplayLink displayLinkWithTarget:self
+                                                       selector:@selector(trackTransition:)];
+  [_transitionDisplayLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopTrackingTransition
+{
+  [_transitionDisplayLink invalidate];
+  _transitionDisplayLink = nil;
+}
+
+- (void)trackTransition:(__unused CADisplayLink *)displayLink
+{
+  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
+  if (scrollView == nil) {
+    [self stopTrackingTransition];
+    return;
+  }
+
+  CGFloat offset = [self visibleOffsetForScrollView:scrollView];
+  CGFloat progress;
+  if ([_phase isEqualToString:@"refreshing"]) {
+    progress = 1;
+  } else if ([_phase isEqualToString:@"settling"] && _transitionStartOffset > 0) {
+    // 回弹进度沿用松手时的值并按剩余位移等比衰减，避免低于阈值时突然变大。
+    progress = _transitionStartProgress * (offset / _transitionStartOffset);
+  } else {
+    progress = MIN(1, offset / _pullDistance);
+  }
+  [self updatePhase:_phase offset:offset progress:progress];
+}
+
+- (void)updatePhase:(NSString *)phase offset:(CGFloat)offset progress:(CGFloat)progress
 {
   BOOL phaseChanged = ![_phase isEqualToString:phase];
   _phase = phase;
   _currentOffset = MAX(0, MIN(_maxPullDistance, offset));
+  _currentProgress = MIN(1, MAX(0, progress));
   // Nitro 只接收离散变化；即使阶段不变，Fabric 仍需逐帧发送最新 offset。
   if (phaseChanged && _controllerId.length > 0) {
     [NitroRefreshControllerRegistry notifyControllerId:_controllerId phase:phase];
@@ -253,7 +369,7 @@ using namespace facebook::react;
   // progress 被限制在 0...1，超阈值的原始距离仍完整保留在 offset。
   NitroRefreshControlViewEventEmitter::OnPull event = {
       .offset = _currentOffset,
-      .progress = MIN(1, MAX(0, _currentOffset / _pullDistance)),
+      .progress = _currentProgress,
       .phase = std::string(_phase.UTF8String),
   };
   std::static_pointer_cast<NitroRefreshControlViewEventEmitter const>(_eventEmitter)->onPull(event);
