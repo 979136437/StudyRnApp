@@ -23,8 +23,7 @@
       },
       "ios": {
         // 显式声明为真机架构 (ARM64 Physical Device)
-        "simulator": false,
-        "withoutCredentials": true
+        "simulator": true
       },
       "android": {
         "buildType": "apk",
