@@ -222,7 +222,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun emitPull() {
     val reactContext = context as? ThemedReactContext ?: return
-    val offsetDp = PixelUtil.toDIPFromPixel(offsetPx.toDouble())
+    val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
     val progress = if (pullDistanceDp == 0.0) 0.0 else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0)
     // 使用 surfaceId + viewTag 构造 Fabric 直接事件，以兼容多个 React Surface。
     UIManagerHelper.getEventDispatcher(reactContext)?.dispatchEvent(
