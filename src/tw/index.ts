@@ -1,4 +1,4 @@
-import { useNativeVariable } from 'react-native-css';
+import { useUnstableNativeVariable } from 'nativewind';
 
 export { Image } from './hoc';
 
@@ -9,7 +9,7 @@ export {
   TextInput,
   TouchableHighlight,
   View,
-} from 'react-native-css/components';
+} from 'react-native';
 
 export type {
   PressableProps,
@@ -23,4 +23,4 @@ export type {
 export const useCSSVariable =
   process.env.EXPO_OS === 'web'
     ? (variable: string) => `var(${variable})`
-    : useNativeVariable;
+    : useUnstableNativeVariable;
