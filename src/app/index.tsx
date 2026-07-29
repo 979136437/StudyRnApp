@@ -1,30 +1,376 @@
-import { Text, View, Image } from '@/tw';
+import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import {
+  RefreshControl,
+  RefreshPhase,
+  type RefreshHeaderContext,
+} from 'react-native-nitro-refresh';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function Home() {
+type ActivityItem = {
+  id: number;
+  title: string;
+  category: string;
+  time: string;
+  accent: string;
+};
+
+const BASE_ITEMS: ActivityItem[] = [
+  {
+    id: 1,
+    title: '移动端交互评审',
+    category: '设计',
+    time: '09:30',
+    accent: '#e05a47',
+  },
+  {
+    id: 2,
+    title: 'Fabric 组件联调',
+    category: '原生',
+    time: '10:45',
+    accent: '#147d64',
+  },
+  {
+    id: 3,
+    title: '列表性能采样',
+    category: '性能',
+    time: '13:20',
+    accent: '#d99a27',
+  },
+  {
+    id: 4,
+    title: '刷新状态验收',
+    category: '测试',
+    time: '15:10',
+    accent: '#4966a8',
+  },
+  {
+    id: 5,
+    title: 'iOS 安全区校准',
+    category: '适配',
+    time: '16:00',
+    accent: '#8c5d9f',
+  },
+  {
+    id: 6,
+    title: 'Android 手势回归',
+    category: '适配',
+    time: '17:30',
+    accent: '#315f74',
+  },
+  {
+    id: 7,
+    title: '开发构建归档',
+    category: '交付',
+    time: '18:20',
+    accent: '#785c48',
+  },
+];
+
+const PHASE_LABEL: Record<RefreshPhase, string> = {
+  [RefreshPhase.IDLE]: '下拉同步',
+  [RefreshPhase.PULLING]: '继续下拉',
+  [RefreshPhase.READY]: '松开同步',
+  [RefreshPhase.REFRESHING]: '同步中',
+  [RefreshPhase.SETTLING]: '已同步',
+};
+
+const ActivityRow = memo(function ActivityRow({
+  item,
+}: {
+  item: ActivityItem;
+}): React.JSX.Element {
   return (
-    <View className="flex-1 flex flex-col gap-2 px-2 bg-red-500 pt-safe flex-center">
-      <View className="bg-blue-500/50 p-2">
-        <Text>1122331111111</Text>
+    <View style={styles.row}>
+      <View style={[styles.accent, { backgroundColor: item.accent }]} />
+      <View style={styles.rowBody}>
+        <Text style={styles.rowTitle}>{item.title}</Text>
+        <Text style={styles.rowMeta}>{item.category}</Text>
       </View>
-      <View className="bg-blue-500/50 p-2">
-        <Text className="text-blue-900">1122331111111</Text>
+      <Text style={styles.rowTime}>{item.time}</Text>
+    </View>
+  );
+});
+
+function DemoRefreshHeader({
+  phase,
+  offset,
+  progress,
+}: RefreshHeaderContext): React.JSX.Element {
+  const dialStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.2, 1], [0, 0.45, 1]),
+    transform: [
+      { rotate: `${progress.value * 270}deg` },
+      { scale: interpolate(progress.value, [0, 1], [0.72, 1]) },
+    ],
+  }));
+  const lineStyle = useAnimatedStyle(() => ({
+    width: Math.max(12, offset.value * 0.48),
+  }));
+
+  return (
+    <View style={styles.refreshHeader}>
+      <Animated.View style={[styles.refreshDial, dialStyle]}>
+        <View style={styles.refreshDialCore} />
+      </Animated.View>
+      <View style={styles.refreshCopy}>
+        <Text style={styles.refreshLabel}>{PHASE_LABEL[phase]}</Text>
+        <Animated.View style={[styles.refreshLine, lineStyle]} />
       </View>
-      <View className="bg-blue-500/50 p-2">
-        <Text className="text-blue-900" style={{ padding: 24 }}>
-          1122331111111
-        </Text>
-      </View>
-      <View className="bg-blue-500/50 p-2">
-        <Text style={{ fontSize: 24 }} className="text-blue-900">
-          1122331111111
-        </Text>
-      </View>
-      <Image
-        source={{
-          uri: 'https://picsum.photos/200/300',
-        }}
-        className="w-24 h-24 rounded-full"
-      />
     </View>
   );
 }
+
+export default function Home(): React.JSX.Element {
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  const data = useMemo(
+    () =>
+      BASE_ITEMS.map((item, index) => ({
+        ...item,
+        time:
+          refreshCount === 0
+            ? item.time
+            : `${String(9 + ((index + refreshCount) % 10)).padStart(2, '0')}:${String((index * 11 + refreshCount * 7) % 60).padStart(2, '0')}`,
+      })),
+    [refreshCount],
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshCount((count) => count + 1);
+      setRefreshing(false);
+    }, 1100);
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<ActivityItem>) => <ActivityRow item={item} />,
+    [],
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.topBar}>
+        <View>
+          <Text style={styles.eyebrow}>NITRO REFRESH</Text>
+          <Text style={styles.title}>今日工作流</Text>
+        </View>
+        <View style={styles.syncBadge}>
+          <View style={styles.syncDot} />
+          <Text style={styles.syncText}>#{refreshCount + 1}</Text>
+        </View>
+      </View>
+
+      <View style={styles.summaryBand}>
+        <View>
+          <Text style={styles.summaryNumber}>{data.length}</Text>
+          <Text style={styles.summaryLabel}>待处理节点</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryWide}>
+          <Text style={styles.summaryCaption}>最近同步</Text>
+          <Text style={styles.summaryValue}>
+            {refreshCount === 0 ? '尚未同步' : `已完成 ${refreshCount} 次`}
+          </Text>
+        </View>
+      </View>
+
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        pullDistance={96}
+        maxPullDistance={176}
+        renderHeader={(context) => <DemoRefreshHeader {...context} />}
+        style={styles.refreshControl}
+      >
+        <FlashList
+          data={data}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={Separator}
+        />
+      </RefreshControl>
+    </SafeAreaView>
+  );
+}
+
+function Separator(): React.JSX.Element {
+  return <View style={styles.separator} />;
+}
+
+const styles = StyleSheet.create({
+  accent: {
+    borderRadius: 2,
+    height: 34,
+    width: 4,
+  },
+  eyebrow: {
+    color: '#147d64',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  listContent: {
+    paddingBottom: 28,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+  },
+  refreshControl: {
+    backgroundColor: '#f3f5f1',
+  },
+  refreshCopy: {
+    gap: 6,
+    minWidth: 82,
+  },
+  refreshDial: {
+    alignItems: 'center',
+    borderColor: '#147d64',
+    borderRadius: 19,
+    borderRightColor: '#e05a47',
+    borderWidth: 3,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  refreshDialCore: {
+    backgroundColor: '#16211e',
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  refreshHeader: {
+    alignItems: 'center',
+    backgroundColor: '#dce9e2',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 14,
+    justifyContent: 'center',
+  },
+  refreshLabel: {
+    color: '#16211e',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  refreshLine: {
+    backgroundColor: '#e05a47',
+    borderRadius: 2,
+    height: 3,
+    maxWidth: 72,
+  },
+  row: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe3de',
+    borderRadius: 6,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 70,
+    paddingHorizontal: 16,
+  },
+  rowBody: {
+    flex: 1,
+    gap: 4,
+    marginLeft: 14,
+  },
+  rowMeta: {
+    color: '#708078',
+    fontSize: 12,
+  },
+  rowTime: {
+    color: '#31433d',
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
+  rowTitle: {
+    color: '#17211e',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  safeArea: {
+    backgroundColor: '#f3f5f1',
+    flex: 1,
+  },
+  separator: {
+    height: 10,
+  },
+  summaryBand: {
+    alignItems: 'center',
+    backgroundColor: '#17211e',
+    flexDirection: 'row',
+    minHeight: 88,
+    paddingHorizontal: 22,
+  },
+  summaryCaption: {
+    color: '#9fb1a9',
+    fontSize: 11,
+  },
+  summaryDivider: {
+    backgroundColor: '#40504a',
+    height: 42,
+    marginHorizontal: 22,
+    width: 1,
+  },
+  summaryLabel: {
+    color: '#9fb1a9',
+    fontSize: 11,
+  },
+  summaryNumber: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+  },
+  summaryValue: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  summaryWide: {
+    flex: 1,
+  },
+  syncBadge: {
+    alignItems: 'center',
+    backgroundColor: '#e7ece8',
+    borderRadius: 5,
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 34,
+    paddingHorizontal: 11,
+  },
+  syncDot: {
+    backgroundColor: '#e05a47',
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  syncText: {
+    color: '#24332e',
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+  },
+  title: {
+    color: '#17211e',
+    fontSize: 25,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  topBar: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 88,
+    paddingHorizontal: 22,
+  },
+});

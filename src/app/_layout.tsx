@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout(): React.JSX.Element {
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView className="flex-1">
       <KeyboardProvider>
         <SafeAreaProvider>
           <Stack screenOptions={{ headerShown: false }} />

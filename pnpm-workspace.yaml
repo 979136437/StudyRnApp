@@ -1,3 +1,6 @@
+packages:
+  - 'modules/*'
+
 overrides:
   baseline-browser-mapping: 2.11.3
   lightningcss: 1.30.1

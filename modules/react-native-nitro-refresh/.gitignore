@@ -1,0 +1,6 @@
+node_modules/
+build/
+android/.cxx/
+android/app/
+android/build/
+ios/build/
