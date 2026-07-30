@@ -60,7 +60,7 @@ export interface RefreshControlRef {
   finishRefresh(result: RefreshResult): void;
   /** 同步读取原生视图最近一次发布的完整状态。 */
   getState(): RefreshStateSnapshot;
-  /** 动画拉至 `maxPullDistance` 并停留，等待开始、取消或结果命令。 */
+  /** 动画拉至 `limit` 并停留，等待开始、取消或结果命令。 */
   pullToMax(): void;
 }
 
@@ -78,7 +78,7 @@ export interface RefreshHeaderContext {
   /**
    * 当前下拉位移，单位为 dp/pt。
    *
-   * 该值保留阈值之外的超拉距离，范围为 `0...maxPullDistance`。
+   * 该值保留阈值之外的超拉距离，范围为 `0...limit`。
    */
   offset: SharedValue<number>;
   /**
@@ -87,9 +87,7 @@ export interface RefreshHeaderContext {
    */
   progress: SharedValue<number>;
   /** 当前生效的刷新触发阈值，单位为 dp/pt。 */
-  pullDistance: number;
-  /** 刷新中及结果态的内容保持高度，单位为 dp/pt。 */
-  refreshingHeight: number;
+  threshold: number;
 }
 
 /** `RefreshControl` 的公共属性。 */
@@ -107,15 +105,13 @@ export interface RefreshControlProps {
   /** 是否允许下拉刷新。禁用时会立即结束刷新并复位内容，默认为 `true`。 */
   enabled?: boolean;
   /** 触发刷新的可见下拉阈值，单位为 dp/pt，默认 `80`。 */
-  pullDistance?: number;
-  /** 刷新中及结果态的内容保持高度，单位为 dp/pt，默认等于 `pullDistance`。 */
-  refreshingHeight?: number;
-  /** 最大下拉位移，单位为 dp/pt，默认 `pullDistance * 2`。 */
-  maxPullDistance?: number;
+  threshold?: number;
+  /** 允许下拉的最大距离，单位为 dp/pt，默认 `threshold * 2`。 */
+  limit?: number;
   /** 下拉触发灵敏度，范围为 `(0, 1]`，默认 `1`；值越小需要拖动越远。 */
   dragRate?: number;
   /** 成功或失败结果的停留时长，单位为毫秒，默认 `800`；设为 `0` 时立即回弹。 */
-  resultDuration?: number;
+  timeout?: number;
   /** 刷新控件宿主样式；通常由滚动组件自动注入。 */
   style?: StyleProp<ViewStyle>;
   /** 离散阶段发生变化时调用；逐帧动画请使用刷新头上下文中的 SharedValue。 */

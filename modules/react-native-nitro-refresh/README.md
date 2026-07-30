@@ -23,9 +23,9 @@ const [refreshing, setRefreshing] = useState(false);
       ref={refreshRef}
       refreshing={refreshing}
       onRefresh={() => setRefreshing(true)}
-      pullDistance={96}
-      refreshingHeight={72}
-      resultDuration={800}
+      threshold={96}
+      limit={192}
+      timeout={800}
       renderHeader={({ progress, offset, phase }) => (
         <CustomHeader progress={progress} offset={offset} phase={phase} />
       )}
@@ -47,9 +47,9 @@ setRefreshing(false);
 
 - `beginRefresh()`：进入刷新并触发一次 `onRefresh`。
 - `cancelRefresh()`：取消当前下拉、刷新、结果展示或回弹，不显示结果态。
-- `finishRefresh(result)`：从 `refreshing` 或程序化拉满后的 `ready` 阶段显示 `success` 或 `failure`，停留 `resultDuration` 后自动收起；其他阶段调用无操作。
+- `finishRefresh(result)`：从 `refreshing` 或程序化拉满后的 `ready` 阶段显示 `success` 或 `failure`，停留 `timeout` 后自动收起；其他阶段调用无操作。
 - `getState()`：同步返回 `{ phase, offset, refreshing }` 完整快照。
-- `pullToMax()`：动画拉到 `maxPullDistance` 并停在 `ready`，等待开始、取消或结果命令。
+- `pullToMax()`：动画拉到 `limit` 并停在 `ready`，等待开始、取消或结果命令。
 
 组件继续采用受控模型。调用 `finishRefresh()` 或 `cancelRefresh()` 时，调用方必须同时把 `refreshing` 更新为 `false`；调用 `beginRefresh()` 后，应在 `onRefresh` 中尽快把它更新为 `true`。
 
@@ -59,9 +59,11 @@ setRefreshing(false);
 
 ## 配置
 
-`pullDistance` 是触发阈值，默认 `80`；`refreshingHeight` 是刷新中及结果态的保持高度，默认等于 `pullDistance`。`maxPullDistance` 默认是 `pullDistance * 2`，并会自动保证不小于触发所需距离和保持高度。
+`threshold` 是触发刷新的可见下拉阈值，默认 `80`。`limit` 是允许下拉的最大距离，默认是 `threshold * 2`，并会自动保证不小于触发所需距离和刷新头实际高度。
 
-`dragRate` 是触发灵敏度，范围为 `(0, 1]`，默认 `1`。默认情况下可见下拉距离达到 `pullDistance` 即可触发；主动设置为 `0.5` 时，需要下拉约两倍距离。`resultDuration` 默认 `800` 毫秒，设为 `0` 会在结果阶段后立即开始回弹。
+`dragRate` 是触发灵敏度，范围为 `(0, 1]`，默认 `1`。默认情况下可见下拉距离达到 `threshold` 即可触发；主动设置为 `0.5` 时，需要下拉约两倍距离。`timeout` 是成功或失败结果的显示时间，默认 `800` 毫秒，设为 `0` 会立即开始回弹。
+
+刷新中及结果态的保持高度由刷新头实际布局自动决定，无需额外配置。自定义刷新头应提供可测量的自然高度；高度在运行期间变化时，原生内容位置会同步调整。
 
 组件必须通过纵向、非倒置滚动组件的 `refreshControl` 属性传入，不支持包裹滚动组件。`ScrollView`、`FlatList`、`SectionList` 和 FlashList 2 均使用相同方式：
 

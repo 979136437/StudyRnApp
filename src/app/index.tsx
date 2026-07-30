@@ -375,9 +375,9 @@ export default function Home(): React.JSX.Element {
             refreshing={refreshing}
             onRefresh={onRefresh}
             onStateChange={onStateChange}
-            pullDistance={46}
-            maxPullDistance={176}
-            resultDuration={800}
+            threshold={46}
+            limit={176}
+            timeout={800}
             renderHeader={(context) => <DemoRefreshHeader {...context} />}
           />
         }

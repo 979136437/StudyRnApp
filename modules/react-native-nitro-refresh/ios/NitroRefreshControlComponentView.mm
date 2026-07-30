@@ -21,6 +21,7 @@ using namespace facebook::react;
 - (void)pullToMax;
 - (void)scheduleResultDismissAfter:(double)resultDuration;
 - (void)cancelResultDismiss;
+- (void)updateActiveOffsetForConfigurationChange;
 - (BOOL)isShowingResult;
 - (void)settleToIdle;
 - (void)updatePhase:(NSString *)phase offset:(CGFloat)offset progress:(CGFloat)progress;
@@ -34,9 +35,9 @@ using namespace facebook::react;
   NSString *_controllerId;
   BOOL _enabled;
   BOOL _refreshing;
-  CGFloat _pullDistance;
-  CGFloat _refreshingHeight;
-  CGFloat _maxPullDistance;
+  CGFloat _threshold;
+  CGFloat _headerHeight;
+  CGFloat _limit;
   CGFloat _dragRate;
   CGFloat _currentOffset;
   CGFloat _currentProgress;
@@ -70,9 +71,9 @@ using namespace facebook::react;
     self.userInteractionEnabled = NO;
     _props = NitroRefreshControlViewShadowNode::defaultSharedProps();
     _enabled = YES;
-    _pullDistance = 80;
-    _refreshingHeight = 80;
-    _maxPullDistance = 160;
+    _threshold = 80;
+    _headerHeight = 80;
+    _limit = 160;
     _dragRate = 1;
     _phase = @"idle";
   }
@@ -95,6 +96,9 @@ using namespace facebook::react;
 {
   const auto &newProps = static_cast<const NitroRefreshControlViewProps &>(*props);
   NSString *nextControllerId = RCTNSStringFromString(newProps.controllerId);
+  CGFloat previousThreshold = _threshold;
+  CGFloat previousHeaderHeight = _headerHeight;
+  CGFloat previousLimit = _limit;
 
   // Fabric 复用 ComponentView 时 id 可能变化，先解除旧绑定再关联新控制器。
   if (_controllerId != nil && ![_controllerId isEqualToString:nextControllerId]) {
@@ -104,9 +108,9 @@ using namespace facebook::react;
   _controllerId = nextControllerId;
   _enabled = newProps.enabled;
   // JS 已执行校验；原生层仍保留最后一道保护，避免除零或负 inset。
-  _pullDistance = MAX(1, newProps.pullDistance);
-  _refreshingHeight = MAX(1, newProps.refreshingHeight);
-  _maxPullDistance = MAX(MAX(_pullDistance, _refreshingHeight), newProps.maxPullDistance);
+  _threshold = MAX(1, newProps.threshold);
+  _headerHeight = MAX(1, newProps.headerHeight);
+  _limit = MAX(MAX(_threshold, _headerHeight), newProps.limit);
   _dragRate = MIN(1, MAX(0.01, newProps.dragRate));
 
   if (_controllerId.length > 0) {
@@ -122,6 +126,12 @@ using namespace facebook::react;
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView != nil && _hasOriginalAlwaysBounceVertical) {
     scrollView.alwaysBounceVertical = _enabled ? YES : _originalAlwaysBounceVertical;
+  }
+  if (_enabled &&
+      (ABS(previousThreshold - _threshold) >= 0.5 ||
+       ABS(previousHeaderHeight - _headerHeight) >= 0.5 ||
+       ABS(previousLimit - _limit) >= 0.5)) {
+    [self updateActiveOffsetForConfigurationChange];
   }
 }
 
@@ -207,14 +217,14 @@ using namespace facebook::react;
   CGFloat rawOffset = MAX(0, -(scrollView.contentOffset.y + _originalAdjustedTop));
   // UIScrollView 已经把手指位移转换成带系统阻尼的可见内容位移。offset 必须使用这个
   // 实际位移，刷新头才能紧贴列表；再次乘 dragRate 会让刷新头只移动列表的一部分。
-  CGFloat offset = MIN(_maxPullDistance, rawOffset);
+  CGFloat offset = MIN(_limit, rawOffset);
   // dragRate 只调节触发灵敏度，不破坏刷新头和列表之间的一比一视觉关系。
-  CGFloat triggerOffset = MIN(_maxPullDistance, rawOffset * _dragRate);
+  CGFloat triggerOffset = MIN(_limit, rawOffset * _dragRate);
 
   if (gesture.state == UIGestureRecognizerStateChanged && offset > 0) {
-    _readyToRefresh = triggerOffset >= _pullDistance;
+    _readyToRefresh = triggerOffset >= _threshold;
     NSString *phase = _readyToRefresh ? @"ready" : @"pulling";
-    [self updatePhase:phase offset:offset progress:(triggerOffset / _pullDistance)];
+    [self updatePhase:phase offset:offset progress:(triggerOffset / _threshold)];
   } else if (gesture.state == UIGestureRecognizerStateEnded ||
              gesture.state == UIGestureRecognizerStateCancelled ||
              gesture.state == UIGestureRecognizerStateFailed) {
@@ -292,7 +302,7 @@ using namespace facebook::react;
 
     // 增加顶部 inset 形成刷新保持区域，并把 offset 对齐到新 inset 的顶部。
     UIEdgeInsets inset = _originalContentInset;
-    inset.top += _refreshingHeight;
+    inset.top += _headerHeight;
     [self startTrackingTransition];
     [UIView animateWithDuration:0.28
         delay:0
@@ -302,7 +312,7 @@ using namespace facebook::react;
         animations:^{
           scrollView.contentInset = inset;
           CGPoint point = scrollView.contentOffset;
-          point.y = -(self->_originalAdjustedTop + self->_refreshingHeight);
+          point.y = -(self->_originalAdjustedTop + self->_headerHeight);
           scrollView.contentOffset = point;
         }
         completion:^(BOOL finished) {
@@ -311,10 +321,10 @@ using namespace facebook::react;
             return;
           }
           [self stopTrackingTransition];
-          [self updatePhase:@"refreshing" offset:self->_refreshingHeight progress:1];
+          [self updatePhase:@"refreshing" offset:self->_headerHeight progress:1];
         }];
   } else {
-    [self updatePhase:@"refreshing" offset:_refreshingHeight progress:1];
+    [self updatePhase:@"refreshing" offset:_headerHeight progress:1];
   }
 
   // 程序化 refreshing=true 不回调 onRefresh，防止 React 受控更新形成通知回路。
@@ -339,6 +349,7 @@ using namespace facebook::react;
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
   [self updatePhase:result offset:initialOffset progress:1];
+  [self scheduleResultDismissAfter:resultDuration];
 
   if (scrollView != nil) {
     if (!_hasOriginalContentInset) {
@@ -347,7 +358,7 @@ using namespace facebook::react;
       _hasOriginalContentInset = YES;
     }
     UIEdgeInsets inset = _originalContentInset;
-    inset.top += _refreshingHeight;
+    inset.top += _headerHeight;
     [self startTrackingTransition];
     [UIView animateWithDuration:0.28
         delay:0
@@ -357,7 +368,7 @@ using namespace facebook::react;
         animations:^{
           scrollView.contentInset = inset;
           CGPoint point = scrollView.contentOffset;
-          point.y = -(self->_originalAdjustedTop + self->_refreshingHeight);
+          point.y = -(self->_originalAdjustedTop + self->_headerHeight);
           scrollView.contentOffset = point;
         }
         completion:^(BOOL finished) {
@@ -366,12 +377,10 @@ using namespace facebook::react;
             return;
           }
           [self stopTrackingTransition];
-          [self updatePhase:result offset:self->_refreshingHeight progress:1];
-          [self scheduleResultDismissAfter:resultDuration];
+          [self updatePhase:result offset:self->_headerHeight progress:1];
         }];
   } else {
-    [self updatePhase:result offset:_refreshingHeight progress:1];
-    [self scheduleResultDismissAfter:resultDuration];
+    [self updatePhase:result offset:_headerHeight progress:1];
   }
 }
 
@@ -390,7 +399,7 @@ using namespace facebook::react;
   CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
   [self updatePhase:@"pulling"
              offset:initialOffset
-           progress:MIN(1, initialOffset / _pullDistance)];
+           progress:MIN(1, initialOffset / _threshold)];
 
   if (scrollView != nil) {
     if (!_hasOriginalContentInset) {
@@ -399,7 +408,7 @@ using namespace facebook::react;
       _hasOriginalContentInset = YES;
     }
     UIEdgeInsets inset = _originalContentInset;
-    inset.top += _maxPullDistance;
+    inset.top += _limit;
     [self startTrackingTransition];
     [UIView animateWithDuration:0.28
         delay:0
@@ -409,7 +418,7 @@ using namespace facebook::react;
         animations:^{
           scrollView.contentInset = inset;
           CGPoint point = scrollView.contentOffset;
-          point.y = -(self->_originalAdjustedTop + self->_maxPullDistance);
+          point.y = -(self->_originalAdjustedTop + self->_limit);
           scrollView.contentOffset = point;
         }
         completion:^(BOOL finished) {
@@ -418,11 +427,75 @@ using namespace facebook::react;
             return;
           }
           [self stopTrackingTransition];
-          [self updatePhase:@"ready" offset:self->_maxPullDistance progress:1];
+          [self updatePhase:@"ready" offset:self->_limit progress:1];
         }];
   } else {
-    [self updatePhase:@"ready" offset:_maxPullDistance progress:1];
+    [self updatePhase:@"ready" offset:_limit progress:1];
   }
+}
+
+- (void)updateActiveOffsetForConfigurationChange
+{
+  BOOL isHeldPhase = _refreshing || [self isShowingResult];
+  BOOL isProgrammaticPull =
+      _programmaticPull &&
+      ([_phase isEqualToString:@"pulling"] || [_phase isEqualToString:@"ready"]);
+  if (!isHeldPhase && !isProgrammaticPull) {
+    if (_currentOffset > _limit) {
+      [self updatePhase:_phase offset:_limit progress:_currentProgress];
+    }
+    return;
+  }
+
+  CGFloat targetOffset = isProgrammaticPull ? _limit : _headerHeight;
+  NSString *targetPhase = _phase;
+  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
+  if (scrollView == nil) {
+    [self updatePhase:isProgrammaticPull ? @"ready" : targetPhase
+               offset:targetOffset
+             progress:1];
+    return;
+  }
+
+  if (!_hasOriginalContentInset) {
+    _originalContentInset = scrollView.contentInset;
+    _originalAdjustedTop = scrollView.adjustedContentInset.top;
+    _hasOriginalContentInset = YES;
+  }
+  CGFloat initialOffset = [self visibleOffsetForScrollView:scrollView];
+  [self updatePhase:targetPhase
+             offset:initialOffset
+           progress:isHeldPhase ? 1 : MIN(1, initialOffset / _threshold)];
+
+  UIEdgeInsets inset = _originalContentInset;
+  inset.top += targetOffset;
+  [self startTrackingTransition];
+  [UIView animateWithDuration:0.28
+      delay:0
+      options:UIViewAnimationOptionBeginFromCurrentState |
+              UIViewAnimationOptionCurveEaseOut |
+              UIViewAnimationOptionAllowUserInteraction
+      animations:^{
+        scrollView.contentInset = inset;
+        CGPoint point = scrollView.contentOffset;
+        point.y = -(self->_originalAdjustedTop + targetOffset);
+        scrollView.contentOffset = point;
+      }
+      completion:^(BOOL finished) {
+        if (!finished || self->_scrollViewComponentView.scrollView != scrollView) {
+          return;
+        }
+        if (isProgrammaticPull) {
+          if (!self->_programmaticPull) {
+            return;
+          }
+          [self stopTrackingTransition];
+          [self updatePhase:@"ready" offset:self->_limit progress:1];
+        } else if ([self->_phase isEqualToString:targetPhase]) {
+          [self stopTrackingTransition];
+          [self updatePhase:targetPhase offset:self->_headerHeight progress:1];
+        }
+      }];
 }
 
 - (void)scheduleResultDismissAfter:(double)resultDuration
@@ -523,7 +596,7 @@ using namespace facebook::react;
       ? presentationLayer.bounds.origin.y
       : scrollView.contentOffset.y;
   CGFloat offset = MAX(0, -(contentOffsetY + _originalAdjustedTop));
-  return MIN(_maxPullDistance, offset);
+  return MIN(_limit, offset);
 }
 
 - (void)startTrackingTransition
@@ -560,7 +633,7 @@ using namespace facebook::react;
     // 回弹进度沿用松手时的值并按剩余位移等比衰减，避免低于阈值时突然变大。
     progress = _transitionStartProgress * (offset / _transitionStartOffset);
   } else {
-    progress = MIN(1, offset / _pullDistance);
+    progress = MIN(1, offset / _threshold);
   }
   [self updatePhase:_phase offset:offset progress:progress];
 }
@@ -569,7 +642,7 @@ using namespace facebook::react;
 {
   BOOL phaseChanged = ![_phase isEqualToString:phase];
   _phase = phase;
-  _currentOffset = MAX(0, MIN(_maxPullDistance, offset));
+  _currentOffset = MAX(0, MIN(_limit, offset));
   _currentProgress = MIN(1, MAX(0, progress));
   if (_controllerId.length > 0) {
     // 快照只在原生对象之间更新；只有 getState 主动读取时才跨越 JSI。

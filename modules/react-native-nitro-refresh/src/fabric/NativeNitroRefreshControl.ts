@@ -15,7 +15,7 @@ import type {
 export type RefreshPullEvent = Readonly<{
   /** 当前下拉距离，单位为 dp/pt，包含超过触发阈值后的距离。 */
   offset: Double;
-  /** `offset / pullDistance` 的钳制结果，范围为 `0...1`。 */
+  /** `offset / threshold` 的钳制结果，范围为 `0...1`。 */
   progress: Double;
   /** 当前原生阶段的字符串值，与 Nitro `RefreshPhase` 保持一致。 */
   phase: string;
@@ -28,11 +28,11 @@ export interface NativeProps extends ViewProps {
   /** 是否响应下拉手势。 */
   enabled?: WithDefault<boolean, true>;
   /** 触发刷新的可见下拉阈值。 */
-  pullDistance?: WithDefault<Double, 80>;
+  threshold?: WithDefault<Double, 80>;
   /** 刷新中及结果态的内容保持高度。 */
-  refreshingHeight?: WithDefault<Double, 80>;
+  headerHeight?: WithDefault<Double, 80>;
   /** 原生内容允许下移的最大距离。 */
-  maxPullDistance?: WithDefault<Double, 160>;
+  limit?: WithDefault<Double, 160>;
   /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
   dragRate?: WithDefault<Double, 1>;
   /** 连续位移事件；由 Reanimated 在界面线程消费。 */

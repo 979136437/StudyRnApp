@@ -4,6 +4,8 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { RefreshPhase, type RefreshHeaderContext } from './types';
 
+export const DEFAULT_REFRESH_HEADER_HEIGHT = 80;
+
 const PHASE_LABELS = {
   [RefreshPhase.IDLE]: '下拉刷新',
   [RefreshPhase.PULLING]: '继续下拉',
@@ -82,8 +84,8 @@ export function DefaultRefreshHeader({
 const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
-    flex: 1,
     flexDirection: 'row',
+    height: DEFAULT_REFRESH_HEADER_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: 16,
   },

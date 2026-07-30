@@ -2,13 +2,19 @@ import {
   cloneElement,
   forwardRef,
   type ReactElement,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { NitroModules } from 'react-native-nitro-modules';
 import Animated, {
   useAnimatedStyle,
@@ -16,7 +22,10 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
-import { DefaultRefreshHeader } from './DefaultRefreshHeader';
+import {
+  DefaultRefreshHeader,
+  DEFAULT_REFRESH_HEADER_HEIGHT,
+} from './DefaultRefreshHeader';
 import NativeNitroRefreshControl, {
   type NativeProps,
   type RefreshPullEvent,
@@ -29,9 +38,10 @@ import {
   type RefreshHeaderContext,
 } from './types';
 
-const DEFAULT_PULL_DISTANCE = 80;
+const DEFAULT_THRESHOLD = 80;
 const DEFAULT_DRAG_RATE = 1;
-const DEFAULT_RESULT_DURATION = 800;
+const DEFAULT_TIMEOUT = 800;
+const HEADER_HEIGHT_EPSILON = 0.5;
 const AnimatedNativeRefreshControl = Animated.createAnimatedComponent(
   NativeNitroRefreshControl,
 );
@@ -98,68 +108,59 @@ export const RefreshControl = forwardRef<
     onRefresh,
     renderHeader,
     enabled = true,
-    pullDistance: pullDistanceProp,
-    refreshingHeight: refreshingHeightProp,
-    maxPullDistance: maxPullDistanceProp,
+    threshold: thresholdProp,
+    limit: limitProp,
     dragRate: dragRateProp,
-    resultDuration: resultDurationProp,
+    timeout: timeoutProp,
     style,
     onStateChange,
   } = props;
-  const pullDistance = positiveOrDefault(
-    'pullDistance',
-    pullDistanceProp,
-    DEFAULT_PULL_DISTANCE,
-  );
-  const refreshingHeight = positiveOrDefault(
-    'refreshingHeight',
-    refreshingHeightProp,
-    pullDistance,
+  const threshold = positiveOrDefault(
+    'threshold',
+    thresholdProp,
+    DEFAULT_THRESHOLD,
   );
   const dragRate = Math.min(
     1,
     positiveOrDefault('dragRate', dragRateProp, DEFAULT_DRAG_RATE),
   );
   const configuredMaxDistance = positiveOrDefault(
-    'maxPullDistance',
-    maxPullDistanceProp,
-    pullDistance * 2,
+    'limit',
+    limitProp,
+    threshold * 2,
   );
-  const maxPullDistance = Math.max(
-    pullDistance / dragRate,
-    refreshingHeight,
+  const [headerHeight, setHeaderHeight] = useState(
+    DEFAULT_REFRESH_HEADER_HEIGHT,
+  );
+  const limit = Math.max(
+    threshold / dragRate,
+    headerHeight,
     configuredMaxDistance,
   );
-  const resultDuration = nonNegativeOrDefault(
-    'resultDuration',
-    resultDurationProp,
-    DEFAULT_RESULT_DURATION,
-  );
+  const timeout = nonNegativeOrDefault('timeout', timeoutProp, DEFAULT_TIMEOUT);
 
   // 控制器在组件整个生命周期内保持同一实例，id 才能稳定关联原生 Fabric 视图。
   const [controller] = useState(() =>
     NitroModules.createHybridObject<RefreshController>('RefreshController'),
   );
   const [phase, setPhase] = useState<RefreshPhase>(RefreshPhase.IDLE);
+  const [refreshRequestVersion, setRefreshRequestVersion] = useState(0);
   const phaseValue = useSharedValue<RefreshPhase>(RefreshPhase.IDLE);
   const offset = useSharedValue(0);
   const progress = useSharedValue(0);
   const onRefreshRef = useRef(onRefresh);
   const onStateChangeRef = useRef(onStateChange);
-  const refreshingRef = useRef(refreshing);
 
   onRefreshRef.current = onRefresh;
   onStateChangeRef.current = onStateChange;
-  refreshingRef.current = refreshing;
 
   useEffect(() => {
     // 使用 ref 调用最新回调，避免每次父组件渲染都跨 JSI 重新注册函数。
     controller.setOnRefresh(() => {
       onRefreshRef.current();
-      // 给父组件一次提交受控状态的机会；若仍为 false，原生刷新立即复位。
-      requestAnimationFrame(() => {
-        controller.setRefreshing(refreshingRef.current);
-      });
+      // 强制完成一次 React 提交，再由下方 effect 同步最终受控值。不能依赖单帧延迟，
+      // 并发渲染可能在该帧后才提交 refreshing=true，造成原生先回弹又重新进入刷新。
+      setRefreshRequestVersion((version) => version + 1);
     });
     controller.setOnStateChange((nextPhase) => {
       setPhase(nextPhase);
@@ -172,20 +173,31 @@ export const RefreshControl = forwardRef<
   useEffect(() => {
     // 禁用优先级高于 refreshing，确保运行中切换 enabled=false 也会可靠复位。
     controller.setRefreshing(enabled && refreshing);
-  }, [controller, enabled, refreshing]);
+  }, [controller, enabled, refreshing, refreshRequestVersion]);
 
   useImperativeHandle(
     ref,
     () => ({
       beginRefresh: () => controller.beginRefresh(),
       cancelRefresh: () => controller.cancelRefresh(),
-      finishRefresh: (result) =>
-        controller.finishRefresh(result, resultDuration),
+      finishRefresh: (result) => controller.finishRefresh(result, timeout),
       getState: () => controller.getState(),
       pullToMax: () => controller.pullToMax(),
     }),
-    [controller, resultDuration],
+    [controller, timeout],
   );
+
+  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    const measuredHeight = event.nativeEvent.layout.height;
+    if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) {
+      return;
+    }
+    setHeaderHeight((currentHeight) =>
+      Math.abs(currentHeight - measuredHeight) < HEADER_HEIGHT_EPSILON
+        ? currentHeight
+        : measuredHeight,
+    );
+  }, []);
 
   // Fabric 直接事件在 UI runtime 中更新 SharedValue，不经过 React state。
   const pullEventHandler = useEvent<RefreshPullEvent>(
@@ -204,7 +216,7 @@ export const RefreshControl = forwardRef<
     // 未完全露出时紧贴内容进入视口；达到保持高度后固定在顶部，避免超额下拉时头部上方留白。
     transform: [
       {
-        translateY: Math.min(offset.value, refreshingHeight) - refreshingHeight,
+        translateY: Math.min(offset.value, headerHeight) - headerHeight,
       },
     ],
   }));
@@ -215,10 +227,9 @@ export const RefreshControl = forwardRef<
       phase,
       phaseValue,
       progress,
-      pullDistance,
-      refreshingHeight,
+      threshold,
     }),
-    [offset, phase, phaseValue, progress, pullDistance, refreshingHeight],
+    [offset, phase, phaseValue, progress, threshold],
   );
 
   const nativeControl = (
@@ -226,14 +237,18 @@ export const RefreshControl = forwardRef<
       controllerId={controller.id}
       dragRate={dragRate}
       enabled={enabled}
-      maxPullDistance={maxPullDistance}
+      headerHeight={headerHeight}
+      limit={limit}
       onPull={pullEventHandler as unknown as NativeProps['onPull']}
-      pullDistance={pullDistance}
-      refreshingHeight={refreshingHeight}
+      threshold={threshold}
     />
   );
-  const buildHeader = renderHeader ?? DefaultRefreshHeader;
-  const header = buildHeader(headerContext);
+  const header =
+    renderHeader === undefined ? (
+      <DefaultRefreshHeader {...headerContext} />
+    ) : (
+      renderHeader(headerContext)
+    );
 
   if (Platform.OS === 'ios') {
     if (__DEV__ && children != null) {
@@ -248,11 +263,9 @@ export const RefreshControl = forwardRef<
         style: [style, styles.iosControl],
       },
       <View
+        onLayout={handleHeaderLayout}
         pointerEvents="none"
-        style={[
-          styles.iosHeader,
-          { height: refreshingHeight, top: -refreshingHeight },
-        ]}
+        style={[styles.iosHeader, { top: -headerHeight }]}
       >
         {header}
       </View>,
@@ -277,8 +290,9 @@ export const RefreshControl = forwardRef<
   return (
     <View style={[styles.container, style]}>
       <Animated.View
+        onLayout={handleHeaderLayout}
         pointerEvents="none"
-        style={[styles.header, { height: refreshingHeight }, headerStyle]}
+        style={[styles.header, headerStyle]}
       >
         {header}
       </Animated.View>

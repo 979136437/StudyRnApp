@@ -32,13 +32,25 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     }
 
   /** 触发刷新的可见下拉阈值，单位为 dp。 */
-  var pullDistanceDp = 80.0
+  var thresholdDp = 80.0
+    set(value) {
+      field = value
+      scheduleConfigurationUpdate()
+    }
 
   /** 刷新中及结果态的内容保持高度，单位为 dp。 */
-  var refreshingHeightDp = 80.0
+  var headerHeightDp = 80.0
+    set(value) {
+      field = value
+      scheduleConfigurationUpdate()
+    }
 
   /** 内容允许下移的最大距离，单位为 dp。 */
-  var maxPullDistanceDp = 160.0
+  var limitDp = 160.0
+    set(value) {
+      field = value
+      scheduleConfigurationUpdate()
+    }
 
   /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
   var dragRate = 1.0
@@ -54,13 +66,17 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private var controller: HybridRefreshController? = null
   private var animator: ValueAnimator? = null
   private var resultDismissRunnable: Runnable? = null
+  private val configurationUpdateRunnable = Runnable { applyConfigurationUpdate() }
 
-  private val pullDistancePx: Float
-    get() = PixelUtil.toPixelFromDIP(pullDistanceDp)
-  private val refreshingHeightPx: Float
-    get() = PixelUtil.toPixelFromDIP(refreshingHeightDp)
-  private val maxPullDistancePx: Float
-    get() = PixelUtil.toPixelFromDIP(maxPullDistanceDp)
+  private val thresholdPx: Float
+    get() = PixelUtil.toPixelFromDIP(thresholdDp)
+  private val headerHeightPx: Float
+    get() = PixelUtil.toPixelFromDIP(headerHeightDp)
+  private val limitPx: Float
+    get() =
+      PixelUtil.toPixelFromDIP(
+        max(max(limitDp, headerHeightDp), thresholdDp / dragRate.coerceAtLeast(0.01)),
+      )
 
   fun attachController(controllerId: String) {
     controller?.detach(this)
@@ -74,6 +90,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   override fun onDetachedFromWindow() {
     cancelResultDismiss()
+    removeCallbacks(configurationUpdateRunnable)
     animator?.cancel()
     animator = null
     controller?.detach(this)
@@ -136,11 +153,11 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         }
         if (dragging) {
           val rawDistance = max(0f, event.y - initialY - touchSlop)
-          val visibleOffset = min(maxPullDistancePx, rawDistance)
-          val triggerOffset = min(maxPullDistancePx, rawDistance * dragRate.toFloat())
-          setOffset(visibleOffset, triggerOffset / pullDistancePx)
+          val visibleOffset = min(limitPx, rawDistance)
+          val triggerOffset = min(limitPx, rawDistance * dragRate.toFloat())
+          setOffset(visibleOffset, triggerOffset / thresholdPx)
           setPhase(
-            if (triggerOffset >= pullDistancePx) RefreshPhase.READY else RefreshPhase.PULLING,
+            if (triggerOffset >= thresholdPx) RefreshPhase.READY else RefreshPhase.PULLING,
           )
         }
         return dragging
@@ -201,7 +218,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     cancelResultDismiss()
     programmaticPull = false
     setPhase(RefreshPhase.REFRESHING)
-    animateOffsetTo(refreshingHeightPx, 1f)
+    animateOffsetTo(headerHeightPx, 1f)
     if (notifyJs) controller?.requestRefresh()
     return true
   }
@@ -217,9 +234,8 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     setPhase(
       if (result == RefreshResult.SUCCESS) RefreshPhase.SUCCESS else RefreshPhase.FAILURE,
     )
-    animateOffsetTo(refreshingHeightPx, 1f) {
-      scheduleResultDismiss(resultDuration)
-    }
+    scheduleResultDismiss(resultDuration)
+    animateOffsetTo(headerHeightPx, 1f)
   }
 
   private fun pullToMax() {
@@ -229,7 +245,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     cancelResultDismiss()
     programmaticPull = true
     setPhase(RefreshPhase.PULLING)
-    animateOffsetTo(maxPullDistancePx) {
+    animateOffsetTo(limitPx) {
       if (programmaticPull && phase == RefreshPhase.PULLING) {
         setPhase(RefreshPhase.READY)
       }
@@ -263,7 +279,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     }
     resultDismissRunnable = runnable
     if (durationMs == 0L) {
-      runnable.run()
+      post(runnable)
     } else {
       postDelayed(runnable, durationMs)
     }
@@ -272,6 +288,26 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private fun cancelResultDismiss() {
     resultDismissRunnable?.let(::removeCallbacks)
     resultDismissRunnable = null
+  }
+
+  private fun scheduleConfigurationUpdate() {
+    removeCallbacks(configurationUpdateRunnable)
+    post(configurationUpdateRunnable)
+  }
+
+  private fun applyConfigurationUpdate() {
+    when {
+      phase == RefreshPhase.REFRESHING || isResultPhase() ->
+        animateOffsetTo(headerHeightPx, 1f)
+      programmaticPull &&
+        (phase == RefreshPhase.PULLING || phase == RefreshPhase.READY) ->
+        animateOffsetTo(limitPx) {
+          if (programmaticPull && phase == RefreshPhase.PULLING) {
+            setPhase(RefreshPhase.READY)
+          }
+        }
+      offsetPx > limitPx -> setOffset(limitPx)
+    }
   }
 
   private fun animateOffsetTo(
@@ -320,11 +356,11 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   private fun setOffset(value: Float, progressOverride: Float? = null) {
-    offsetPx = value.coerceIn(0f, maxPullDistancePx)
+    offsetPx = value.coerceIn(0f, limitPx)
     val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
     progress =
       progressOverride?.coerceIn(0f, 1f)
-        ?: if (pullDistanceDp == 0.0) 0f else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0).toFloat()
+        ?: if (thresholdDp == 0.0) 0f else (offsetDp / thresholdDp).coerceIn(0.0, 1.0).toFloat()
     if (childCount > 0) getChildAt(0).translationY = offsetPx
     emitPull()
   }
