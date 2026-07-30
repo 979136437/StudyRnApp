@@ -91,7 +91,12 @@ class HybridRecyclerListView(
   override fun afterUpdate() {
     if (previousListId != listId) {
       if (previousListId.isNotEmpty()) {
-        publishRefresh(NativeRefreshPhase.IDLE, 0.0, 0.0, previousListId)
+        publishRefresh(
+          NativeRefreshPhase.IDLE,
+          0.0,
+          0.0,
+          targetListId = previousListId,
+        )
         RecyclerListRegistry.unregisterList(previousListId, this)
       }
       previousListId = listId

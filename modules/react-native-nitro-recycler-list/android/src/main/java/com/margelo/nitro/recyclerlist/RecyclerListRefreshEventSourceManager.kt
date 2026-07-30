@@ -32,6 +32,7 @@ internal class RecyclerListRefreshEventSourceManager :
       .put("topPull", MapBuilder.of("registrationName", "onPull"))
       .put("topTabScroll", MapBuilder.of("registrationName", "onTabScroll"))
       .build()
+      .toMutableMap()
 
   companion object {
     const val REACT_CLASS = "RecyclerListRefreshEventSourceView"
