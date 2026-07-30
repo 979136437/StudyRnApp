@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { MoreContentTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { MoreContentTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function MoreContentRoute(): React.JSX.Element {
   return (

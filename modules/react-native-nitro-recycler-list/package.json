@@ -14,6 +14,7 @@
     "nitrogen",
     "nitro.json",
     "react-native.config.js",
+    "testing.ts",
     "NitroRecyclerList.podspec",
     "README.md"
   ],

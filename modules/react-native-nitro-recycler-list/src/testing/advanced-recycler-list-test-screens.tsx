@@ -1,18 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { RecyclerList } from '../RecyclerList';
 import {
   RecyclerGroupedStickyList,
-  RecyclerList,
   RecyclerSecondLevelList,
-  RecyclerTabView,
-  type RecyclerTabItem,
-  type SecondLevelContentContext,
-  type SecondLevelOptions,
-} from 'react-native-nitro-recycler-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
+} from '../RecyclerList.presets';
+import { RecyclerTabView } from '../RecyclerTabView';
+import type { RecyclerTabItem } from '../RecyclerTabView.types';
+import type { SecondLevelContentContext, SecondLevelOptions } from '../types';
 import { useTestRefresh } from './recycler-list-test-screens';
 
+/** 高级滚动场景共用的背景、文本与状态强调色。 */
 const COLORS = {
   background: '#eef2ef',
   border: '#d5ddd8',
@@ -24,15 +23,32 @@ const COLORS = {
   yellow: '#d6a133',
 } as const;
 
-type DemoTab = RecyclerTabItem & { accent: string };
-type TabCard = { id: string; title: string; detail: string; height: number };
+/** 带场景识别色的折叠页签描述。 */
+type DemoTab = RecyclerTabItem & {
+  /** 当前页签卡片使用的强调色。 */
+  accent: string;
+};
 
+/** 折叠多页中用于形成动态高度的列表卡片。 */
+type TabCard = {
+  /** 在所属页签内稳定且唯一的项目键。 */
+  id: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 描述当前手工验收动作的正文。 */
+  detail: string;
+  /** 用于检查切页后测量缓存和深层偏移恢复的最小高度。 */
+  height: number;
+};
+
+/** 三个稳定页签用于同时验证点击切换和左右滑页。 */
 const TABS: readonly DemoTab[] = [
   { key: 'selected', title: '精选', accent: COLORS.green },
   { key: 'latest', title: '最新', accent: COLORS.orange },
   { key: 'saved', title: '收藏', accent: COLORS.yellow },
 ];
 
+/** 为每个页签生成独立键空间和不同高度分布的长列表数据。 */
 const TAB_DATA = Object.fromEntries(
   TABS.map((tab, tabIndex) => [
     tab.key,
@@ -51,6 +67,12 @@ const TAB_DATA = Object.fromEntries(
   ]),
 ) as Record<string, TabCard[]>;
 
+/**
+ * 验证共享折叠头、多页横向切换和每页原生滚动位置恢复。
+ *
+ * 每个场景直接返回 `RecyclerList`，并提供稳定 `listKey`；切换页签前后应保留已经
+ * 越过折叠区间的深层位置，未完全折叠时则同步当前折叠量。
+ */
 export function CollapsibleTabsTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 
@@ -81,7 +103,7 @@ export function CollapsibleTabsTestScreen(): React.JSX.Element {
   );
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <RecyclerTabView
         collapsedHeaderHeight={0}
         defaultActiveKey="selected"
@@ -101,10 +123,16 @@ export function CollapsibleTabsTestScreen(): React.JSX.Element {
         renderScene={renderScene}
         tabs={TABS}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
+/**
+ * 分组多层吸顶测试数据。
+ *
+ * `group` 是零级组标题，`section` 是一级分区标题，`content` 是不参与吸顶的普通
+ * 行。判别字段确保普通行不会意外提供吸顶层级或组键。
+ */
 type StickyItem =
   | {
       id: string;
@@ -130,6 +158,11 @@ type StickyItem =
       detail: string;
     };
 
+/**
+ * 生成三个吸顶组，每组包含一个零级标题和三个一级标题。
+ *
+ * 新组零级标题到达吸顶边界时，应整体推走上一组完整的两级吸顶栈。
+ */
 const STICKY_ITEMS: StickyItem[] = ['产品', '工程', '运营'].flatMap(
   (group, groupIndex) => {
     const accent = [COLORS.green, COLORS.orange, '#4267a9'][groupIndex]!;
@@ -168,6 +201,7 @@ const STICKY_ITEMS: StickyItem[] = ['产品', '工程', '运营'].flatMap(
   },
 );
 
+/** 验证同组层级叠放、同层推顶以及跨组完整排斥退出。 */
 export function ComplexStickyTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
   return (
@@ -218,16 +252,32 @@ export function ComplexStickyTestScreen(): React.JSX.Element {
   );
 }
 
-type SecondItem = { id: string; title: string };
+/** 下拉二级主列表中的固定行数据。 */
+type SecondItem = {
+  /** 原生差异更新使用的稳定键。 */
+  id: string;
+  /** 行标题。 */
+  title: string;
+};
+
+/** 提供足够滚动距离的二楼主列表数据。 */
 const SECOND_ITEMS: SecondItem[] = Array.from({ length: 32 }, (_, index) => ({
   id: `second-${index}`,
   title: `主列表内容 ${String(index + 1).padStart(2, '0')}`,
 }));
 
+/**
+ * 验证普通刷新与二楼请求的双阈值互斥分流。
+ *
+ * 第一阈值固定为 72，第二阈值固定为 176。达到第二阈值松手后仅增加请求计数并
+ * 打开受控二楼；内容中的关闭按钮通过上下文请求原生执行关闭动画。
+ */
 export function SecondLevelTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
   const [open, setOpen] = useState(false);
   const [requestedCount, setRequestedCount] = useState(0);
+
+  /** 二楼内容保持稳定引用，仅在请求计数变化时更新显示值。 */
   const renderContent = useCallback(
     (context: SecondLevelContentContext) => (
       <View style={styles.secondFloor}>
@@ -245,6 +295,8 @@ export function SecondLevelTestScreen(): React.JSX.Element {
     ),
     [requestedCount],
   );
+
+  /** 组合业务受控状态与原生二楼阈值，避免每次渲染创建新配置对象。 */
   const secondLevel = useMemo<SecondLevelOptions>(
     () => ({
       open,
@@ -284,23 +336,30 @@ export function SecondLevelTestScreen(): React.JSX.Element {
   );
 }
 
+/** 高级场景外壳属性。 */
+type AdvancedShellProps = {
+  /** 占满剩余区域的被测列表。 */
+  children: React.ReactNode;
+  /** 标识当前原生能力的短标签。 */
+  eyebrow: string;
+  /** 页面主标题。 */
+  title: string;
+};
+
+/** 为复杂吸顶和下拉二级场景提供一致的安全区与固定标题区域。 */
 function AdvancedShell({
   children,
   eyebrow,
   title,
-}: {
-  children: React.ReactNode;
-  eyebrow: string;
-  title: string;
-}): React.JSX.Element {
+}: AdvancedShellProps): React.JSX.Element {
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <View style={styles.screenHeader}>
         <Text style={styles.eyebrow}>{eyebrow}</Text>
         <Text style={styles.screenTitle}>{title}</Text>
       </View>
       <View style={styles.body}>{children}</View>
-    </SafeAreaView>
+    </View>
   );
 }
 

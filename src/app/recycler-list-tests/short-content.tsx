@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { ShortContentTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { ShortContentTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function ShortContentRoute(): React.JSX.Element {
   return (

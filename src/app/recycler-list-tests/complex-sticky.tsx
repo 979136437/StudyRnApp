@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { ComplexStickyTestScreen } from '@/components/recycler-list-tests/advanced-recycler-list-test-screens';
+import { ComplexStickyTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function ComplexStickyRoute(): React.JSX.Element {
   return (

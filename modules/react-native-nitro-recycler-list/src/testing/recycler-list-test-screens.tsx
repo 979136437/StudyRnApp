@@ -7,20 +7,23 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+
+import { RecyclerList } from '../RecyclerList';
+import {
+  RecyclerGridList,
+  RecyclerHorizontalList,
+  RecyclerMasonryList,
+} from '../RecyclerList.presets';
 import {
   LoadMoreState,
   NativeRefreshPhase,
-  RecyclerGridList,
-  RecyclerHorizontalList,
-  RecyclerList,
-  RecyclerMasonryList,
   SecondLevelPhase,
   type RefreshHeaderContext,
   type RecyclerRenderItemInfo,
-} from 'react-native-nitro-recycler-list';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from '../types';
 
+/** 基础测试页面共用的中性色与状态强调色。 */
 const COLORS = {
   background: '#f2f4f1',
   border: '#d9dfda',
@@ -32,6 +35,7 @@ const COLORS = {
   yellow: '#d6a133',
 } as const;
 
+/** 将原生刷新阶段映射为测试刷新头显示的离散文案。 */
 const REFRESH_PHASE_LABELS = {
   [NativeRefreshPhase.IDLE]: '下拉刷新',
   [NativeRefreshPhase.PULLING]: '继续下拉',
@@ -40,12 +44,19 @@ const REFRESH_PHASE_LABELS = {
   [NativeRefreshPhase.SETTLING]: '刷新完成',
 } as const;
 
+/** 将时间格式化为刷新头使用的二十四小时制小时和分钟。 */
 function formatRefreshTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
 }
 
+/**
+ * 九个集成场景共用的自定义刷新头。
+ *
+ * 箭头旋转直接读取 Reanimated `SharedValue`，用于验证 Fabric 高频事件没有经过
+ * React 逐帧渲染；启用二楼时优先显示第二段手势进度和提示文案。
+ */
 export function RecyclerTestRefreshHeader({
   phase,
   progress,
@@ -95,9 +106,18 @@ export function RecyclerTestRefreshHeader({
   );
 }
 
+/**
+ * 为测试页面提供可复用的受控刷新状态。
+ *
+ * 每次刷新保持 900 毫秒后自动结束；组件卸载时清理计时器，避免切换测试路由后
+ * 继续更新已经卸载的页面。
+ */
 export function useTestRefresh(): {
+  /** 由列表达到第一阈值并松手时调用。 */
   onRefresh: () => void;
+  /** 传给列表的受控刷新状态。 */
   refreshing: boolean;
+  /** 渲染支持普通刷新和二楼提示的统一刷新头。 */
   renderRefreshHeader: (context: RefreshHeaderContext) => React.JSX.Element;
 } {
   const [refreshing, setRefreshing] = useState(false);
@@ -129,13 +149,19 @@ export function useTestRefresh(): {
   return { onRefresh, refreshing, renderRefreshHeader };
 }
 
+/** 基础测试页面外壳属性。 */
 type TestShellProps = {
+  /** 标识当前场景关注能力的短标签。 */
   badge: string;
+  /** 占满剩余空间的列表测试内容。 */
   children: React.ReactNode;
+  /** 当前测试数据项总数。 */
   count: number;
+  /** 页面主标题。 */
   title: string;
 };
 
+/** 统一基础场景的安全区、标题和数据量显示，不参与被测列表滚动。 */
 function TestShell({
   badge,
   children,
@@ -143,7 +169,7 @@ function TestShell({
   title,
 }: TestShellProps): React.JSX.Element {
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <View style={styles.screenHeader}>
         <View style={styles.screenHeading}>
           <Text style={styles.screenEyebrow}>{badge}</Text>
@@ -155,10 +181,15 @@ function TestShell({
         </View>
       </View>
       <View style={styles.listFrame}>{children}</View>
-    </SafeAreaView>
+    </View>
   );
 }
 
+/**
+ * 精选瀑布流的数据联合。
+ *
+ * `section` 是必须通栏的吸顶标题，`story` 是具有不同预设高度的普通瀑布流卡片。
+ */
 type FeaturedItem =
   | { id: string; kind: 'section'; title: string }
   | {
@@ -170,6 +201,7 @@ type FeaturedItem =
       height: number;
     };
 
+/** 同时覆盖通栏吸顶、异构类型和动态卡片高度的固定测试数据。 */
 const FEATURED_ITEMS: FeaturedItem[] = [
   { id: 'featured', kind: 'section', title: '精选内容' },
   {
@@ -213,6 +245,9 @@ const FEATURED_ITEMS: FeaturedItem[] = [
   ),
 ];
 
+/**
+ * 验证两列瀑布流、通栏吸顶项目、异构宿主复用和统一下拉刷新的集成场景。
+ */
 export function FeaturedContentTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 
@@ -254,13 +289,19 @@ export function FeaturedContentTestScreen(): React.JSX.Element {
   );
 }
 
+/** 动态测量场景中的单张瀑布流卡片。 */
 type DynamicCard = {
+  /** 跨重排保持稳定的项目键。 */
   id: string;
+  /** 卡片标题。 */
   label: string;
+  /** 形成不同实测高度的正文。 */
   body: string;
+  /** 区分相邻测试卡片的背景色。 */
   tone: string;
 };
 
+/** 用不同文本长度和换行情况制造真实动态高度。 */
 const DYNAMIC_BODIES = [
   '短内容。',
   '内容完成布局后，将真实高度同步给原生尺寸缓存。',
@@ -269,6 +310,7 @@ const DYNAMIC_BODIES = [
   '快速滚动后返回此处，卡片应继续使用已经记录的真实尺寸，而不是重新依赖预估高度。',
 ] as const;
 
+/** 重复正文样本生成足以触发快速滚动和回收的动态高度数据。 */
 const DYNAMIC_CARDS: DynamicCard[] = Array.from({ length: 60 }, (_, index) => ({
   id: `dynamic-${index}`,
   label: `测量样本 ${String(index + 1).padStart(2, '0')}`,
@@ -276,6 +318,7 @@ const DYNAMIC_CARDS: DynamicCard[] = Array.from({ length: 60 }, (_, index) => ({
   tone: ['#dcece5', '#f3e7dd', '#e3e9f4', '#eee7f1'][index % 4],
 }));
 
+/** 验证真实尺寸回传、瀑布流局部重排和可视锚点保持。 */
 export function DynamicHeightCardsTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 
@@ -307,12 +350,17 @@ export function DynamicHeightCardsTestScreen(): React.JSX.Element {
   );
 }
 
+/** 短列表项使用的稳定数据结构。 */
 type CompactItem = {
+  /** 数据差异和回收重挂载使用的稳定键。 */
   id: string;
+  /** 单行显示的主要内容。 */
   label: string;
+  /** 用于观察快速滚动时内容是否串项的固定状态。 */
   status: '就绪' | '测量' | '回收';
 };
 
+/** 大量固定短项目，用于增加单次滚动跨越的回收槽位数量。 */
 const COMPACT_ITEMS: CompactItem[] = Array.from(
   { length: 160 },
   (_, index) => ({
@@ -322,6 +370,7 @@ const COMPACT_ITEMS: CompactItem[] = Array.from(
   }),
 );
 
+/** 验证高密度短项目在快速滚动下的绑定顺序和复用稳定性。 */
 export function ShortContentTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 
@@ -354,24 +403,38 @@ export function ShortContentTestScreen(): React.JSX.Element {
   );
 }
 
+/** 纵向父列表中的一个横向分组。 */
 type Shelf = {
+  /** 同时作为父项键和子列表 `listKey`。 */
   id: string;
+  /** 分组标题。 */
   title: string;
+  /** 分组识别色。 */
   accent: string;
 };
 
+/** 横向子列表中的卡片数据。 */
 type ShelfItem = {
+  /** 当前分组内稳定且唯一的项目键。 */
   id: string;
+  /** 卡片标题。 */
   title: string;
+  /** 用于快速识别滚动位置的百分比文本。 */
   value: string;
 };
 
+/** 生成足够多的纵向分组，确保父项离屏后会发生回收。 */
 const SHELVES: Shelf[] = Array.from({ length: 24 }, (_, index) => ({
   id: `shelf-${index}`,
   title: `横向分组 ${String(index + 1).padStart(2, '0')}`,
   accent: ['#147d64', '#d56843', '#4267a9', '#8b5a92'][index % 4],
 }));
 
+/**
+ * 单个可回收父项中的横向列表。
+ *
+ * `listKey` 复用分组键，用于验证父项回收并重新挂载后能够恢复各自的横向位置。
+ */
 const HorizontalShelf = memo(function HorizontalShelf({
   shelf,
 }: {
@@ -413,6 +476,7 @@ const HorizontalShelf = memo(function HorizontalShelf({
   );
 });
 
+/** 验证纵向主列表嵌套横向列表及每个子列表的独立位置恢复。 */
 export function NestedHorizontalListsTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 
@@ -435,12 +499,22 @@ export function NestedHorizontalListsTestScreen(): React.JSX.Element {
   );
 }
 
+/** 分页追加场景中的一条内容记录。 */
 type LoadMoreItem = {
+  /** 跨分页追加保持唯一的项目键。 */
   id: string;
+  /** 当前项目所属的十二项数据批次。 */
   batch: number;
+  /** 行标题。 */
   title: string;
 };
 
+/**
+ * 创建连续且键稳定的分页测试数据。
+ *
+ * @param start 第一条数据的全局零基索引。
+ * @param count 本批生成的数据量。
+ */
 function createLoadMoreItems(start: number, count: number): LoadMoreItem[] {
   return Array.from({ length: count }, (_, offset) => {
     const index = start + offset;
@@ -452,6 +526,12 @@ function createLoadMoreItems(start: number, count: number): LoadMoreItem[] {
   });
 }
 
+/**
+ * 验证触底去重、分页追加、失败重试和完成态禁用。
+ *
+ * 第二次加载固定失败，便于手工检查 `retryEndReached()` 对错误状态的恢复；数据达到
+ * 72 项后进入完成态，不应继续触发加载。
+ */
 export function MoreContentTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
   const [items, setItems] = useState(() => createLoadMoreItems(0, 24));
@@ -553,13 +633,19 @@ export function MoreContentTestScreen(): React.JSX.Element {
   );
 }
 
+/** 回收重挂载场景中的异构项目。 */
 type RecycleItem = {
+  /** 用于隔离 React 局部状态的稳定项目键。 */
   id: string;
+  /** 决定原生回收池类型和卡片内部控件。 */
   kind: 'metric' | 'toggle';
+  /** 卡片标题。 */
   title: string;
+  /** 计数卡片的基础数值。 */
   value: number;
 };
 
+/** 生成远多于可视槽位数量的异构数据，以持续触发宿主复用。 */
 const RECYCLE_ITEMS: RecycleItem[] = Array.from(
   { length: 240 },
   (_, index) => ({
@@ -570,6 +656,12 @@ const RECYCLE_ITEMS: RecycleItem[] = Array.from(
   }),
 );
 
+/**
+ * 带 React 局部状态的可回收卡片。
+ *
+ * 开关与计数状态用于检查槽位绑定到新 `itemKey` 后子树是否重新挂载，防止状态从
+ * 已离屏项目泄漏到新的数据项。
+ */
 const RecycleCard = memo(function RecycleCard({
   info,
 }: {
@@ -612,6 +704,7 @@ const RecycleCard = memo(function RecycleCard({
   );
 });
 
+/** 验证按 `itemType` 分类的原生回收以及 React 子树状态隔离。 */
 export function RecycledItemsTestScreen(): React.JSX.Element {
   const refresh = useTestRefresh();
 

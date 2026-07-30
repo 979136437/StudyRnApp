@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { CollapsibleTabsTestScreen } from '@/components/recycler-list-tests/advanced-recycler-list-test-screens';
+import { CollapsibleTabsTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function CollapsibleTabsRoute(): React.JSX.Element {
   return (

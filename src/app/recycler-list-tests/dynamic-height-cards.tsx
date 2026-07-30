@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { DynamicHeightCardsTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { DynamicHeightCardsTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function DynamicHeightCardsRoute(): React.JSX.Element {
   return (

@@ -3,6 +3,7 @@
 # dependencies
 node_modules/
 .idea/
+docs/
 
 # Expo
 .expo/

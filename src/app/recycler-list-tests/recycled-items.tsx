@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { RecycledItemsTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { RecycledItemsTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function RecycledItemsRoute(): React.JSX.Element {
   return (

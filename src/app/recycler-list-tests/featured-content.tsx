@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { FeaturedContentTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { FeaturedContentTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function FeaturedContentRoute(): React.JSX.Element {
   return (

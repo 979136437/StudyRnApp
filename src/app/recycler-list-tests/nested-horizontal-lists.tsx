@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router/stack';
-
-import { NestedHorizontalListsTestScreen } from '@/components/recycler-list-tests/recycler-list-test-screens';
+import { NestedHorizontalListsTestScreen } from 'react-native-nitro-recycler-list/testing';
 
 export default function NestedHorizontalListsRoute(): React.JSX.Element {
   return (
