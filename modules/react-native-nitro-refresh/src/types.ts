@@ -86,8 +86,10 @@ export interface RefreshHeaderContext {
    * 如需表现超过阈值后的超拉效果，应读取 `offset`。
    */
   progress: SharedValue<number>;
-  /** 当前生效的刷新触发阈值和刷新保持高度，单位为 dp/pt。 */
+  /** 当前生效的刷新触发阈值，单位为 dp/pt。 */
   pullDistance: number;
+  /** 刷新中及结果态的内容保持高度，单位为 dp/pt。 */
+  refreshingHeight: number;
 }
 
 /** `RefreshControl` 的公共属性。 */
@@ -104,11 +106,13 @@ export interface RefreshControlProps {
   renderHeader?: (context: RefreshHeaderContext) => ReactNode;
   /** 是否允许下拉刷新。禁用时会立即结束刷新并复位内容，默认为 `true`。 */
   enabled?: boolean;
-  /** 触发阈值及刷新中的内容保持高度，单位为 dp/pt，默认 `80`。 */
+  /** 触发刷新的可见下拉阈值，单位为 dp/pt，默认 `80`。 */
   pullDistance?: number;
+  /** 刷新中及结果态的内容保持高度，单位为 dp/pt，默认等于 `pullDistance`。 */
+  refreshingHeight?: number;
   /** 最大下拉位移，单位为 dp/pt，默认 `pullDistance * 2`。 */
   maxPullDistance?: number;
-  /** 拖拽位移阻尼系数，范围为 `(0, 1]`，默认 `0.5`。 */
+  /** 下拉触发灵敏度，范围为 `(0, 1]`，默认 `1`；值越小需要拖动越远。 */
   dragRate?: number;
   /** 成功或失败结果的停留时长，单位为毫秒，默认 `800`；设为 `0` 时立即回弹。 */
   resultDuration?: number;

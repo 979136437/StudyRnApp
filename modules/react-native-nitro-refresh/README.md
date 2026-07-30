@@ -24,6 +24,7 @@ const [refreshing, setRefreshing] = useState(false);
       refreshing={refreshing}
       onRefresh={() => setRefreshing(true)}
       pullDistance={96}
+      refreshingHeight={72}
       resultDuration={800}
       renderHeader={({ progress, offset, phase }) => (
         <CustomHeader progress={progress} offset={offset} phase={phase} />
@@ -56,7 +57,9 @@ setRefreshing(false);
 
 ## 配置
 
-`pullDistance`、`maxPullDistance`、`dragRate` 与 `resultDuration` 均可省略，默认值依次为 `80`、`pullDistance * 2`、`0.5` 和 `800` 毫秒。`resultDuration={0}` 会在结果阶段后立即开始回弹。
+`pullDistance` 是触发阈值，默认 `80`；`refreshingHeight` 是刷新中及结果态的保持高度，默认等于 `pullDistance`。`maxPullDistance` 默认是 `pullDistance * 2`，并会自动保证不小于触发所需距离和保持高度。
+
+`dragRate` 是触发灵敏度，范围为 `(0, 1]`，默认 `1`。默认情况下可见下拉距离达到 `pullDistance` 即可触发；主动设置为 `0.5` 时，需要下拉约两倍距离。`resultDuration` 默认 `800` 毫秒，设为 `0` 会在结果阶段后立即开始回弹。
 
 组件必须通过纵向、非倒置滚动组件的 `refreshControl` 属性传入，不支持包裹滚动组件。`ScrollView`、`FlatList`、`SectionList` 和 FlashList 2 均使用相同方式：
 

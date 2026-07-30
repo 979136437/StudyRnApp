@@ -31,14 +31,17 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       if (!value) cancelCurrentAction()
     }
 
-  /** 触发阈值和刷新保持高度，单位为 dp。 */
+  /** 触发刷新的可见下拉阈值，单位为 dp。 */
   var pullDistanceDp = 80.0
+
+  /** 刷新中及结果态的内容保持高度，单位为 dp。 */
+  var refreshingHeightDp = 80.0
 
   /** 内容允许下移的最大距离，单位为 dp。 */
   var maxPullDistanceDp = 160.0
 
-  /** 原始手指距离转换为内容位移时使用的阻尼系数。 */
-  var dragRate = 0.5
+  /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
+  var dragRate = 1.0
 
   private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
   private var initialX = 0f
@@ -46,6 +49,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private var dragging = false
   private var programmaticPull = false
   private var offsetPx = 0f
+  private var progress = 0f
   private var phase = RefreshPhase.IDLE
   private var controller: HybridRefreshController? = null
   private var animator: ValueAnimator? = null
@@ -53,6 +57,8 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private val pullDistancePx: Float
     get() = PixelUtil.toPixelFromDIP(pullDistanceDp)
+  private val refreshingHeightPx: Float
+    get() = PixelUtil.toPixelFromDIP(refreshingHeightDp)
   private val maxPullDistancePx: Float
     get() = PixelUtil.toPixelFromDIP(maxPullDistanceDp)
 
@@ -130,9 +136,12 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         }
         if (dragging) {
           val rawDistance = max(0f, event.y - initialY - touchSlop)
-          val resisted = min(maxPullDistancePx, rawDistance * dragRate.toFloat())
-          setOffset(resisted)
-          setPhase(if (resisted >= pullDistancePx) RefreshPhase.READY else RefreshPhase.PULLING)
+          val visibleOffset = min(maxPullDistancePx, rawDistance)
+          val triggerOffset = min(maxPullDistancePx, rawDistance * dragRate.toFloat())
+          setOffset(visibleOffset, triggerOffset / pullDistancePx)
+          setPhase(
+            if (triggerOffset >= pullDistancePx) RefreshPhase.READY else RefreshPhase.PULLING,
+          )
         }
         return dragging
       }
@@ -143,7 +152,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       }
       MotionEvent.ACTION_UP -> {
         if (dragging) {
-          if (offsetPx >= pullDistancePx) {
+          if (phase == RefreshPhase.READY) {
             beginRefreshing(true)
           } else {
             settleToIdle()
@@ -189,7 +198,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     cancelResultDismiss()
     programmaticPull = false
     setPhase(RefreshPhase.REFRESHING)
-    animateOffsetTo(pullDistancePx)
+    animateOffsetTo(refreshingHeightPx, 1f)
     if (notifyJs) controller?.requestRefresh()
     return true
   }
@@ -202,7 +211,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     setPhase(
       if (result == RefreshResult.SUCCESS) RefreshPhase.SUCCESS else RefreshPhase.FAILURE,
     )
-    animateOffsetTo(pullDistancePx) {
+    animateOffsetTo(refreshingHeightPx, 1f) {
       scheduleResultDismiss(resultDuration)
     }
   }
@@ -233,7 +242,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     programmaticPull = false
     if (offsetPx == 0f && phase == RefreshPhase.IDLE) return
     setPhase(RefreshPhase.SETTLING)
-    animateOffsetTo(0f) {
+    animateOffsetTo(0f, decayProgress = true) {
       setPhase(RefreshPhase.IDLE)
     }
   }
@@ -259,19 +268,35 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     resultDismissRunnable = null
   }
 
-  private fun animateOffsetTo(target: Float, completion: (() -> Unit)? = null) {
+  private fun animateOffsetTo(
+    target: Float,
+    progressOverride: Float? = null,
+    decayProgress: Boolean = false,
+    completion: (() -> Unit)? = null,
+  ) {
     animator?.cancel()
     if (abs(offsetPx - target) < 0.5f) {
       animator = null
-      setOffset(target)
+      setOffset(target, if (decayProgress) 0f else progressOverride)
       completion?.invoke()
       return
     }
 
-    animator = ValueAnimator.ofFloat(offsetPx, target).apply {
+    val startOffset = offsetPx
+    val startProgress = progress
+    animator = ValueAnimator.ofFloat(startOffset, target).apply {
       duration = 220
       interpolator = DecelerateInterpolator()
-      addUpdateListener { setOffset(it.animatedValue as Float) }
+      addUpdateListener {
+        val animatedOffset = it.animatedValue as Float
+        val animatedProgress =
+          if (decayProgress && startOffset > 0f) {
+            startProgress * (animatedOffset / startOffset)
+          } else {
+            progressOverride
+          }
+        setOffset(animatedOffset, animatedProgress)
+      }
       addListener(object : AnimatorListenerAdapter() {
         private var cancelled = false
 
@@ -288,8 +313,12 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     }
   }
 
-  private fun setOffset(value: Float) {
+  private fun setOffset(value: Float, progressOverride: Float? = null) {
     offsetPx = value.coerceIn(0f, maxPullDistancePx)
+    val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
+    progress =
+      progressOverride?.coerceIn(0f, 1f)
+        ?: if (pullDistanceDp == 0.0) 0f else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0).toFloat()
     if (childCount > 0) getChildAt(0).translationY = offsetPx
     emitPull()
   }
@@ -303,8 +332,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun emitPull() {
     val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
-    val progress =
-      if (pullDistanceDp == 0.0) 0.0 else (offsetDp / pullDistanceDp).coerceIn(0.0, 1.0)
     publishSnapshot(offsetDp)
 
     val reactContext = context as? ThemedReactContext ?: return
@@ -313,7 +340,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         UIManagerHelper.getSurfaceId(this),
         id,
         offsetDp,
-        progress,
+        progress.toDouble(),
         phase.name.lowercase(),
       ),
     )

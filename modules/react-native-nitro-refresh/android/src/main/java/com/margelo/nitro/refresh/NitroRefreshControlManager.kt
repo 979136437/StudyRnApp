@@ -42,12 +42,17 @@ internal class NitroRefreshControlManager :
     view.pullDistanceDp = value
   }
 
+  @ReactProp(name = "refreshingHeight", defaultDouble = 80.0)
+  override fun setRefreshingHeight(view: NitroRefreshLayout, value: Double) {
+    view.refreshingHeightDp = value
+  }
+
   @ReactProp(name = "maxPullDistance", defaultDouble = 160.0)
   override fun setMaxPullDistance(view: NitroRefreshLayout, value: Double) {
     view.maxPullDistanceDp = value
   }
 
-  @ReactProp(name = "dragRate", defaultDouble = 0.5)
+  @ReactProp(name = "dragRate", defaultDouble = 1.0)
   override fun setDragRate(view: NitroRefreshLayout, value: Double) {
     view.dragRate = value
   }

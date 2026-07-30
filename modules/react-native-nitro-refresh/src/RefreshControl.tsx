@@ -30,7 +30,7 @@ import {
 } from './types';
 
 const DEFAULT_PULL_DISTANCE = 80;
-const DEFAULT_DRAG_RATE = 0.5;
+const DEFAULT_DRAG_RATE = 1;
 const DEFAULT_RESULT_DURATION = 800;
 const AnimatedNativeRefreshControl = Animated.createAnimatedComponent(
   NativeNitroRefreshControl,
@@ -99,6 +99,7 @@ export const RefreshControl = forwardRef<
     renderHeader,
     enabled = true,
     pullDistance: pullDistanceProp,
+    refreshingHeight: refreshingHeightProp,
     maxPullDistance: maxPullDistanceProp,
     dragRate: dragRateProp,
     resultDuration: resultDurationProp,
@@ -110,15 +111,24 @@ export const RefreshControl = forwardRef<
     pullDistanceProp,
     DEFAULT_PULL_DISTANCE,
   );
+  const refreshingHeight = positiveOrDefault(
+    'refreshingHeight',
+    refreshingHeightProp,
+    pullDistance,
+  );
+  const dragRate = Math.min(
+    1,
+    positiveOrDefault('dragRate', dragRateProp, DEFAULT_DRAG_RATE),
+  );
   const configuredMaxDistance = positiveOrDefault(
     'maxPullDistance',
     maxPullDistanceProp,
     pullDistance * 2,
   );
-  const maxPullDistance = Math.max(pullDistance, configuredMaxDistance);
-  const dragRate = Math.min(
-    1,
-    positiveOrDefault('dragRate', dragRateProp, DEFAULT_DRAG_RATE),
+  const maxPullDistance = Math.max(
+    pullDistance / dragRate,
+    refreshingHeight,
+    configuredMaxDistance,
   );
   const resultDuration = nonNegativeOrDefault(
     'resultDuration',
@@ -191,8 +201,12 @@ export const RefreshControl = forwardRef<
   );
 
   const headerStyle = useAnimatedStyle(() => ({
-    // offset=0 时刷新头位于容器上方；下拉时与滚动内容同步进入可视区域。
-    transform: [{ translateY: offset.value - pullDistance }],
+    // 未完全露出时紧贴内容进入视口；达到保持高度后固定在顶部，避免超额下拉时头部上方留白。
+    transform: [
+      {
+        translateY: Math.min(offset.value, refreshingHeight) - refreshingHeight,
+      },
+    ],
   }));
 
   const headerContext = useMemo<RefreshHeaderContext>(
@@ -202,8 +216,9 @@ export const RefreshControl = forwardRef<
       phaseValue,
       progress,
       pullDistance,
+      refreshingHeight,
     }),
-    [offset, phase, phaseValue, progress, pullDistance],
+    [offset, phase, phaseValue, progress, pullDistance, refreshingHeight],
   );
 
   const nativeControl = (
@@ -214,6 +229,7 @@ export const RefreshControl = forwardRef<
       maxPullDistance={maxPullDistance}
       onPull={pullEventHandler as unknown as NativeProps['onPull']}
       pullDistance={pullDistance}
+      refreshingHeight={refreshingHeight}
     />
   );
   const buildHeader = renderHeader ?? DefaultRefreshHeader;
@@ -233,7 +249,10 @@ export const RefreshControl = forwardRef<
       },
       <View
         pointerEvents="none"
-        style={[styles.iosHeader, { height: pullDistance, top: -pullDistance }]}
+        style={[
+          styles.iosHeader,
+          { height: refreshingHeight, top: -refreshingHeight },
+        ]}
       >
         {header}
       </View>,
@@ -259,7 +278,7 @@ export const RefreshControl = forwardRef<
     <View style={[styles.container, style]}>
       <Animated.View
         pointerEvents="none"
-        style={[styles.header, { height: pullDistance }, headerStyle]}
+        style={[styles.header, { height: refreshingHeight }, headerStyle]}
       >
         {header}
       </Animated.View>
