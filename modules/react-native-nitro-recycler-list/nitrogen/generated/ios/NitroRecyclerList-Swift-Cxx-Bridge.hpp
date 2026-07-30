@@ -16,6 +16,8 @@ namespace margelo::nitro::recyclerlist { class HybridRecyclerListViewSpec; }
 namespace margelo::nitro::recyclerlist { struct ItemDescriptor; }
 // Forward declaration of `NativeRefreshPhase` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class NativeRefreshPhase; }
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 // Forward declaration of `RecyclerListState` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { struct RecyclerListState; }
 // Forward declaration of `SlotBinding` to properly resolve imports.
@@ -34,6 +36,7 @@ namespace NitroRecyclerList { class HybridRecyclerListViewSpec_cxx; }
 #include "HybridRecyclerListViewSpec.hpp"
 #include "ItemDescriptor.hpp"
 #include "NativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 #include "RecyclerListState.hpp"
 #include "SlotBinding.hpp"
 #include "VisibleRange.hpp"
@@ -138,6 +141,28 @@ namespace margelo::nitro::recyclerlist::bridge::swift {
     return Func_void_NativeRefreshPhase_Wrapper(std::move(value));
   }
   
+  // pragma MARK: std::function<void(NativeSecondLevelPhase /* phase */)>
+  /**
+   * Specialized version of `std::function<void(NativeSecondLevelPhase)>`.
+   */
+  using Func_void_NativeSecondLevelPhase = std::function<void(NativeSecondLevelPhase /* phase */)>;
+  /**
+   * Wrapper class for a `std::function<void(NativeSecondLevelPhase / * phase * /)>`, this can be used from Swift.
+   */
+  class Func_void_NativeSecondLevelPhase_Wrapper final {
+  public:
+    explicit Func_void_NativeSecondLevelPhase_Wrapper(std::function<void(NativeSecondLevelPhase /* phase */)>&& func): _function(std::make_unique<std::function<void(NativeSecondLevelPhase /* phase */)>>(std::move(func))) {}
+    inline void call(int phase) const noexcept {
+      _function->operator()(static_cast<NativeSecondLevelPhase>(phase));
+    }
+  private:
+    std::unique_ptr<std::function<void(NativeSecondLevelPhase /* phase */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_NativeSecondLevelPhase create_Func_void_NativeSecondLevelPhase(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_NativeSecondLevelPhase_Wrapper wrap_Func_void_NativeSecondLevelPhase(Func_void_NativeSecondLevelPhase value) noexcept {
+    return Func_void_NativeSecondLevelPhase_Wrapper(std::move(value));
+  }
+
   // pragma MARK: std::function<void(const VisibleRange& /* range */)>
   /**
    * Specialized version of `std::function<void(const VisibleRange&)>`.

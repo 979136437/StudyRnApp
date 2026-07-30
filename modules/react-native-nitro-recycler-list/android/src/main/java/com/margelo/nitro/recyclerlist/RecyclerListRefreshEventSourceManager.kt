@@ -28,7 +28,10 @@ internal class RecyclerListRefreshEventSourceManager :
   }
 
   override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
-    MapBuilder.of("topPull", MapBuilder.of("registrationName", "onPull"))
+    MapBuilder.builder<String, Any>()
+      .put("topPull", MapBuilder.of("registrationName", "onPull"))
+      .put("topTabScroll", MapBuilder.of("registrationName", "onTabScroll"))
+      .build()
 
   companion object {
     const val REACT_CLASS = "RecyclerListRefreshEventSourceView"

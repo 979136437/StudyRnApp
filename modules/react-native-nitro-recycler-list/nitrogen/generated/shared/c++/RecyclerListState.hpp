@@ -28,9 +28,10 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 
-
-
+#include "NativeSecondLevelPhase.hpp"
 
 namespace margelo::nitro::recyclerlist {
 
@@ -44,10 +45,12 @@ namespace margelo::nitro::recyclerlist {
     double firstVisibleIndex     SWIFT_PRIVATE;
     double lastVisibleIndex     SWIFT_PRIVATE;
     bool refreshing     SWIFT_PRIVATE;
+    bool secondLevelOpen     SWIFT_PRIVATE;
+    NativeSecondLevelPhase secondLevelPhase     SWIFT_PRIVATE;
 
   public:
     RecyclerListState() = default;
-    explicit RecyclerListState(double offset, double contentSize, double firstVisibleIndex, double lastVisibleIndex, bool refreshing): offset(offset), contentSize(contentSize), firstVisibleIndex(firstVisibleIndex), lastVisibleIndex(lastVisibleIndex), refreshing(refreshing) {}
+    explicit RecyclerListState(double offset, double contentSize, double firstVisibleIndex, double lastVisibleIndex, bool refreshing, bool secondLevelOpen, NativeSecondLevelPhase secondLevelPhase): offset(offset), contentSize(contentSize), firstVisibleIndex(firstVisibleIndex), lastVisibleIndex(lastVisibleIndex), refreshing(refreshing), secondLevelOpen(secondLevelOpen), secondLevelPhase(secondLevelPhase) {}
 
   public:
     friend bool operator==(const RecyclerListState& lhs, const RecyclerListState& rhs) = default;
@@ -67,7 +70,9 @@ namespace margelo::nitro {
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "contentSize"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "firstVisibleIndex"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "lastVisibleIndex"))),
-        JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "refreshing")))
+        JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "refreshing"))),
+        JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "secondLevelOpen"))),
+        JSIConverter<margelo::nitro::recyclerlist::NativeSecondLevelPhase>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "secondLevelPhase")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::recyclerlist::RecyclerListState& arg) {
@@ -77,6 +82,8 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "firstVisibleIndex"), JSIConverter<double>::toJSI(runtime, arg.firstVisibleIndex));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "lastVisibleIndex"), JSIConverter<double>::toJSI(runtime, arg.lastVisibleIndex));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "refreshing"), JSIConverter<bool>::toJSI(runtime, arg.refreshing));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "secondLevelOpen"), JSIConverter<bool>::toJSI(runtime, arg.secondLevelOpen));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "secondLevelPhase"), JSIConverter<margelo::nitro::recyclerlist::NativeSecondLevelPhase>::toJSI(runtime, arg.secondLevelPhase));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -92,6 +99,8 @@ namespace margelo::nitro {
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "firstVisibleIndex")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "lastVisibleIndex")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "refreshing")))) return false;
+      if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "secondLevelOpen")))) return false;
+      if (!JSIConverter<margelo::nitro::recyclerlist::NativeSecondLevelPhase>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "secondLevelPhase")))) return false;
       return true;
     }
   };

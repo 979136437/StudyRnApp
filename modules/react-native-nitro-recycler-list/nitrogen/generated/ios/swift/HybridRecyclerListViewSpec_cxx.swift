@@ -226,6 +226,83 @@ open class HybridRecyclerListViewSpec_cxx {
     }
   }
   
+  public final var secondLevelEnabled: Bool {
+    @inline(__always)
+    get {
+      return self.__implementation.secondLevelEnabled
+    }
+    @inline(__always)
+    set {
+      self.__implementation.secondLevelEnabled = newValue
+    }
+  }
+
+  public final var secondLevelOpen: Bool {
+    @inline(__always)
+    get {
+      return self.__implementation.secondLevelOpen
+    }
+    @inline(__always)
+    set {
+      self.__implementation.secondLevelOpen = newValue
+    }
+  }
+
+  public final var secondLevelThreshold: Double {
+    @inline(__always)
+    get {
+      return self.__implementation.secondLevelThreshold
+    }
+    @inline(__always)
+    set {
+      self.__implementation.secondLevelThreshold = newValue
+    }
+  }
+
+  public final var tabCoordinatorId: std.string {
+    @inline(__always)
+    get {
+      return std.string(self.__implementation.tabCoordinatorId)
+    }
+    @inline(__always)
+    set {
+      self.__implementation.tabCoordinatorId = String(newValue)
+    }
+  }
+
+  public final var tabKey: std.string {
+    @inline(__always)
+    get {
+      return std.string(self.__implementation.tabKey)
+    }
+    @inline(__always)
+    set {
+      self.__implementation.tabKey = String(newValue)
+    }
+  }
+
+  public final var tabActive: Bool {
+    @inline(__always)
+    get {
+      return self.__implementation.tabActive
+    }
+    @inline(__always)
+    set {
+      self.__implementation.tabActive = newValue
+    }
+  }
+
+  public final var tabCollapseRange: Double {
+    @inline(__always)
+    get {
+      return self.__implementation.tabCollapseRange
+    }
+    @inline(__always)
+    set {
+      self.__implementation.tabCollapseRange = newValue
+    }
+  }
+
   public final var endReachedThreshold: Double {
     @inline(__always)
     get {
@@ -311,6 +388,44 @@ open class HybridRecyclerListViewSpec_cxx {
     }
   }
   
+  public final var onSecondLevelRequested: bridge.Func_void {
+    @inline(__always)
+    get {
+      return { () -> bridge.Func_void in
+        let __closureWrapper = Func_void(self.__implementation.onSecondLevelRequested)
+        return bridge.create_Func_void(__closureWrapper.toUnsafe())
+      }()
+    }
+    @inline(__always)
+    set {
+      self.__implementation.onSecondLevelRequested = { () -> () -> Void in
+        let __wrappedFunction = bridge.wrap_Func_void(newValue)
+        return { () -> Void in
+          __wrappedFunction.call()
+        }
+      }()
+    }
+  }
+
+  public final var onSecondLevelPhaseChanged: bridge.Func_void_NativeSecondLevelPhase {
+    @inline(__always)
+    get {
+      return { () -> bridge.Func_void_NativeSecondLevelPhase in
+        let __closureWrapper = Func_void_NativeSecondLevelPhase(self.__implementation.onSecondLevelPhaseChanged)
+        return bridge.create_Func_void_NativeSecondLevelPhase(__closureWrapper.toUnsafe())
+      }()
+    }
+    @inline(__always)
+    set {
+      self.__implementation.onSecondLevelPhaseChanged = { () -> (NativeSecondLevelPhase) -> Void in
+        let __wrappedFunction = bridge.wrap_Func_void_NativeSecondLevelPhase(newValue)
+        return { (__phase: NativeSecondLevelPhase) -> Void in
+          __wrappedFunction.call(__phase.rawValue)
+        }
+      }()
+    }
+  }
+
   public final var onEndReached: bridge.Func_void {
     @inline(__always)
     get {

@@ -10,7 +10,11 @@ import {
 import {
   LoadMoreState,
   NativeRefreshPhase,
+  RecyclerGridList,
+  RecyclerHorizontalList,
   RecyclerList,
+  RecyclerMasonryList,
+  SecondLevelPhase,
   type RefreshHeaderContext,
   type RecyclerRenderItemInfo,
 } from 'react-native-nitro-recycler-list';
@@ -42,16 +46,18 @@ function formatRefreshTime(date: Date): string {
   return `${hours}:${minutes}`;
 }
 
-function RecyclerTestRefreshHeader({
+export function RecyclerTestRefreshHeader({
   phase,
   progress,
+  secondLevel,
 }: RefreshHeaderContext): React.JSX.Element {
   const previousPhaseRef = useRef(phase);
   const [lastRefreshTime, setLastRefreshTime] = useState(() =>
     formatRefreshTime(new Date()),
   );
+  const arrowProgress = secondLevel?.progress ?? progress;
   const arrowStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${progress.value * 180}deg` }],
+    transform: [{ rotate: `${arrowProgress.value * 180}deg` }],
   }));
 
   useEffect(() => {
@@ -76,14 +82,20 @@ function RecyclerTestRefreshHeader({
         )}
       </View>
       <View style={styles.refreshCopy}>
-        <Text style={styles.refreshTitle}>{REFRESH_PHASE_LABELS[phase]}</Text>
+        <Text style={styles.refreshTitle}>
+          {secondLevel?.phase === SecondLevelPhase.READY
+            ? '松开进入二楼'
+            : secondLevel?.phase === SecondLevelPhase.PULLING
+              ? '继续下拉进入二楼'
+              : REFRESH_PHASE_LABELS[phase]}
+        </Text>
         <Text style={styles.refreshTime}>最后更新：{lastRefreshTime}</Text>
       </View>
     </View>
   );
 }
 
-function useTestRefresh(): {
+export function useTestRefresh(): {
   onRefresh: () => void;
   refreshing: boolean;
   renderRefreshHeader: (context: RefreshHeaderContext) => React.JSX.Element;
@@ -210,7 +222,7 @@ export function FeaturedContentTestScreen(): React.JSX.Element {
       count={FEATURED_ITEMS.length}
       title="精选内容"
     >
-      <RecyclerList
+      <RecyclerMasonryList
         {...refresh}
         contentContainerStyle={styles.listContent}
         data={FEATURED_ITEMS}
@@ -219,7 +231,6 @@ export function FeaturedContentTestScreen(): React.JSX.Element {
         getItemType={(item) => item.kind}
         getStickyLevel={(item) => (item.kind === 'section' ? 0 : undefined)}
         keyExtractor={(item) => item.id}
-        layout="masonry"
         numColumns={2}
         renderItem={({ item }) =>
           item.kind === 'section' ? (
@@ -274,14 +285,13 @@ export function DynamicHeightCardsTestScreen(): React.JSX.Element {
       count={DYNAMIC_CARDS.length}
       title="动态高度卡片"
     >
-      <RecyclerList
+      <RecyclerMasonryList
         {...refresh}
         contentContainerStyle={styles.listContent}
         data={DYNAMIC_CARDS}
         estimatedItemSize={138}
         getItemType={() => 'dynamic-card'}
         keyExtractor={(item) => item.id}
-        layout="masonry"
         numColumns={2}
         renderItem={({ item, index }) => (
           <View style={[styles.dynamicCard, { backgroundColor: item.tone }]}>
@@ -385,11 +395,10 @@ const HorizontalShelf = memo(function HorizontalShelf({
         <Text style={styles.shelfCount}>{items.length}</Text>
       </View>
       <View style={styles.horizontalListFrame}>
-        <RecyclerList
+        <RecyclerHorizontalList
           data={items}
           estimatedItemSize={132}
           getItemType={() => 'shelf-card'}
-          horizontal
           keyExtractor={(item) => item.id}
           listKey={shelf.id}
           renderItem={({ item }) => (
@@ -612,14 +621,13 @@ export function RecycledItemsTestScreen(): React.JSX.Element {
       count={RECYCLE_ITEMS.length}
       title="回收项"
     >
-      <RecyclerList
+      <RecyclerGridList
         {...refresh}
         contentContainerStyle={styles.listContent}
         data={RECYCLE_ITEMS}
         estimatedItemSize={126}
         getItemType={(item) => item.kind}
         keyExtractor={(item) => item.id}
-        layout="grid"
         numColumns={2}
         overscan={0.5}
         renderItem={(info) => <RecycleCard info={info} />}

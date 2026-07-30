@@ -28,6 +28,19 @@ internal class RecyclerListRefreshEventSourceView(
         snapshot.offset,
         snapshot.progress,
         snapshot.phase.toJsValue(),
+        snapshot.secondLevelProgress,
+        snapshot.secondLevelPhase.toJsValue(),
+      ),
+    )
+  }
+
+  override fun emitTabScroll(collapseOffset: Double) {
+    if (!isAttachedToWindow || id == NO_ID) return
+    UIManagerHelper.getEventDispatcher(reactContext)?.dispatchEvent(
+      RecyclerListTabScrollEvent(
+        UIManagerHelper.getSurfaceId(this),
+        id,
+        collapseOffset,
       ),
     )
   }
@@ -49,4 +62,13 @@ internal fun NativeRefreshPhase.toJsValue(): String = when (this) {
   NativeRefreshPhase.READY -> "ready"
   NativeRefreshPhase.REFRESHING -> "refreshing"
   NativeRefreshPhase.SETTLING -> "settling"
+}
+
+internal fun NativeSecondLevelPhase.toJsValue(): String = when (this) {
+  NativeSecondLevelPhase.IDLE -> "idle"
+  NativeSecondLevelPhase.PULLING -> "pulling"
+  NativeSecondLevelPhase.READY -> "ready"
+  NativeSecondLevelPhase.OPENING -> "opening"
+  NativeSecondLevelPhase.OPEN -> "open"
+  NativeSecondLevelPhase.CLOSING -> "closing"
 }

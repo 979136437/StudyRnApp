@@ -9,22 +9,31 @@ class RefreshEventStateTest {
     val state = RecyclerListRefreshEventState()
     val pulls = mutableListOf<RecyclerListRefreshSnapshot>()
     val phases = mutableListOf<NativeRefreshPhase>()
+    val secondPhases = mutableListOf<NativeSecondLevelPhase>()
 
-    state.publish(NativeRefreshPhase.PULLING, -12.0, 1.8, pulls::add, phases::add)
-    state.publish(NativeRefreshPhase.PULLING, 42.0, 0.5, pulls::add, phases::add)
-    state.publish(NativeRefreshPhase.READY, 80.0, 1.0, pulls::add, phases::add)
+    state.publish(NativeRefreshPhase.PULLING, -12.0, 1.8, NativeSecondLevelPhase.IDLE, 0.0, pulls::add, phases::add, secondPhases::add)
+    state.publish(NativeRefreshPhase.READY, 120.0, 1.0, NativeSecondLevelPhase.PULLING, 0.4, pulls::add, phases::add, secondPhases::add)
+    state.publish(NativeRefreshPhase.READY, 180.0, 1.0, NativeSecondLevelPhase.READY, 1.8, pulls::add, phases::add, secondPhases::add)
 
     assertEquals(3, pulls.size)
     assertEquals(0.0, pulls.first().offset, 0.0)
     assertEquals(1.0, pulls.first().progress, 0.0)
     assertEquals(listOf(NativeRefreshPhase.PULLING, NativeRefreshPhase.READY), phases)
+    assertEquals(listOf(NativeSecondLevelPhase.PULLING, NativeSecondLevelPhase.READY), secondPhases)
+    assertEquals(1.0, pulls.last().secondLevelProgress, 0.0)
   }
 
   @Test
   fun registrySupportsLateRegistrationReplacementAndUnregister() {
     val first = FakeSink("refresh-registry-test")
     val second = FakeSink("refresh-registry-test")
-    val snapshot = RecyclerListRefreshSnapshot(NativeRefreshPhase.PULLING, 20.0, 0.25)
+    val snapshot = RecyclerListRefreshSnapshot(
+      NativeRefreshPhase.PULLING,
+      20.0,
+      0.25,
+      NativeSecondLevelPhase.IDLE,
+      0.0,
+    )
 
     RecyclerListRegistry.emitRefresh(first.listId, snapshot)
     RecyclerListRegistry.registerRefreshEventSource(first)
@@ -47,5 +56,7 @@ class RefreshEventStateTest {
     override fun emitPull(snapshot: RecyclerListRefreshSnapshot) {
       events += snapshot
     }
+
+    override fun emitTabScroll(collapseOffset: Double) = Unit
   }
 }

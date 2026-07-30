@@ -5,6 +5,7 @@ import java.lang.ref.WeakReference
 internal interface RecyclerListRefreshEventSink {
   val listId: String
   fun emitPull(snapshot: RecyclerListRefreshSnapshot)
+  fun emitTabScroll(collapseOffset: Double)
 }
 
 internal object RecyclerListRegistry {
@@ -54,5 +55,11 @@ internal object RecyclerListRegistry {
   fun emitRefresh(listId: String, snapshot: RecyclerListRefreshSnapshot) {
     val source = refreshEventSources[listId]?.get()
     if (source == null) refreshEventSources.remove(listId) else source.emitPull(snapshot)
+  }
+
+  @Synchronized
+  fun emitTabScroll(listId: String, collapseOffset: Double) {
+    val source = refreshEventSources[listId]?.get()
+    if (source == null) refreshEventSources.remove(listId) else source.emitTabScroll(collapseOffset)
   }
 }

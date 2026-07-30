@@ -63,15 +63,30 @@ using namespace facebook::react;
   }
 }
 
-- (void)emitRefreshWithPhase:(NSString *)phase offset:(double)offset progress:(double)progress
+- (void)emitRefreshWithPhase:(NSString *)phase
+                      offset:(double)offset
+                    progress:(double)progress
+            secondLevelPhase:(NSString *)secondLevelPhase
+         secondLevelProgress:(double)secondLevelProgress
 {
   if (!_eventEmitter) return;
   RecyclerListRefreshEventSourceViewEventEmitter::OnPull event = {
       .offset = MAX(0, offset),
       .progress = MIN(1, MAX(0, progress)),
       .phase = std::string(phase.UTF8String),
+      .secondLevelProgress = MIN(1, MAX(0, secondLevelProgress)),
+      .secondLevelPhase = std::string(secondLevelPhase.UTF8String),
   };
   std::static_pointer_cast<RecyclerListRefreshEventSourceViewEventEmitter const>(_eventEmitter)->onPull(event);
+}
+
+- (void)emitTabScrollWithCollapseOffset:(double)collapseOffset
+{
+  if (!_eventEmitter) return;
+  RecyclerListRefreshEventSourceViewEventEmitter::OnTabScroll event = {
+      .collapseOffset = MAX(0, collapseOffset),
+  };
+  std::static_pointer_cast<RecyclerListRefreshEventSourceViewEventEmitter const>(_eventEmitter)->onTabScroll(event);
 }
 
 @end

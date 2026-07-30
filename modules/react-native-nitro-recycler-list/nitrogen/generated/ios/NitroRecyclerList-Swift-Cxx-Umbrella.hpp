@@ -16,6 +16,8 @@ namespace margelo::nitro::recyclerlist { class HybridRecyclerListViewSpec; }
 namespace margelo::nitro::recyclerlist { struct ItemDescriptor; }
 // Forward declaration of `NativeRefreshPhase` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class NativeRefreshPhase; }
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 // Forward declaration of `RecyclerLayout` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class RecyclerLayout; }
 // Forward declaration of `RecyclerListState` to properly resolve imports.
@@ -30,6 +32,7 @@ namespace margelo::nitro::recyclerlist { struct VisibleRange; }
 #include "HybridRecyclerListViewSpec.hpp"
 #include "ItemDescriptor.hpp"
 #include "NativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 #include "RecyclerLayout.hpp"
 #include "RecyclerListState.hpp"
 #include "SlotBinding.hpp"

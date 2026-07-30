@@ -9,6 +9,7 @@ export interface DescriptorOptions<T> {
   getItemType?: (item: T, index: number) => string | number;
   getItemSpan?: (item: T, index: number) => number;
   getStickyLevel?: (item: T, index: number) => number | undefined;
+  getStickyGroup?: (item: T, index: number) => string | number | undefined;
   estimatedItemSize: number;
   layout: RecyclerLayout;
   numColumns: number;
@@ -20,6 +21,7 @@ export function createDescriptors<T>({
   getItemType,
   getItemSpan,
   getStickyLevel,
+  getStickyGroup,
   estimatedItemSize,
   layout,
   numColumns,
@@ -37,6 +39,7 @@ export function createDescriptors<T>({
 
     const requestedSpan = getItemSpan?.(item, index) ?? 1;
     const stickyLevel = getStickyLevel?.(item, index) ?? -1;
+    const normalizedStickyLevel = Math.max(-1, Math.trunc(stickyLevel));
     const span =
       layout === 'list' ? 1 : clampInteger(requestedSpan, 1, numColumns);
 
@@ -50,7 +53,11 @@ export function createDescriptors<T>({
       key,
       type: String(getItemType?.(item, index) ?? 'default'),
       span,
-      stickyLevel: Math.max(-1, Math.trunc(stickyLevel)),
+      stickyLevel: normalizedStickyLevel,
+      stickyGroup:
+        normalizedStickyLevel < 0
+          ? ''
+          : String(getStickyGroup?.(item, index) ?? '__default__'),
       estimatedSize: positiveOrDefault(estimatedItemSize, 100),
     };
   });

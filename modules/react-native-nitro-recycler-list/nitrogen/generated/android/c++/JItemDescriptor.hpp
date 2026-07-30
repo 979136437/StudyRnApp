@@ -39,6 +39,8 @@ namespace margelo::nitro::recyclerlist {
       double span = this->getFieldValue(fieldSpan);
       static const auto fieldStickyLevel = clazz->getField<double>("stickyLevel");
       double stickyLevel = this->getFieldValue(fieldStickyLevel);
+      static const auto fieldStickyGroup = clazz->getField<jni::JString>("stickyGroup");
+      jni::local_ref<jni::JString> stickyGroup = this->getFieldValue(fieldStickyGroup);
       static const auto fieldEstimatedSize = clazz->getField<double>("estimatedSize");
       double estimatedSize = this->getFieldValue(fieldEstimatedSize);
       return ItemDescriptor(
@@ -46,6 +48,7 @@ namespace margelo::nitro::recyclerlist {
         type->toStdString(),
         span,
         stickyLevel,
+        stickyGroup->toStdString(),
         estimatedSize
       );
     }
@@ -56,7 +59,7 @@ namespace margelo::nitro::recyclerlist {
      */
     [[maybe_unused]]
     static jni::local_ref<JItemDescriptor::javaobject> fromCpp(const ItemDescriptor& value) {
-      using JSignature = JItemDescriptor(jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>, double, double, double);
+      using JSignature = JItemDescriptor(jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>, double, double, jni::alias_ref<jni::JString>, double);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -65,6 +68,7 @@ namespace margelo::nitro::recyclerlist {
         jni::make_jstring(value.type),
         value.span,
         value.stickyLevel,
+        jni::make_jstring(value.stickyGroup),
         value.estimatedSize
       );
     }

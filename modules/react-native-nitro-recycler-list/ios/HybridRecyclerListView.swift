@@ -61,6 +61,9 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   private var lastRange = VisibleRange(first: -1, last: -1)
   private var endReachedArmed = true
   private var previousDescriptorVersion = ""
+  private var previousTabCoordinatorId = ""
+  private var previousTabKey = ""
+  private var previousTabActive = false
   private let refreshEvents = RecyclerListRefreshEventState()
   private let refreshTransition = RecyclerListRefreshTransitionDriver()
 
@@ -73,11 +76,20 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   var refreshing = false
   var refreshEnabled = false
   var refreshThreshold: Double = 80
+  var secondLevelEnabled = false
+  var secondLevelOpen = false
+  var secondLevelThreshold: Double = 160
+  var tabCoordinatorId = ""
+  var tabKey = ""
+  var tabActive = true
+  var tabCollapseRange: Double = 0
   var endReachedThreshold: Double = 0.5
   var endReachedEnabled = false
   var onSlotsChanged: ([SlotBinding]) -> Void = { _ in }
   var onRefreshRequested: () -> Void = {}
   var onRefreshPhaseChanged: (NativeRefreshPhase) -> Void = { _ in }
+  var onSecondLevelRequested: () -> Void = {}
+  var onSecondLevelPhaseChanged: (NativeSecondLevelPhase) -> Void = { _ in }
   var onEndReached: () -> Void = {}
   var onVisibleRangeChanged: (VisibleRange) -> Void = { _ in }
 
@@ -98,7 +110,9 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       previousListId = listId
       RecyclerListRegistry.register(list: self, id: listId)
     }
-    let descriptorVersion = descriptors.map(\.key).joined(separator: "\u{001F}")
+    let descriptorVersion = descriptors.map {
+      "\($0.key):\($0.stickyGroup):\($0.stickyLevel)"
+    }.joined(separator: "\u{001F}")
     if descriptorVersion != previousDescriptorVersion {
       previousDescriptorVersion = descriptorVersion
       endReachedArmed = true
@@ -109,7 +123,31 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     view.layout.horizontal = horizontal
     view.collectionView.alwaysBounceVertical = refreshEnabled && !horizontal
     view.collectionView.reloadData()
-    updateRefreshing(active: refreshEnabled && !horizontal && refreshing, animated: true)
+    if tabCoordinatorId != previousTabCoordinatorId || tabKey != previousTabKey {
+      if !previousTabCoordinatorId.isEmpty {
+        RecyclerTabCoordinatorRegistry.unregister(
+          self,
+          coordinatorId: previousTabCoordinatorId,
+          tabKey: previousTabKey
+        )
+      }
+      previousTabCoordinatorId = tabCoordinatorId
+      previousTabKey = tabKey
+      RecyclerTabCoordinatorRegistry.register(self)
+    }
+    if tabActive && !previousTabActive && !tabCoordinatorId.isEmpty {
+      try? scrollToOffset(offset: RecyclerTabCoordinatorRegistry.targetOffset(for: self), animated: false)
+    }
+    previousTabActive = tabActive
+    if !refreshEnabled || horizontal || !tabActive {
+      resetRefresh()
+    } else if secondLevelEnabled && secondLevelOpen {
+      updateSecondLevel(open: true)
+    } else if refreshEvents.secondLevelPhase == .open || refreshEvents.secondLevelPhase == .opening {
+      updateSecondLevel(open: false)
+    } else {
+      updateRefreshing(active: refreshing, animated: true)
+    }
   }
 
   func attachHost(_ host: HybridRecyclerCellHostView) {
@@ -151,21 +189,38 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     }
     publishBindings()
     checkEndReached()
+    publishTabScroll()
 
     if view.collectionView.isDragging && refreshTransition.isRunning {
       refreshTransition.cancel()
     }
-    guard refreshEnabled, !horizontal, !refreshing, !refreshTransition.isRunning else { return }
+    guard refreshEnabled, !horizontal, !refreshing, !secondLevelOpen, tabActive, !refreshTransition.isRunning else { return }
     let pull = max(0, -(view.collectionView.contentOffset.y + view.collectionView.adjustedContentInset.top))
     let progress = min(1, pull / max(1, refreshThreshold))
     let phase: NativeRefreshPhase = pull >= refreshThreshold ? .ready : pull > 0 ? .pulling : .idle
-    publishRefresh(phase, offset: pull, progress: progress)
+    let secondPhase: NativeSecondLevelPhase = secondLevelEnabled
+      ? (pull >= secondLevelThreshold ? .ready : pull > refreshThreshold ? .pulling : .idle)
+      : .idle
+    let secondProgress = secondLevelEnabled
+      ? min(1, max(0, (pull - refreshThreshold) / max(1, secondLevelThreshold - refreshThreshold)))
+      : 0
+    publishRefresh(
+      phase,
+      offset: pull,
+      progress: progress,
+      secondLevelPhase: secondPhase,
+      secondLevelProgress: secondProgress
+    )
   }
 
   func didEndDragging() {
-    guard refreshEnabled, !refreshing, !horizontal else { return }
+    guard refreshEnabled, !refreshing, !horizontal, tabActive else { return }
     let pull = max(0, -(view.collectionView.contentOffset.y + view.collectionView.adjustedContentInset.top))
-    if pull >= refreshThreshold { onRefreshRequested() }
+    if secondLevelEnabled && pull >= secondLevelThreshold {
+      onSecondLevelRequested()
+    } else if pull >= refreshThreshold {
+      onRefreshRequested()
+    }
   }
 
   func scrollToOffset(offset: Double, animated: Bool) throws {
@@ -199,7 +254,9 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       contentSize: size,
       firstVisibleIndex: range.first,
       lastVisibleIndex: range.last,
-      refreshing: refreshing
+      refreshing: refreshing,
+      secondLevelOpen: refreshEvents.secondLevelPhase == .open,
+      secondLevelPhase: refreshEvents.secondLevelPhase
     )
   }
 
@@ -217,6 +274,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   func prepareForRecycle() {
     resetRefresh()
+    RecyclerTabCoordinatorRegistry.unregister(self)
     view.collectionView.setContentOffset(.zero, animated: false)
     hosts.removeAll()
     cells.removeAll()
@@ -227,6 +285,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   func onDropView() {
     resetRefresh()
     RecyclerListRegistry.unregister(list: self, id: listId)
+    RecyclerTabCoordinatorRegistry.unregister(self)
     view.collectionView.dataSource = nil
     view.collectionView.delegate = nil
   }
@@ -329,23 +388,94 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     }
   }
 
+  private func updateSecondLevel(open: Bool) {
+    if open && (refreshEvents.secondLevelPhase == .opening || refreshEvents.secondLevelPhase == .open) {
+      return
+    }
+    if !open && (refreshEvents.secondLevelPhase == .closing || refreshEvents.secondLevelPhase == .idle) {
+      return
+    }
+    refreshTransition.cancel()
+    let collectionView = view.collectionView
+    let start = Double(collectionView.transform.ty == 0 ? refreshEvents.offset : collectionView.transform.ty)
+    let target = open ? Double(max(1, view.bounds.height)) : 0
+    let transitionPhase: NativeSecondLevelPhase = open ? .opening : .closing
+    if open && collectionView.transform.ty == 0 {
+      collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
+      collectionView.transform = CGAffineTransform(translationX: 0, y: start)
+    }
+    collectionView.isScrollEnabled = false
+    UIView.animate(
+      withDuration: 0.26,
+      delay: 0,
+      options: [.curveEaseInOut, .beginFromCurrentState],
+      animations: {
+        collectionView.transform = CGAffineTransform(translationX: 0, y: target)
+      }
+    )
+    refreshTransition.start(
+      from: start,
+      to: target,
+      duration: 0.26,
+      onUpdate: { [weak self] value in
+        guard let self else { return }
+        self.publishRefresh(
+          .ready,
+          offset: value,
+          progress: 1,
+          secondLevelPhase: transitionPhase,
+          secondLevelProgress: 1
+        )
+      },
+      onCompletion: { [weak self] in
+        guard let self else { return }
+        collectionView.transform = open
+          ? CGAffineTransform(translationX: 0, y: target)
+          : .identity
+        collectionView.isScrollEnabled = !open
+        self.publishRefresh(
+          open ? .ready : .idle,
+          offset: target,
+          progress: open ? 1 : 0,
+          secondLevelPhase: open ? .open : .idle,
+          secondLevelProgress: open ? 1 : 0
+        )
+      }
+    )
+  }
+
+  private func publishTabScroll() {
+    guard tabActive, !tabCoordinatorId.isEmpty, !horizontal else { return }
+    let offset = max(0, view.collectionView.contentOffset.y)
+    RecyclerTabCoordinatorRegistry.update(self, offset: offset)
+    RecyclerListRefreshEventRegistry.emitTabScroll(
+      listId: listId,
+      collapseOffset: min(max(0, tabCollapseRange), offset)
+    )
+  }
+
   private func publishRefresh(
     _ phase: NativeRefreshPhase,
     offset: Double,
     progress: Double,
+    secondLevelPhase: NativeSecondLevelPhase = .idle,
+    secondLevelProgress: Double = 0,
     targetListId: String? = nil
   ) {
     refreshEvents.publish(
       phase: phase,
       offset: offset,
       progress: progress,
+      secondLevelPhase: secondLevelPhase,
+      secondLevelProgress: secondLevelProgress,
       onPull: { snapshot in
         RecyclerListRefreshEventRegistry.emit(
           listId: targetListId ?? self.listId,
           snapshot: snapshot
         )
       },
-      onPhaseChanged: { nextPhase in self.onRefreshPhaseChanged(nextPhase) }
+      onPhaseChanged: { nextPhase in self.onRefreshPhaseChanged(nextPhase) },
+      onSecondLevelPhaseChanged: { nextPhase in self.onSecondLevelPhaseChanged(nextPhase) }
     )
   }
 
@@ -354,6 +484,8 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     var inset = view.collectionView.contentInset
     inset.top = 0
     view.collectionView.contentInset = inset
+    view.collectionView.transform = .identity
+    view.collectionView.isScrollEnabled = true
     publishRefresh(.idle, offset: 0, progress: 0)
   }
 }

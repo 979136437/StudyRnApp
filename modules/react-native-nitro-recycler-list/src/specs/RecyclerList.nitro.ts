@@ -19,6 +19,15 @@ export type NativeRefreshPhase =
   | 'refreshing'
   | 'settling';
 
+/** 原生下拉二级状态机向 JavaScript 发布的阶段。 */
+export type NativeSecondLevelPhase =
+  | 'idle'
+  | 'pulling'
+  | 'ready'
+  | 'opening'
+  | 'open'
+  | 'closing';
+
 /** JavaScript 为一条数据生成并提交给原生布局引擎的只读描述符。 */
 export interface ItemDescriptor {
   /** 数据项的稳定唯一键，用于差异更新、尺寸缓存和可视锚点。 */
@@ -32,6 +41,9 @@ export interface ItemDescriptor {
 
   /** 吸顶层级；`-1` 表示普通数据项，不参与吸顶布局。 */
   stickyLevel: number;
+
+  /** 吸顶组键；空字符串表示普通项，默认吸顶组使用 `__default__`。 */
+  stickyGroup: string;
 
   /** 实际尺寸尚未测得时使用的主轴预估尺寸，单位为逻辑像素。 */
   estimatedSize: number;
@@ -77,6 +89,12 @@ export interface RecyclerListState {
 
   /** 原生刷新状态机当前是否处于刷新保持阶段。 */
   refreshing: boolean;
+
+  /** 受控二楼当前是否已完全打开。 */
+  secondLevelOpen: boolean;
+
+  /** 原生二楼状态机最近一次发布的阶段。 */
+  secondLevelPhase: NativeSecondLevelPhase;
 }
 
 /** JavaScript 写入原生 `RecyclerList` HybridView 的完整属性。 */
@@ -108,6 +126,27 @@ export interface RecyclerListViewProps extends HybridViewProps {
   /** 下拉刷新触发距离，单位为逻辑像素。 */
   refreshThreshold: number;
 
+  /** 是否启用下拉二级手势。 */
+  secondLevelEnabled: boolean;
+
+  /** 受控二楼是否应保持打开。 */
+  secondLevelOpen: boolean;
+
+  /** 下拉二级触发距离，单位为逻辑像素。 */
+  secondLevelThreshold: number;
+
+  /** 所属折叠 Tab 协调器标识；空字符串表示不参与协调。 */
+  tabCoordinatorId: string;
+
+  /** 当前列表在折叠 Tab 中的稳定键。 */
+  tabKey: string;
+
+  /** 当前列表是否为折叠 Tab 的活动页。 */
+  tabActive: boolean;
+
+  /** 共享头可折叠距离，单位为逻辑像素。 */
+  tabCollapseRange: number;
+
   /** 触底回调相对可视区域的提前触发比例。 */
   endReachedThreshold: number;
 
@@ -122,6 +161,12 @@ export interface RecyclerListViewProps extends HybridViewProps {
 
   /** 下拉刷新阶段真正发生变化时调用，不承载逐帧位移数据。 */
   onRefreshPhaseChanged: (phase: NativeRefreshPhase) => void;
+
+  /** 达到二楼阈值并松手时调用；与普通刷新请求互斥。 */
+  onSecondLevelRequested: () => void;
+
+  /** 下拉二级阶段真正发生变化时调用，不承载逐帧位移数据。 */
+  onSecondLevelPhaseChanged: (phase: NativeSecondLevelPhase) => void;
 
   /** 当前内容进入触底阈值且满足去重条件时调用。 */
   onEndReached: () => void;

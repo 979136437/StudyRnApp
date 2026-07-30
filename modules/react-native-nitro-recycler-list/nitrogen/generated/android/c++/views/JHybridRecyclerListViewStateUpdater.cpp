@@ -73,6 +73,34 @@ void JHybridRecyclerListViewStateUpdater::updateViewProps(jni::alias_ref<jni::JC
     hybridView->setRefreshThreshold(props->refreshThreshold.value);
     props->refreshThreshold.isDirty = false;
   }
+  if (props->secondLevelEnabled.isDirty) {
+    hybridView->setSecondLevelEnabled(props->secondLevelEnabled.value);
+    props->secondLevelEnabled.isDirty = false;
+  }
+  if (props->secondLevelOpen.isDirty) {
+    hybridView->setSecondLevelOpen(props->secondLevelOpen.value);
+    props->secondLevelOpen.isDirty = false;
+  }
+  if (props->secondLevelThreshold.isDirty) {
+    hybridView->setSecondLevelThreshold(props->secondLevelThreshold.value);
+    props->secondLevelThreshold.isDirty = false;
+  }
+  if (props->tabCoordinatorId.isDirty) {
+    hybridView->setTabCoordinatorId(props->tabCoordinatorId.value);
+    props->tabCoordinatorId.isDirty = false;
+  }
+  if (props->tabKey.isDirty) {
+    hybridView->setTabKey(props->tabKey.value);
+    props->tabKey.isDirty = false;
+  }
+  if (props->tabActive.isDirty) {
+    hybridView->setTabActive(props->tabActive.value);
+    props->tabActive.isDirty = false;
+  }
+  if (props->tabCollapseRange.isDirty) {
+    hybridView->setTabCollapseRange(props->tabCollapseRange.value);
+    props->tabCollapseRange.isDirty = false;
+  }
   if (props->endReachedThreshold.isDirty) {
     hybridView->setEndReachedThreshold(props->endReachedThreshold.value);
     props->endReachedThreshold.isDirty = false;
@@ -92,6 +120,14 @@ void JHybridRecyclerListViewStateUpdater::updateViewProps(jni::alias_ref<jni::JC
   if (props->onRefreshPhaseChanged.isDirty) {
     hybridView->setOnRefreshPhaseChanged(props->onRefreshPhaseChanged.value);
     props->onRefreshPhaseChanged.isDirty = false;
+  }
+  if (props->onSecondLevelRequested.isDirty) {
+    hybridView->setOnSecondLevelRequested(props->onSecondLevelRequested.value);
+    props->onSecondLevelRequested.isDirty = false;
+  }
+  if (props->onSecondLevelPhaseChanged.isDirty) {
+    hybridView->setOnSecondLevelPhaseChanged(props->onSecondLevelPhaseChanged.value);
+    props->onSecondLevelPhaseChanged.isDirty = false;
   }
   if (props->onEndReached.isDirty) {
     hybridView->setOnEndReached(props->onEndReached.value);

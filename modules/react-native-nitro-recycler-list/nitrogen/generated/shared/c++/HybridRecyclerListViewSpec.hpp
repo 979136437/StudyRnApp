@@ -21,6 +21,8 @@ namespace margelo::nitro::recyclerlist { enum class RecyclerLayout; }
 namespace margelo::nitro::recyclerlist { struct SlotBinding; }
 // Forward declaration of `NativeRefreshPhase` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class NativeRefreshPhase; }
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 // Forward declaration of `VisibleRange` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { struct VisibleRange; }
 // Forward declaration of `RecyclerListState` to properly resolve imports.
@@ -33,6 +35,7 @@ namespace margelo::nitro::recyclerlist { struct RecyclerListState; }
 #include "SlotBinding.hpp"
 #include <functional>
 #include "NativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 #include "VisibleRange.hpp"
 #include "RecyclerListState.hpp"
 
@@ -81,6 +84,20 @@ namespace margelo::nitro::recyclerlist {
       virtual void setRefreshEnabled(bool refreshEnabled) = 0;
       virtual double getRefreshThreshold() = 0;
       virtual void setRefreshThreshold(double refreshThreshold) = 0;
+      virtual bool getSecondLevelEnabled() = 0;
+      virtual void setSecondLevelEnabled(bool secondLevelEnabled) = 0;
+      virtual bool getSecondLevelOpen() = 0;
+      virtual void setSecondLevelOpen(bool secondLevelOpen) = 0;
+      virtual double getSecondLevelThreshold() = 0;
+      virtual void setSecondLevelThreshold(double secondLevelThreshold) = 0;
+      virtual std::string getTabCoordinatorId() = 0;
+      virtual void setTabCoordinatorId(const std::string& tabCoordinatorId) = 0;
+      virtual std::string getTabKey() = 0;
+      virtual void setTabKey(const std::string& tabKey) = 0;
+      virtual bool getTabActive() = 0;
+      virtual void setTabActive(bool tabActive) = 0;
+      virtual double getTabCollapseRange() = 0;
+      virtual void setTabCollapseRange(double tabCollapseRange) = 0;
       virtual double getEndReachedThreshold() = 0;
       virtual void setEndReachedThreshold(double endReachedThreshold) = 0;
       virtual bool getEndReachedEnabled() = 0;
@@ -91,6 +108,10 @@ namespace margelo::nitro::recyclerlist {
       virtual void setOnRefreshRequested(const std::function<void()>& onRefreshRequested) = 0;
       virtual std::function<void(NativeRefreshPhase /* phase */)> getOnRefreshPhaseChanged() = 0;
       virtual void setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) = 0;
+      virtual std::function<void()> getOnSecondLevelRequested() = 0;
+      virtual void setOnSecondLevelRequested(const std::function<void()>& onSecondLevelRequested) = 0;
+      virtual std::function<void(NativeSecondLevelPhase /* phase */)> getOnSecondLevelPhaseChanged() = 0;
+      virtual void setOnSecondLevelPhaseChanged(const std::function<void(NativeSecondLevelPhase /* phase */)>& onSecondLevelPhaseChanged) = 0;
       virtual std::function<void()> getOnEndReached() = 0;
       virtual void setOnEndReached(const std::function<void()>& onEndReached) = 0;
       virtual std::function<void(const VisibleRange& /* range */)> getOnVisibleRangeChanged() = 0;

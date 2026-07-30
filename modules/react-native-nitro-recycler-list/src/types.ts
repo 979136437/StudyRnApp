@@ -4,6 +4,7 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import type {
   NativeRefreshPhase as NativeRefreshPhaseValue,
+  NativeSecondLevelPhase as NativeSecondLevelPhaseValue,
   RecyclerLayout,
   RecyclerListState,
   VisibleRange,
@@ -52,6 +53,65 @@ export type NativeRefreshPhase =
  */
 export type RefreshPhase = NativeRefreshPhase;
 
+/** 下拉二级阶段的运行时常量。 */
+export const SecondLevelPhase = {
+  /** 未进入第二段下拉，二楼完全关闭。 */
+  IDLE: 'idle',
+  /** 已超过刷新阈值，正在向二楼阈值继续下拉。 */
+  PULLING: 'pulling',
+  /** 已达到二楼阈值，松手将请求打开二楼。 */
+  READY: 'ready',
+  /** 列表正在离开视口并显示二楼内容。 */
+  OPENING: 'opening',
+  /** 二楼已完全打开并允许交互。 */
+  OPEN: 'open',
+  /** 二楼正在关闭，列表返回初始位置。 */
+  CLOSING: 'closing',
+} as const satisfies Record<
+  Uppercase<NativeSecondLevelPhaseValue>,
+  NativeSecondLevelPhaseValue
+>;
+
+/** `SecondLevelPhase` 运行时对象中所有值组成的字符串字面量联合。 */
+export type SecondLevelPhase =
+  (typeof SecondLevelPhase)[keyof typeof SecondLevelPhase];
+
+/** 刷新头读取的第二段下拉手势上下文。 */
+export interface SecondLevelGestureContext {
+  /** 当前二楼阶段，用于切换离散提示内容。 */
+  phase: SecondLevelPhase;
+  /** 当前二楼阶段的 UI Runtime 共享值。 */
+  phaseValue: SharedValue<SecondLevelPhase>;
+  /** 第一阈值至第二阈值之间的标准化进度。 */
+  progress: SharedValue<number>;
+  /** 当前二楼触发距离，单位为逻辑像素。 */
+  threshold: number;
+}
+
+/** `renderContent` 渲染全屏二楼时接收的上下文。 */
+export interface SecondLevelContentContext extends SecondLevelGestureContext {
+  /** 当前原生下拉或开关动画的可见位移。 */
+  offset: SharedValue<number>;
+  /** 请求业务将受控 `open` 更新为 `false`。 */
+  close(): void;
+}
+
+/** 受控下拉二级功能配置。 */
+export interface SecondLevelOptions {
+  /** 二楼是否应保持打开；业务必须在 `onOpenChange` 中同步该值。 */
+  open: boolean;
+  /** 原生请求打开或内容请求关闭时调用。 */
+  onOpenChange(open: boolean): void;
+  /** 用户达到第二阈值并松手时额外调用，不在程序化打开时调用。 */
+  onRequested?: () => void;
+  /** 渲染列表背后的全屏二楼内容。 */
+  renderContent(context: SecondLevelContentContext): ReactNode;
+  /** 二楼触发距离，必须大于 `refreshThreshold`。 */
+  threshold?: number;
+  /** 是否接受二楼手势，默认值为 `true`。 */
+  enabled?: boolean;
+}
+
 /** `renderItem` 渲染单个回收槽位时接收的上下文。 */
 export interface RecyclerRenderItemInfo<T> {
   /** 当前槽位绑定的数据项。 */
@@ -93,6 +153,9 @@ export interface RefreshHeaderContext {
 
   /** 当前生效的刷新触发距离，单位为逻辑像素。 */
   threshold: number;
+
+  /** 启用下拉二级时提供第二段进度与阶段，否则为 `null`。 */
+  secondLevel: SecondLevelGestureContext | null;
 }
 
 /** `renderLoadMoreFooter` 渲染加载尾部时接收的上下文。 */
@@ -214,6 +277,14 @@ export interface RecyclerListProps<T> {
   getStickyLevel?: (item: T, index: number) => number | undefined;
 
   /**
+   * 返回吸顶项所属的组键；仅在 `getStickyLevel` 返回有效层级时生效。
+   *
+   * 同组不同层级会叠放，同组同层后项推走前项。进入新组后，新组边界会整体
+   * 推走上一组的吸顶栈。未提供时所有吸顶项属于同一个默认组。
+   */
+  getStickyGroup?: (item: T, index: number) => string | number | undefined;
+
+  /**
    * 在数据内容之前滚动的头部内容。
    *
    * 头部作为独立通栏元素参与原生布局，不进入普通数据项的回收池。
@@ -271,6 +342,14 @@ export interface RecyclerListProps<T> {
    * 普通数据项的回收槽位。
    */
   renderRefreshHeader?: (context: RefreshHeaderContext) => ReactNode;
+
+  /**
+   * 受控下拉二级配置。
+   *
+   * 松手位置位于刷新阈值与二楼阈值之间时执行普通刷新；达到二楼阈值后只请求
+   * 打开二楼，不会同时触发 `onRefresh`。横向列表会忽略该配置。
+   */
+  secondLevel?: SecondLevelOptions;
 
   /**
    * 列表接近内容末端时调用，用于加载下一页数据。

@@ -124,6 +124,41 @@ using namespace margelo::nitro::recyclerlist::views;
     swiftPart.setRefreshThreshold(newViewProps.refreshThreshold.value);
     newViewProps.refreshThreshold.isDirty = false;
   }
+  // secondLevelEnabled: boolean
+  if (newViewProps.secondLevelEnabled.isDirty) {
+    swiftPart.setSecondLevelEnabled(newViewProps.secondLevelEnabled.value);
+    newViewProps.secondLevelEnabled.isDirty = false;
+  }
+  // secondLevelOpen: boolean
+  if (newViewProps.secondLevelOpen.isDirty) {
+    swiftPart.setSecondLevelOpen(newViewProps.secondLevelOpen.value);
+    newViewProps.secondLevelOpen.isDirty = false;
+  }
+  // secondLevelThreshold: number
+  if (newViewProps.secondLevelThreshold.isDirty) {
+    swiftPart.setSecondLevelThreshold(newViewProps.secondLevelThreshold.value);
+    newViewProps.secondLevelThreshold.isDirty = false;
+  }
+  // tabCoordinatorId: string
+  if (newViewProps.tabCoordinatorId.isDirty) {
+    swiftPart.setTabCoordinatorId(newViewProps.tabCoordinatorId.value);
+    newViewProps.tabCoordinatorId.isDirty = false;
+  }
+  // tabKey: string
+  if (newViewProps.tabKey.isDirty) {
+    swiftPart.setTabKey(newViewProps.tabKey.value);
+    newViewProps.tabKey.isDirty = false;
+  }
+  // tabActive: boolean
+  if (newViewProps.tabActive.isDirty) {
+    swiftPart.setTabActive(newViewProps.tabActive.value);
+    newViewProps.tabActive.isDirty = false;
+  }
+  // tabCollapseRange: number
+  if (newViewProps.tabCollapseRange.isDirty) {
+    swiftPart.setTabCollapseRange(newViewProps.tabCollapseRange.value);
+    newViewProps.tabCollapseRange.isDirty = false;
+  }
   // endReachedThreshold: number
   if (newViewProps.endReachedThreshold.isDirty) {
     swiftPart.setEndReachedThreshold(newViewProps.endReachedThreshold.value);
@@ -148,6 +183,16 @@ using namespace margelo::nitro::recyclerlist::views;
   if (newViewProps.onRefreshPhaseChanged.isDirty) {
     swiftPart.setOnRefreshPhaseChanged(newViewProps.onRefreshPhaseChanged.value);
     newViewProps.onRefreshPhaseChanged.isDirty = false;
+  }
+  // onSecondLevelRequested: function
+  if (newViewProps.onSecondLevelRequested.isDirty) {
+    swiftPart.setOnSecondLevelRequested(newViewProps.onSecondLevelRequested.value);
+    newViewProps.onSecondLevelRequested.isDirty = false;
+  }
+  // onSecondLevelPhaseChanged: function
+  if (newViewProps.onSecondLevelPhaseChanged.isDirty) {
+    swiftPart.setOnSecondLevelPhaseChanged(newViewProps.onSecondLevelPhaseChanged.value);
+    newViewProps.onSecondLevelPhaseChanged.isDirty = false;
   }
   // onEndReached: function
   if (newViewProps.onEndReached.isDirty) {

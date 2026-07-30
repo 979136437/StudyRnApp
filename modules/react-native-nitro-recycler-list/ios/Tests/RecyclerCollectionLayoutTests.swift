@@ -7,9 +7,9 @@ final class RecyclerCollectionLayoutTests: XCTestCase {
     layout.mode = .masonry
     layout.columns = 2
     layout.descriptors = [
-      ItemDescriptor(key: "a", type: "card", span: 1, stickyLevel: -1, estimatedSize: 100),
-      ItemDescriptor(key: "b", type: "card", span: 1, stickyLevel: -1, estimatedSize: 160),
-      ItemDescriptor(key: "c", type: "card", span: 1, stickyLevel: -1, estimatedSize: 80),
+      ItemDescriptor(key: "a", type: "card", span: 1, stickyLevel: -1, stickyGroup: "", estimatedSize: 100),
+      ItemDescriptor(key: "b", type: "card", span: 1, stickyLevel: -1, stickyGroup: "", estimatedSize: 160),
+      ItemDescriptor(key: "c", type: "card", span: 1, stickyLevel: -1, stickyGroup: "", estimatedSize: 80),
     ]
     let collectionView = UICollectionView(
       frame: CGRect(x: 0, y: 0, width: 320, height: 640),

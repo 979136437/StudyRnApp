@@ -116,6 +116,76 @@ namespace margelo::nitro::recyclerlist::views {
         throw std::runtime_error(std::string("RecyclerListView.refreshThreshold: ") + exc.what());
       }
     }()),
+    secondLevelEnabled([&]() -> CachedProp<bool> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("secondLevelEnabled", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.secondLevelEnabled;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<bool>::fromRawValue(*runtime, value, sourceProps.secondLevelEnabled);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.secondLevelEnabled: ") + exc.what());
+      }
+    }()),
+    secondLevelOpen([&]() -> CachedProp<bool> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("secondLevelOpen", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.secondLevelOpen;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<bool>::fromRawValue(*runtime, value, sourceProps.secondLevelOpen);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.secondLevelOpen: ") + exc.what());
+      }
+    }()),
+    secondLevelThreshold([&]() -> CachedProp<double> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("secondLevelThreshold", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.secondLevelThreshold;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<double>::fromRawValue(*runtime, value, sourceProps.secondLevelThreshold);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.secondLevelThreshold: ") + exc.what());
+      }
+    }()),
+    tabCoordinatorId([&]() -> CachedProp<std::string> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("tabCoordinatorId", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.tabCoordinatorId;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::string>::fromRawValue(*runtime, value, sourceProps.tabCoordinatorId);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.tabCoordinatorId: ") + exc.what());
+      }
+    }()),
+    tabKey([&]() -> CachedProp<std::string> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("tabKey", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.tabKey;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::string>::fromRawValue(*runtime, value, sourceProps.tabKey);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.tabKey: ") + exc.what());
+      }
+    }()),
+    tabActive([&]() -> CachedProp<bool> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("tabActive", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.tabActive;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<bool>::fromRawValue(*runtime, value, sourceProps.tabActive);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.tabActive: ") + exc.what());
+      }
+    }()),
+    tabCollapseRange([&]() -> CachedProp<double> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("tabCollapseRange", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.tabCollapseRange;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<double>::fromRawValue(*runtime, value, sourceProps.tabCollapseRange);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.tabCollapseRange: ") + exc.what());
+      }
+    }()),
     endReachedThreshold([&]() -> CachedProp<double> {
       try {
         const react::RawValue* rawValue = rawProps.at("endReachedThreshold", nullptr, nullptr);
@@ -166,6 +236,26 @@ namespace margelo::nitro::recyclerlist::views {
         throw std::runtime_error(std::string("RecyclerListView.onRefreshPhaseChanged: ") + exc.what());
       }
     }()),
+    onSecondLevelRequested([&]() -> CachedProp<std::function<void()>> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("onSecondLevelRequested", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.onSecondLevelRequested;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::function<void()>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onSecondLevelRequested);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.onSecondLevelRequested: ") + exc.what());
+      }
+    }()),
+    onSecondLevelPhaseChanged([&]() -> CachedProp<std::function<void(NativeSecondLevelPhase /* phase */)>> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("onSecondLevelPhaseChanged", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.onSecondLevelPhaseChanged;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::function<void(NativeSecondLevelPhase /* phase */)>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onSecondLevelPhaseChanged);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("RecyclerListView.onSecondLevelPhaseChanged: ") + exc.what());
+      }
+    }()),
     onEndReached([&]() -> CachedProp<std::function<void()>> {
       try {
         const react::RawValue* rawValue = rawProps.at("onEndReached", nullptr, nullptr);
@@ -208,11 +298,20 @@ namespace margelo::nitro::recyclerlist::views {
       case hashString("refreshing"): return true;
       case hashString("refreshEnabled"): return true;
       case hashString("refreshThreshold"): return true;
+      case hashString("secondLevelEnabled"): return true;
+      case hashString("secondLevelOpen"): return true;
+      case hashString("secondLevelThreshold"): return true;
+      case hashString("tabCoordinatorId"): return true;
+      case hashString("tabKey"): return true;
+      case hashString("tabActive"): return true;
+      case hashString("tabCollapseRange"): return true;
       case hashString("endReachedThreshold"): return true;
       case hashString("endReachedEnabled"): return true;
       case hashString("onSlotsChanged"): return true;
       case hashString("onRefreshRequested"): return true;
       case hashString("onRefreshPhaseChanged"): return true;
+      case hashString("onSecondLevelRequested"): return true;
+      case hashString("onSecondLevelPhaseChanged"): return true;
       case hashString("onEndReached"): return true;
       case hashString("onVisibleRangeChanged"): return true;
       case hashString("hybridRef"): return true;

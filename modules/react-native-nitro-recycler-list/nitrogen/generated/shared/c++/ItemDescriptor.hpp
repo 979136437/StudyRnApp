@@ -43,11 +43,12 @@ namespace margelo::nitro::recyclerlist {
     std::string type     SWIFT_PRIVATE;
     double span     SWIFT_PRIVATE;
     double stickyLevel     SWIFT_PRIVATE;
+    std::string stickyGroup     SWIFT_PRIVATE;
     double estimatedSize     SWIFT_PRIVATE;
 
   public:
     ItemDescriptor() = default;
-    explicit ItemDescriptor(std::string key, std::string type, double span, double stickyLevel, double estimatedSize): key(key), type(type), span(span), stickyLevel(stickyLevel), estimatedSize(estimatedSize) {}
+    explicit ItemDescriptor(std::string key, std::string type, double span, double stickyLevel, std::string stickyGroup, double estimatedSize): key(key), type(type), span(span), stickyLevel(stickyLevel), stickyGroup(stickyGroup), estimatedSize(estimatedSize) {}
 
   public:
     friend bool operator==(const ItemDescriptor& lhs, const ItemDescriptor& rhs) = default;
@@ -67,6 +68,7 @@ namespace margelo::nitro {
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "type"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "span"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "stickyLevel"))),
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "stickyGroup"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "estimatedSize")))
       );
     }
@@ -76,6 +78,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "type"), JSIConverter<std::string>::toJSI(runtime, arg.type));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "span"), JSIConverter<double>::toJSI(runtime, arg.span));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "stickyLevel"), JSIConverter<double>::toJSI(runtime, arg.stickyLevel));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "stickyGroup"), JSIConverter<std::string>::toJSI(runtime, arg.stickyGroup));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "estimatedSize"), JSIConverter<double>::toJSI(runtime, arg.estimatedSize));
       return obj;
     }
@@ -91,6 +94,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "type")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "span")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "stickyLevel")))) return false;
+      if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "stickyGroup")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "estimatedSize")))) return false;
       return true;
     }

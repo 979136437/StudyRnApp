@@ -18,8 +18,8 @@ public extension ItemDescriptor {
   /**
    * Create a new instance of `ItemDescriptor`.
    */
-  init(key: String, type: String, span: Double, stickyLevel: Double, estimatedSize: Double) {
-    self.init(std.string(key), std.string(type), span, stickyLevel, estimatedSize)
+  init(key: String, type: String, span: Double, stickyLevel: Double, stickyGroup: String, estimatedSize: Double) {
+    self.init(std.string(key), std.string(type), span, stickyLevel, std.string(stickyGroup), estimatedSize)
   }
 
   @inline(__always)
@@ -42,6 +42,11 @@ public extension ItemDescriptor {
     return self.__stickyLevel
   }
   
+  @inline(__always)
+  var stickyGroup: String {
+    return String(self.__stickyGroup)
+  }
+
   @inline(__always)
   var estimatedSize: Double {
     return self.__estimatedSize

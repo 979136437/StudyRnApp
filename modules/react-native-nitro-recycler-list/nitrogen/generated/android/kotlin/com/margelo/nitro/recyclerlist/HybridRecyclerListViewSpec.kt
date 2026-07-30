@@ -84,6 +84,48 @@ abstract class HybridRecyclerListViewSpec: HybridView() {
   @get:Keep
   @set:DoNotStrip
   @set:Keep
+  abstract var secondLevelEnabled: Boolean
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var secondLevelOpen: Boolean
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var secondLevelThreshold: Double
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var tabCoordinatorId: String
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var tabKey: String
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var tabActive: Boolean
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var tabCollapseRange: Double
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
   abstract var endReachedThreshold: Double
   
   @get:DoNotStrip
@@ -134,6 +176,34 @@ abstract class HybridRecyclerListViewSpec: HybridView() {
       onRefreshPhaseChanged = value
     }
   
+  abstract var onSecondLevelRequested: () -> Unit
+
+  private var onSecondLevelRequested_cxx: Func_void
+    @Keep
+    @DoNotStrip
+    get() {
+      return Func_void_java(onSecondLevelRequested)
+    }
+    @Keep
+    @DoNotStrip
+    set(value) {
+      onSecondLevelRequested = value
+    }
+
+  abstract var onSecondLevelPhaseChanged: (phase: NativeSecondLevelPhase) -> Unit
+
+  private var onSecondLevelPhaseChanged_cxx: Func_void_NativeSecondLevelPhase
+    @Keep
+    @DoNotStrip
+    get() {
+      return Func_void_NativeSecondLevelPhase_java(onSecondLevelPhaseChanged)
+    }
+    @Keep
+    @DoNotStrip
+    set(value) {
+      onSecondLevelPhaseChanged = value
+    }
+
   abstract var onEndReached: () -> Unit
   
   private var onEndReached_cxx: Func_void

@@ -20,6 +20,8 @@ namespace margelo::nitro::recyclerlist { enum class RecyclerLayout; }
 namespace margelo::nitro::recyclerlist { struct SlotBinding; }
 // Forward declaration of `NativeRefreshPhase` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class NativeRefreshPhase; }
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 // Forward declaration of `VisibleRange` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { struct VisibleRange; }
 // Forward declaration of `RecyclerListState` to properly resolve imports.
@@ -32,6 +34,7 @@ namespace margelo::nitro::recyclerlist { struct RecyclerListState; }
 #include "SlotBinding.hpp"
 #include <functional>
 #include "NativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 #include "VisibleRange.hpp"
 #include "RecyclerListState.hpp"
 
@@ -138,6 +141,50 @@ namespace margelo::nitro::recyclerlist {
     inline void setRefreshThreshold(double refreshThreshold) noexcept override {
       _swiftPart.setRefreshThreshold(std::forward<decltype(refreshThreshold)>(refreshThreshold));
     }
+    inline bool getSecondLevelEnabled() noexcept override {
+      return _swiftPart.getSecondLevelEnabled();
+    }
+    inline void setSecondLevelEnabled(bool secondLevelEnabled) noexcept override {
+      _swiftPart.setSecondLevelEnabled(std::forward<decltype(secondLevelEnabled)>(secondLevelEnabled));
+    }
+    inline bool getSecondLevelOpen() noexcept override {
+      return _swiftPart.getSecondLevelOpen();
+    }
+    inline void setSecondLevelOpen(bool secondLevelOpen) noexcept override {
+      _swiftPart.setSecondLevelOpen(std::forward<decltype(secondLevelOpen)>(secondLevelOpen));
+    }
+    inline double getSecondLevelThreshold() noexcept override {
+      return _swiftPart.getSecondLevelThreshold();
+    }
+    inline void setSecondLevelThreshold(double secondLevelThreshold) noexcept override {
+      _swiftPart.setSecondLevelThreshold(std::forward<decltype(secondLevelThreshold)>(secondLevelThreshold));
+    }
+    inline std::string getTabCoordinatorId() noexcept override {
+      auto __result = _swiftPart.getTabCoordinatorId();
+      return __result;
+    }
+    inline void setTabCoordinatorId(const std::string& tabCoordinatorId) noexcept override {
+      _swiftPart.setTabCoordinatorId(tabCoordinatorId);
+    }
+    inline std::string getTabKey() noexcept override {
+      auto __result = _swiftPart.getTabKey();
+      return __result;
+    }
+    inline void setTabKey(const std::string& tabKey) noexcept override {
+      _swiftPart.setTabKey(tabKey);
+    }
+    inline bool getTabActive() noexcept override {
+      return _swiftPart.getTabActive();
+    }
+    inline void setTabActive(bool tabActive) noexcept override {
+      _swiftPart.setTabActive(std::forward<decltype(tabActive)>(tabActive));
+    }
+    inline double getTabCollapseRange() noexcept override {
+      return _swiftPart.getTabCollapseRange();
+    }
+    inline void setTabCollapseRange(double tabCollapseRange) noexcept override {
+      _swiftPart.setTabCollapseRange(std::forward<decltype(tabCollapseRange)>(tabCollapseRange));
+    }
     inline double getEndReachedThreshold() noexcept override {
       return _swiftPart.getEndReachedThreshold();
     }
@@ -170,6 +217,20 @@ namespace margelo::nitro::recyclerlist {
     }
     inline void setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) noexcept override {
       _swiftPart.setOnRefreshPhaseChanged(onRefreshPhaseChanged);
+    }
+    inline std::function<void()> getOnSecondLevelRequested() noexcept override {
+      auto __result = _swiftPart.getOnSecondLevelRequested();
+      return __result;
+    }
+    inline void setOnSecondLevelRequested(const std::function<void()>& onSecondLevelRequested) noexcept override {
+      _swiftPart.setOnSecondLevelRequested(onSecondLevelRequested);
+    }
+    inline std::function<void(NativeSecondLevelPhase /* phase */)> getOnSecondLevelPhaseChanged() noexcept override {
+      auto __result = _swiftPart.getOnSecondLevelPhaseChanged();
+      return __result;
+    }
+    inline void setOnSecondLevelPhaseChanged(const std::function<void(NativeSecondLevelPhase /* phase */)>& onSecondLevelPhaseChanged) noexcept override {
+      _swiftPart.setOnSecondLevelPhaseChanged(onSecondLevelPhaseChanged);
     }
     inline std::function<void()> getOnEndReached() noexcept override {
       auto __result = _swiftPart.getOnEndReached();

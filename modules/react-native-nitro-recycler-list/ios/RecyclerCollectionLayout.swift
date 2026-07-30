@@ -91,16 +91,32 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
     let visible = attributes.filter { $0.frame.intersects(rect) }.map { $0.copy() as! UICollectionViewLayoutAttributes }
     let offsetY = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
     var levelOffsets: [Int: CGFloat] = [:]
+    guard let activeMarker = attributes.last(where: {
+      descriptors[$0.indexPath.item].stickyLevel >= 0 && $0.frame.minY <= offsetY
+    }) else { return visible }
+    let activeGroup = descriptors[activeMarker.indexPath.item].stickyGroup
+    let groupLevels = Set(descriptors.filter { $0.stickyGroup == activeGroup }
+      .map { Int($0.stickyLevel) }.filter { $0 >= 0 }).sorted()
+    let nextGroup = attributes.first {
+      $0.indexPath.item > activeMarker.indexPath.item &&
+        descriptors[$0.indexPath.item].stickyLevel >= 0 &&
+        descriptors[$0.indexPath.item].stickyGroup != activeGroup
+    }
+    var pinned: [UICollectionViewLayoutAttributes] = []
 
-    for level in Set(descriptors.map { Int($0.stickyLevel) }.filter { $0 >= 0 }).sorted() {
+    for level in groupLevels {
       let candidates = attributes.filter {
-        Int(descriptors[$0.indexPath.item].stickyLevel) == level && $0.frame.minY <= offsetY + (levelOffsets.values.reduce(0, +))
+        descriptors[$0.indexPath.item].stickyGroup == activeGroup &&
+          Int(descriptors[$0.indexPath.item].stickyLevel) == level &&
+          $0.frame.minY <= offsetY + (levelOffsets.values.reduce(0, +))
       }
       guard let current = candidates.last else { continue }
       let copied = current.copy() as! UICollectionViewLayoutAttributes
       let stackOffset = levelOffsets.values.reduce(0, +)
       let next = attributes.first {
-        $0.indexPath.item > current.indexPath.item && Int(descriptors[$0.indexPath.item].stickyLevel) == level
+        $0.indexPath.item > current.indexPath.item &&
+          descriptors[$0.indexPath.item].stickyGroup == activeGroup &&
+          Int(descriptors[$0.indexPath.item].stickyLevel) == level
       }
       copied.frame.origin.y = min(
         max(current.frame.minY, offsetY + stackOffset),
@@ -108,6 +124,13 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
       )
       copied.zIndex = 10_000 + level
       levelOffsets[level] = copied.frame.height
+      pinned.append(copied)
+    }
+
+    let stackHeight = pinned.reduce(0) { $0 + $1.frame.height }
+    let groupShift = min(0, (nextGroup?.frame.minY ?? .greatestFiniteMagnitude) - (offsetY + stackHeight))
+    for copied in pinned {
+      copied.frame.origin.y += groupShift
       if let index = visible.firstIndex(where: { $0.indexPath == copied.indexPath }) {
         visible[index] = copied
       } else {

@@ -15,6 +15,8 @@ namespace margelo::nitro::recyclerlist { enum class RecyclerLayout; }
 namespace margelo::nitro::recyclerlist { struct SlotBinding; }
 // Forward declaration of `NativeRefreshPhase` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { enum class NativeRefreshPhase; }
+// Forward declaration of `NativeSecondLevelPhase` to properly resolve imports.
+namespace margelo::nitro::recyclerlist { enum class NativeSecondLevelPhase; }
 // Forward declaration of `VisibleRange` to properly resolve imports.
 namespace margelo::nitro::recyclerlist { struct VisibleRange; }
 // Forward declaration of `RecyclerListState` to properly resolve imports.
@@ -35,6 +37,9 @@ namespace margelo::nitro::recyclerlist { struct RecyclerListState; }
 #include "NativeRefreshPhase.hpp"
 #include "JFunc_void_NativeRefreshPhase.hpp"
 #include "JNativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
+#include "JFunc_void_NativeSecondLevelPhase.hpp"
+#include "JNativeSecondLevelPhase.hpp"
 #include "VisibleRange.hpp"
 #include "JFunc_void_VisibleRange.hpp"
 #include "JVisibleRange.hpp"
@@ -170,6 +175,69 @@ namespace margelo::nitro::recyclerlist {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* refreshThreshold */)>("setRefreshThreshold");
     method(_javaPart, refreshThreshold);
   }
+  bool JHybridRecyclerListViewSpec::getSecondLevelEnabled() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean()>("getSecondLevelEnabled");
+    auto __result = method(_javaPart);
+    return static_cast<bool>(__result);
+  }
+  void JHybridRecyclerListViewSpec::setSecondLevelEnabled(bool secondLevelEnabled) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jboolean /* secondLevelEnabled */)>("setSecondLevelEnabled");
+    method(_javaPart, secondLevelEnabled);
+  }
+  bool JHybridRecyclerListViewSpec::getSecondLevelOpen() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean()>("getSecondLevelOpen");
+    auto __result = method(_javaPart);
+    return static_cast<bool>(__result);
+  }
+  void JHybridRecyclerListViewSpec::setSecondLevelOpen(bool secondLevelOpen) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jboolean /* secondLevelOpen */)>("setSecondLevelOpen");
+    method(_javaPart, secondLevelOpen);
+  }
+  double JHybridRecyclerListViewSpec::getSecondLevelThreshold() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getSecondLevelThreshold");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  void JHybridRecyclerListViewSpec::setSecondLevelThreshold(double secondLevelThreshold) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* secondLevelThreshold */)>("setSecondLevelThreshold");
+    method(_javaPart, secondLevelThreshold);
+  }
+  std::string JHybridRecyclerListViewSpec::getTabCoordinatorId() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getTabCoordinatorId");
+    auto __result = method(_javaPart);
+    return __result->toStdString();
+  }
+  void JHybridRecyclerListViewSpec::setTabCoordinatorId(const std::string& tabCoordinatorId) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* tabCoordinatorId */)>("setTabCoordinatorId");
+    method(_javaPart, jni::make_jstring(tabCoordinatorId));
+  }
+  std::string JHybridRecyclerListViewSpec::getTabKey() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getTabKey");
+    auto __result = method(_javaPart);
+    return __result->toStdString();
+  }
+  void JHybridRecyclerListViewSpec::setTabKey(const std::string& tabKey) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* tabKey */)>("setTabKey");
+    method(_javaPart, jni::make_jstring(tabKey));
+  }
+  bool JHybridRecyclerListViewSpec::getTabActive() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean()>("getTabActive");
+    auto __result = method(_javaPart);
+    return static_cast<bool>(__result);
+  }
+  void JHybridRecyclerListViewSpec::setTabActive(bool tabActive) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jboolean /* tabActive */)>("setTabActive");
+    method(_javaPart, tabActive);
+  }
+  double JHybridRecyclerListViewSpec::getTabCollapseRange() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getTabCollapseRange");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  void JHybridRecyclerListViewSpec::setTabCollapseRange(double tabCollapseRange) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* tabCollapseRange */)>("setTabCollapseRange");
+    method(_javaPart, tabCollapseRange);
+  }
   double JHybridRecyclerListViewSpec::getEndReachedThreshold() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getEndReachedThreshold");
     auto __result = method(_javaPart);
@@ -238,6 +306,40 @@ namespace margelo::nitro::recyclerlist {
   void JHybridRecyclerListViewSpec::setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_NativeRefreshPhase::javaobject> /* onRefreshPhaseChanged */)>("setOnRefreshPhaseChanged_cxx");
     method(_javaPart, JFunc_void_NativeRefreshPhase_cxx::fromCpp(onRefreshPhaseChanged));
+  }
+  std::function<void()> JHybridRecyclerListViewSpec::getOnSecondLevelRequested() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>()>("getOnSecondLevelRequested_cxx");
+    auto __result = method(_javaPart);
+    return [&]() -> std::function<void()> {
+      if (__result->isInstanceOf(JFunc_void_cxx::javaClassStatic())) [[likely]] {
+        auto downcast = jni::static_ref_cast<JFunc_void_cxx::javaobject>(__result);
+        return downcast->cthis()->getFunction();
+      } else {
+        auto __resultRef = jni::make_global(__result);
+        return JNICallable<JFunc_void, void()>(std::move(__resultRef));
+      }
+    }();
+  }
+  void JHybridRecyclerListViewSpec::setOnSecondLevelRequested(const std::function<void()>& onSecondLevelRequested) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void::javaobject> /* onSecondLevelRequested */)>("setOnSecondLevelRequested_cxx");
+    method(_javaPart, JFunc_void_cxx::fromCpp(onSecondLevelRequested));
+  }
+  std::function<void(NativeSecondLevelPhase /* phase */)> JHybridRecyclerListViewSpec::getOnSecondLevelPhaseChanged() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void_NativeSecondLevelPhase::javaobject>()>("getOnSecondLevelPhaseChanged_cxx");
+    auto __result = method(_javaPart);
+    return [&]() -> std::function<void(NativeSecondLevelPhase /* phase */)> {
+      if (__result->isInstanceOf(JFunc_void_NativeSecondLevelPhase_cxx::javaClassStatic())) [[likely]] {
+        auto downcast = jni::static_ref_cast<JFunc_void_NativeSecondLevelPhase_cxx::javaobject>(__result);
+        return downcast->cthis()->getFunction();
+      } else {
+        auto __resultRef = jni::make_global(__result);
+        return JNICallable<JFunc_void_NativeSecondLevelPhase, void(NativeSecondLevelPhase)>(std::move(__resultRef));
+      }
+    }();
+  }
+  void JHybridRecyclerListViewSpec::setOnSecondLevelPhaseChanged(const std::function<void(NativeSecondLevelPhase /* phase */)>& onSecondLevelPhaseChanged) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_NativeSecondLevelPhase::javaobject> /* onSecondLevelPhaseChanged */)>("setOnSecondLevelPhaseChanged_cxx");
+    method(_javaPart, JFunc_void_NativeSecondLevelPhase_cxx::fromCpp(onSecondLevelPhaseChanged));
   }
   std::function<void()> JHybridRecyclerListViewSpec::getOnEndReached() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>()>("getOnEndReached_cxx");

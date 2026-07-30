@@ -18,8 +18,8 @@ public extension RecyclerListState {
   /**
    * Create a new instance of `RecyclerListState`.
    */
-  init(offset: Double, contentSize: Double, firstVisibleIndex: Double, lastVisibleIndex: Double, refreshing: Bool) {
-    self.init(offset, contentSize, firstVisibleIndex, lastVisibleIndex, refreshing)
+  init(offset: Double, contentSize: Double, firstVisibleIndex: Double, lastVisibleIndex: Double, refreshing: Bool, secondLevelOpen: Bool, secondLevelPhase: NativeSecondLevelPhase) {
+    self.init(offset, contentSize, firstVisibleIndex, lastVisibleIndex, refreshing, secondLevelOpen, secondLevelPhase)
   }
 
   @inline(__always)
@@ -45,5 +45,15 @@ public extension RecyclerListState {
   @inline(__always)
   var refreshing: Bool {
     return self.__refreshing
+  }
+
+  @inline(__always)
+  var secondLevelOpen: Bool {
+    return self.__secondLevelOpen
+  }
+
+  @inline(__always)
+  var secondLevelPhase: NativeSecondLevelPhase {
+    return self.__secondLevelPhase
   }
 }

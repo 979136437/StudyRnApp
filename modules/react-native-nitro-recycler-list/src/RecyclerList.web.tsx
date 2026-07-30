@@ -54,6 +54,8 @@ function RecyclerListWebInner<T>(
       firstVisibleIndex: -1,
       lastVisibleIndex: -1,
       refreshing,
+      secondLevelOpen: false,
+      secondLevelPhase: 'idle',
     }),
   }));
 

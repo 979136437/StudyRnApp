@@ -19,11 +19,20 @@ public protocol HybridRecyclerListViewSpec_protocol: HybridObject, HybridView {
   var refreshing: Bool { get set }
   var refreshEnabled: Bool { get set }
   var refreshThreshold: Double { get set }
+  var secondLevelEnabled: Bool { get set }
+  var secondLevelOpen: Bool { get set }
+  var secondLevelThreshold: Double { get set }
+  var tabCoordinatorId: String { get set }
+  var tabKey: String { get set }
+  var tabActive: Bool { get set }
+  var tabCollapseRange: Double { get set }
   var endReachedThreshold: Double { get set }
   var endReachedEnabled: Bool { get set }
   var onSlotsChanged: (_ bindings: [SlotBinding]) -> Void { get set }
   var onRefreshRequested: () -> Void { get set }
   var onRefreshPhaseChanged: (_ phase: NativeRefreshPhase) -> Void { get set }
+  var onSecondLevelRequested: () -> Void { get set }
+  var onSecondLevelPhaseChanged: (_ phase: NativeSecondLevelPhase) -> Void { get set }
   var onEndReached: () -> Void { get set }
   var onVisibleRangeChanged: (_ range: VisibleRange) -> Void { get set }
 

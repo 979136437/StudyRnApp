@@ -23,6 +23,7 @@
 #include "SlotBinding.hpp"
 #include <functional>
 #include "NativeRefreshPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 #include "VisibleRange.hpp"
 #include <memory>
 #include "HybridRecyclerListViewSpec.hpp"
@@ -57,11 +58,20 @@ namespace margelo::nitro::recyclerlist::views {
     CachedProp<bool> refreshing;
     CachedProp<bool> refreshEnabled;
     CachedProp<double> refreshThreshold;
+    CachedProp<bool> secondLevelEnabled;
+    CachedProp<bool> secondLevelOpen;
+    CachedProp<double> secondLevelThreshold;
+    CachedProp<std::string> tabCoordinatorId;
+    CachedProp<std::string> tabKey;
+    CachedProp<bool> tabActive;
+    CachedProp<double> tabCollapseRange;
     CachedProp<double> endReachedThreshold;
     CachedProp<bool> endReachedEnabled;
     CachedProp<std::function<void(const std::vector<SlotBinding>& /* bindings */)>> onSlotsChanged;
     CachedProp<std::function<void()>> onRefreshRequested;
     CachedProp<std::function<void(NativeRefreshPhase /* phase */)>> onRefreshPhaseChanged;
+    CachedProp<std::function<void()>> onSecondLevelRequested;
+    CachedProp<std::function<void(NativeSecondLevelPhase /* phase */)>> onSecondLevelPhaseChanged;
     CachedProp<std::function<void()>> onEndReached;
     CachedProp<std::function<void(const VisibleRange& /* range */)>> onVisibleRangeChanged;
     CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridRecyclerListViewSpec>& /* ref */)>>> hybridRef;

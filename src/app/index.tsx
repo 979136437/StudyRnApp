@@ -44,6 +44,18 @@ const RECYCLER_TEST_ROUTES = [
     href: '/recycler-list-tests/recycled-items',
     label: '回收项',
   },
+  {
+    href: '/recycler-list-tests/collapsible-tabs',
+    label: '折叠多页',
+  },
+  {
+    href: '/recycler-list-tests/complex-sticky',
+    label: '复杂吸顶',
+  },
+  {
+    href: '/recycler-list-tests/second-level',
+    label: '下拉二级',
+  },
 ] as const;
 
 const BASE_ITEMS: ActivityItem[] = [

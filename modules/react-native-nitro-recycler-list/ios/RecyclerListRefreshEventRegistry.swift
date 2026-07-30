@@ -1,7 +1,14 @@
 import Foundation
 
 @objc protocol RecyclerListRefreshEventSink: AnyObject {
-  func emitRefresh(phase: String, offset: Double, progress: Double)
+  func emitRefresh(
+    phase: String,
+    offset: Double,
+    progress: Double,
+    secondLevelPhase: String,
+    secondLevelProgress: Double
+  )
+  func emitTabScroll(collapseOffset: Double)
 }
 
 private final class WeakRefreshEventSink {
@@ -38,7 +45,17 @@ final class RecyclerListRefreshEventRegistry: NSObject {
     source?.emitRefresh(
       phase: snapshot.phase.stringValue,
       offset: snapshot.offset,
-      progress: snapshot.progress
+      progress: snapshot.progress,
+      secondLevelPhase: snapshot.secondLevelPhase.stringValue,
+      secondLevelProgress: snapshot.secondLevelProgress
     )
+  }
+
+  static func emitTabScroll(listId: String, collapseOffset: Double) {
+    lock.lock()
+    let source = sources[listId]?.value
+    if source == nil { sources.removeValue(forKey: listId) }
+    lock.unlock()
+    source?.emitTabScroll(collapseOffset: collapseOffset)
   }
 }

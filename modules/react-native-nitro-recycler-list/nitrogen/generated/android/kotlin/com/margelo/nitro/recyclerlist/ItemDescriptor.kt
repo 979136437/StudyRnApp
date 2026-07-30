@@ -32,6 +32,9 @@ data class ItemDescriptor(
   val stickyLevel: Double,
   @DoNotStrip
   @Keep
+  val stickyGroup: String,
+  @DoNotStrip
+  @Keep
   val estimatedSize: Double
 ) {
   /* primary constructor */
@@ -43,6 +46,7 @@ data class ItemDescriptor(
       && Objects.deepEquals(this.type, other.type)
       && Objects.deepEquals(this.span, other.span)
       && Objects.deepEquals(this.stickyLevel, other.stickyLevel)
+      && Objects.deepEquals(this.stickyGroup, other.stickyGroup)
       && Objects.deepEquals(this.estimatedSize, other.estimatedSize)
   }
 
@@ -52,6 +56,7 @@ data class ItemDescriptor(
       type,
       span,
       stickyLevel,
+      stickyGroup,
       estimatedSize
     ).contentDeepHashCode()
   }
@@ -64,8 +69,8 @@ data class ItemDescriptor(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(key: String, type: String, span: Double, stickyLevel: Double, estimatedSize: Double): ItemDescriptor {
-      return ItemDescriptor(key, type, span, stickyLevel, estimatedSize)
+    private fun fromCpp(key: String, type: String, span: Double, stickyLevel: Double, stickyGroup: String, estimatedSize: Double): ItemDescriptor {
+      return ItemDescriptor(key, type, span, stickyLevel, stickyGroup, estimatedSize)
     }
   }
 }

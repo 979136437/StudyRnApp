@@ -32,7 +32,13 @@ data class RecyclerListState(
   val lastVisibleIndex: Double,
   @DoNotStrip
   @Keep
-  val refreshing: Boolean
+  val refreshing: Boolean,
+  @DoNotStrip
+  @Keep
+  val secondLevelOpen: Boolean,
+  @DoNotStrip
+  @Keep
+  val secondLevelPhase: NativeSecondLevelPhase
 ) {
   /* primary constructor */
 
@@ -44,6 +50,8 @@ data class RecyclerListState(
       && Objects.deepEquals(this.firstVisibleIndex, other.firstVisibleIndex)
       && Objects.deepEquals(this.lastVisibleIndex, other.lastVisibleIndex)
       && Objects.deepEquals(this.refreshing, other.refreshing)
+      && Objects.deepEquals(this.secondLevelOpen, other.secondLevelOpen)
+      && Objects.deepEquals(this.secondLevelPhase, other.secondLevelPhase)
   }
 
   override fun hashCode(): Int {
@@ -52,7 +60,9 @@ data class RecyclerListState(
       contentSize,
       firstVisibleIndex,
       lastVisibleIndex,
-      refreshing
+      refreshing,
+      secondLevelOpen,
+      secondLevelPhase
     ).contentDeepHashCode()
   }
 
@@ -64,8 +74,8 @@ data class RecyclerListState(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(offset: Double, contentSize: Double, firstVisibleIndex: Double, lastVisibleIndex: Double, refreshing: Boolean): RecyclerListState {
-      return RecyclerListState(offset, contentSize, firstVisibleIndex, lastVisibleIndex, refreshing)
+    private fun fromCpp(offset: Double, contentSize: Double, firstVisibleIndex: Double, lastVisibleIndex: Double, refreshing: Boolean, secondLevelOpen: Boolean, secondLevelPhase: NativeSecondLevelPhase): RecyclerListState {
+      return RecyclerListState(offset, contentSize, firstVisibleIndex, lastVisibleIndex, refreshing, secondLevelOpen, secondLevelPhase)
     }
   }
 }

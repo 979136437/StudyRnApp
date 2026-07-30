@@ -39,6 +39,14 @@ namespace margelo::nitro::recyclerlist::bridge::swift {
     };
   }
   
+  // pragma MARK: std::function<void(NativeSecondLevelPhase /* phase */)>
+  Func_void_NativeSecondLevelPhase create_Func_void_NativeSecondLevelPhase(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroRecyclerList::Func_void_NativeSecondLevelPhase::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](NativeSecondLevelPhase phase) mutable -> void {
+      swiftClosure.call(static_cast<int>(phase));
+    };
+  }
+
   // pragma MARK: std::function<void(const VisibleRange& /* range */)>
   Func_void_VisibleRange create_Func_void_VisibleRange(void* NON_NULL swiftClosureWrapper) noexcept {
     auto swiftClosure = NitroRecyclerList::Func_void_VisibleRange::fromUnsafe(swiftClosureWrapper);

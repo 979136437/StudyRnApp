@@ -13,14 +13,45 @@ describe('createDescriptors', () => {
       getItemType: (item) => item.type,
       getItemSpan: (_, index) => index + 1,
       getStickyLevel: (_, index) => (index === 1 ? 0 : undefined),
+      getStickyGroup: (_, index) => (index === 1 ? 'featured' : undefined),
       estimatedItemSize: 120,
       layout: 'grid',
       numColumns: 2,
     });
 
     expect(descriptors).toEqual([
-      { key: 'a', type: 'photo', span: 1, stickyLevel: -1, estimatedSize: 120 },
-      { key: 'b', type: 'text', span: 2, stickyLevel: 0, estimatedSize: 120 },
+      {
+        key: 'a',
+        type: 'photo',
+        span: 1,
+        stickyLevel: -1,
+        stickyGroup: '',
+        estimatedSize: 120,
+      },
+      {
+        key: 'b',
+        type: 'text',
+        span: 2,
+        stickyLevel: 0,
+        stickyGroup: 'featured',
+        estimatedSize: 120,
+      },
+    ]);
+  });
+
+  it('uses a default group for sticky items only', () => {
+    const descriptors = createDescriptors({
+      data: ['header', 'item'],
+      keyExtractor: (item) => item,
+      getStickyLevel: (_, index) => (index === 0 ? 1 : undefined),
+      estimatedItemSize: 80,
+      layout: 'list',
+      numColumns: 1,
+    });
+
+    expect(descriptors.map((item) => item.stickyGroup)).toEqual([
+      '__default__',
+      '',
     ]);
   });
 

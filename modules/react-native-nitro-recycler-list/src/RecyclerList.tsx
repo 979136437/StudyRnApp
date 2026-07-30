@@ -12,6 +12,7 @@ import {
 import { StyleSheet, View } from 'react-native';
 import { callback, type HybridRef } from 'react-native-nitro-modules';
 import Animated, {
+  type SharedValue,
   useAnimatedStyle,
   useEvent,
   useSharedValue,
@@ -20,20 +21,42 @@ import Animated, {
 import { createDescriptors, normalizeListOptions } from './core/descriptors';
 import { EndReachedGate } from './core/endReachedGate';
 import { readSavedOffset, saveOffset } from './core/scrollState';
+import { normalizeSecondLevelOptions } from './core/secondLevel';
 import NativeRecyclerListRefreshEventSource, {
   type NativeProps as RefreshEventSourceProps,
   type RecyclerListRefreshPullEvent,
+  type RecyclerListTabScrollEvent,
 } from './fabric/NativeRecyclerListRefreshEventSource';
 import { NativeRecyclerCellHost } from './native/NativeRecyclerCellHost';
 import { NativeRecyclerList } from './native/NativeRecyclerList';
 import type {
   ItemDescriptor,
+  NativeSecondLevelPhase,
   RecyclerListViewMethods,
   RecyclerListViewProps,
   SlotBinding,
   VisibleRange,
 } from './specs/RecyclerList.nitro';
-import type { RecyclerListProps, RecyclerListRef, RefreshPhase } from './types';
+import type {
+  RecyclerListProps,
+  RecyclerListRef,
+  RefreshPhase,
+  SecondLevelPhase,
+} from './types';
+
+export interface InternalTabSceneProps {
+  coordinatorId: string;
+  tabKey: string;
+  active: boolean;
+  collapseRange: number;
+  headerSpacerHeight: number;
+  collapseOffset: SharedValue<number>;
+  collapseProgress: SharedValue<number>;
+}
+
+type InternalRecyclerListProps<T> = RecyclerListProps<T> & {
+  __tabScene?: InternalTabSceneProps;
+};
 
 type InternalEntry<T> =
   | { kind: 'item'; item: T; dataIndex: number; key: string; type: string }
@@ -50,10 +73,12 @@ const EMPTY_STATE = {
   firstVisibleIndex: -1,
   lastVisibleIndex: -1,
   refreshing: false,
+  secondLevelOpen: false,
+  secondLevelPhase: 'idle' as const,
 };
 
 function RecyclerListInner<T>(
-  props: RecyclerListProps<T>,
+  props: InternalRecyclerListProps<T>,
   forwardedRef: React.ForwardedRef<RecyclerListRef>,
 ): ReactElement {
   const {
@@ -63,6 +88,7 @@ function RecyclerListInner<T>(
     getItemType,
     getItemSpan,
     getStickyLevel,
+    getStickyGroup,
     ListHeaderComponent,
     ListFooterComponent,
     ListEmptyComponent,
@@ -71,6 +97,7 @@ function RecyclerListInner<T>(
     refreshEnabled = true,
     refreshThreshold = 80,
     renderRefreshHeader,
+    secondLevel,
     onEndReached,
     onEndReachedThreshold = 0.5,
     loadMoreState = 'idle',
@@ -81,6 +108,7 @@ function RecyclerListInner<T>(
     style,
     contentContainerStyle,
     testID,
+    __tabScene,
   } = props;
   const options = normalizeListOptions(props);
   const generatedListId = useRef(
@@ -95,8 +123,13 @@ function RecyclerListInner<T>(
   const progress = useSharedValue(0);
   const offset = useSharedValue(0);
   const phaseValue = useSharedValue<RefreshPhase>('idle');
+  const secondLevelProgress = useSharedValue(0);
+  const secondLevelPhaseValue = useSharedValue<SecondLevelPhase>('idle');
   const phaseRef = useRef<RefreshPhase>('idle');
+  const secondLevelPhaseRef = useRef<SecondLevelPhase>('idle');
   const [phase, setPhase] = useState<RefreshPhase>('idle');
+  const [secondLevelPhase, setSecondLevelPhase] =
+    useState<SecondLevelPhase>('idle');
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
 
   const itemDescriptors = useMemo(
@@ -107,6 +140,7 @@ function RecyclerListInner<T>(
         getItemType,
         getItemSpan,
         getStickyLevel,
+        getStickyGroup,
         estimatedItemSize: options.estimatedItemSize,
         layout: options.layout,
         numColumns: options.numColumns,
@@ -116,11 +150,29 @@ function RecyclerListInner<T>(
       getItemSpan,
       getItemType,
       getStickyLevel,
+      getStickyGroup,
       keyExtractor,
       options.estimatedItemSize,
       options.layout,
       options.numColumns,
     ],
+  );
+  const normalizedSecondLevel = normalizeSecondLevelOptions(
+    refreshThreshold,
+    secondLevel,
+  );
+  const tabHeaderSpacerHeight = __tabScene?.headerSpacerHeight ?? 0;
+  const effectiveHeader = useMemo(
+    () =>
+      tabHeaderSpacerHeight > 0 ? (
+        <View>
+          <View style={{ height: tabHeaderSpacerHeight }} />
+          {ListHeaderComponent}
+        </View>
+      ) : (
+        ListHeaderComponent
+      ),
+    [ListHeaderComponent, tabHeaderSpacerHeight],
   );
 
   const loadMoreNode = renderLoadMoreFooter?.({
@@ -147,11 +199,12 @@ function RecyclerListInner<T>(
         type: key,
         span: options.numColumns,
         stickyLevel: -1,
+        stickyGroup: '',
         estimatedSize: options.estimatedItemSize,
       });
     };
 
-    appendSpecial('header', ListHeaderComponent);
+    appendSpecial('header', effectiveHeader);
     const nextHeaderCount = nextEntries.length;
 
     if (data.length === 0) {
@@ -179,7 +232,7 @@ function RecyclerListInner<T>(
   }, [
     ListEmptyComponent,
     ListFooterComponent,
-    ListHeaderComponent,
+    effectiveHeader,
     data,
     itemDescriptors,
     loadMoreNode,
@@ -261,8 +314,19 @@ function RecyclerListInner<T>(
     progress.value = 0;
     phaseValue.value = 'idle';
     phaseRef.current = 'idle';
+    secondLevelProgress.value = 0;
+    secondLevelPhaseValue.value = 'idle';
+    secondLevelPhaseRef.current = 'idle';
     setPhase('idle');
-  }, [listId, offset, phaseValue, progress]);
+    setSecondLevelPhase('idle');
+  }, [
+    listId,
+    offset,
+    phaseValue,
+    progress,
+    secondLevelPhaseValue,
+    secondLevelProgress,
+  ]);
 
   const handleHybridRef = useCallback(
     (ref: HybridRef<RecyclerListViewProps, RecyclerListViewMethods>) => {
@@ -282,6 +346,14 @@ function RecyclerListInner<T>(
         phase,
         phaseValue,
         progress,
+        secondLevel: normalizedSecondLevel.enabled
+          ? {
+              phase: secondLevelPhase,
+              phaseValue: secondLevelPhaseValue,
+              progress: secondLevelProgress,
+              threshold: normalizedSecondLevel.threshold,
+            }
+          : null,
         threshold: refreshThreshold,
       }),
     [
@@ -291,6 +363,11 @@ function RecyclerListInner<T>(
       progress,
       refreshThreshold,
       renderRefreshHeader,
+      normalizedSecondLevel.enabled,
+      normalizedSecondLevel.threshold,
+      secondLevelPhase,
+      secondLevelPhaseValue,
+      secondLevelProgress,
     ],
   );
   const refreshHeaderStyle = useAnimatedStyle(() => ({
@@ -306,12 +383,64 @@ function RecyclerListInner<T>(
       offset.value = Math.max(0, event.offset);
       progress.value = Math.max(0, Math.min(1, event.progress));
       phaseValue.value = event.phase as RefreshPhase;
+      secondLevelProgress.value = Math.max(
+        0,
+        Math.min(1, event.secondLevelProgress),
+      );
+      secondLevelPhaseValue.value = event.secondLevelPhase as SecondLevelPhase;
     },
     ['onPull'],
   );
+  const tabScrollEventHandler = useEvent<RecyclerListTabScrollEvent>(
+    (event) => {
+      'worklet';
+      if (__tabScene !== undefined) {
+        const nextOffset = Math.max(
+          0,
+          Math.min(__tabScene.collapseRange, event.collapseOffset),
+        );
+        __tabScene.collapseOffset.value = nextOffset;
+        __tabScene.collapseProgress.value =
+          __tabScene.collapseRange <= 0
+            ? 1
+            : nextOffset / __tabScene.collapseRange;
+      }
+    },
+    ['onTabScroll'],
+  );
+  const secondLevelContext = useMemo(
+    () => ({
+      close: () => secondLevel?.onOpenChange(false),
+      offset,
+      phase: secondLevelPhase,
+      phaseValue: secondLevelPhaseValue,
+      progress: secondLevelProgress,
+      threshold: normalizedSecondLevel.threshold,
+    }),
+    [
+      normalizedSecondLevel.threshold,
+      offset,
+      secondLevel,
+      secondLevelPhase,
+      secondLevelPhaseValue,
+      secondLevelProgress,
+    ],
+  );
+  const secondLevelStyle = useAnimatedStyle(() => ({
+    opacity:
+      secondLevelPhaseValue.value === 'open' ? 1 : secondLevelProgress.value,
+  }));
 
   return (
     <View style={[styles.container, style]} testID={testID}>
+      {secondLevel === undefined ? null : (
+        <Animated.View
+          pointerEvents={secondLevel.open ? 'auto' : 'none'}
+          style={[styles.secondLevel, secondLevelStyle]}
+        >
+          {secondLevel.renderContent(secondLevelContext)}
+        </Animated.View>
+      )}
       <NativeRecyclerList
         descriptors={descriptors}
         endReachedEnabled={
@@ -333,14 +462,37 @@ function RecyclerListInner<T>(
           }
         })}
         onRefreshRequested={callback(() => onRefresh?.())}
+        onSecondLevelPhaseChanged={callback(
+          (nextPhase: NativeSecondLevelPhase) => {
+            if (secondLevelPhaseRef.current !== nextPhase) {
+              secondLevelPhaseRef.current = nextPhase;
+              setSecondLevelPhase(nextPhase);
+            }
+          },
+        )}
+        onSecondLevelRequested={callback(() => {
+          secondLevel?.onRequested?.();
+          secondLevel?.onOpenChange(true);
+        })}
         onSlotsChanged={callback(setBindings)}
         onVisibleRangeChanged={callback((range) => {
           onVisibleRangeChanged?.(translateRange(range));
         })}
         overscan={options.overscan}
-        refreshEnabled={refreshEnabled && onRefresh != null}
+        refreshEnabled={
+          (refreshEnabled && onRefresh != null) || normalizedSecondLevel.enabled
+        }
         refreshing={refreshing}
         refreshThreshold={Math.max(1, refreshThreshold)}
+        secondLevelEnabled={
+          normalizedSecondLevel.enabled && !options.horizontal
+        }
+        secondLevelOpen={normalizedSecondLevel.open}
+        secondLevelThreshold={normalizedSecondLevel.threshold}
+        tabActive={__tabScene?.active ?? true}
+        tabCollapseRange={__tabScene?.collapseRange ?? 0}
+        tabCoordinatorId={__tabScene?.coordinatorId ?? ''}
+        tabKey={__tabScene?.tabKey ?? ''}
         style={[styles.list, contentContainerStyle]}
       >
         {bindings.map((binding) => {
@@ -391,6 +543,9 @@ function RecyclerListInner<T>(
         onPull={
           pullEventHandler as unknown as RefreshEventSourceProps['onPull']
         }
+        onTabScroll={
+          tabScrollEventHandler as unknown as RefreshEventSourceProps['onTabScroll']
+        }
         pointerEvents="none"
         style={styles.refreshEventSource}
       />
@@ -423,6 +578,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10,
+  },
+  secondLevel: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 0,
   },
   refreshEventSource: {
     height: 0,

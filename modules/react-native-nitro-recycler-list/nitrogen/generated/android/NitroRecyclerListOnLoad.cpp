@@ -19,6 +19,7 @@
 #include "JFunc_void_std__vector_SlotBinding_.hpp"
 #include "JFunc_void.hpp"
 #include "JFunc_void_NativeRefreshPhase.hpp"
+#include "JFunc_void_NativeSecondLevelPhase.hpp"
 #include "JFunc_void_VisibleRange.hpp"
 #include "views/JHybridRecyclerListViewStateUpdater.hpp"
 #include "JHybridRecyclerCellHostViewSpec.hpp"
@@ -59,6 +60,7 @@ void registerAllNatives() {
   margelo::nitro::recyclerlist::JFunc_void_std__vector_SlotBinding__cxx::registerNatives();
   margelo::nitro::recyclerlist::JFunc_void_cxx::registerNatives();
   margelo::nitro::recyclerlist::JFunc_void_NativeRefreshPhase_cxx::registerNatives();
+  margelo::nitro::recyclerlist::JFunc_void_NativeSecondLevelPhase_cxx::registerNatives();
   margelo::nitro::recyclerlist::JFunc_void_VisibleRange_cxx::registerNatives();
   margelo::nitro::recyclerlist::views::JHybridRecyclerListViewStateUpdater::registerNatives();
   margelo::nitro::recyclerlist::JHybridRecyclerCellHostViewSpec::CxxPart::registerNatives();

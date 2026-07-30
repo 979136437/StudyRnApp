@@ -10,7 +10,8 @@
 #include <fbjni/fbjni.h>
 #include "RecyclerListState.hpp"
 
-
+#include "JNativeSecondLevelPhase.hpp"
+#include "NativeSecondLevelPhase.hpp"
 
 namespace margelo::nitro::recyclerlist {
 
@@ -41,12 +42,18 @@ namespace margelo::nitro::recyclerlist {
       double lastVisibleIndex = this->getFieldValue(fieldLastVisibleIndex);
       static const auto fieldRefreshing = clazz->getField<jboolean>("refreshing");
       jboolean refreshing = this->getFieldValue(fieldRefreshing);
+      static const auto fieldSecondLevelOpen = clazz->getField<jboolean>("secondLevelOpen");
+      jboolean secondLevelOpen = this->getFieldValue(fieldSecondLevelOpen);
+      static const auto fieldSecondLevelPhase = clazz->getField<JNativeSecondLevelPhase>("secondLevelPhase");
+      jni::local_ref<JNativeSecondLevelPhase> secondLevelPhase = this->getFieldValue(fieldSecondLevelPhase);
       return RecyclerListState(
         offset,
         contentSize,
         firstVisibleIndex,
         lastVisibleIndex,
-        static_cast<bool>(refreshing)
+        static_cast<bool>(refreshing),
+        static_cast<bool>(secondLevelOpen),
+        secondLevelPhase->toCpp()
       );
     }
 
@@ -56,7 +63,7 @@ namespace margelo::nitro::recyclerlist {
      */
     [[maybe_unused]]
     static jni::local_ref<JRecyclerListState::javaobject> fromCpp(const RecyclerListState& value) {
-      using JSignature = JRecyclerListState(double, double, double, double, jboolean);
+      using JSignature = JRecyclerListState(double, double, double, double, jboolean, jboolean, jni::alias_ref<JNativeSecondLevelPhase>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -65,7 +72,9 @@ namespace margelo::nitro::recyclerlist {
         value.contentSize,
         value.firstVisibleIndex,
         value.lastVisibleIndex,
-        value.refreshing
+        value.refreshing,
+        value.secondLevelOpen,
+        JNativeSecondLevelPhase::fromCpp(value.secondLevelPhase)
       );
     }
   };
