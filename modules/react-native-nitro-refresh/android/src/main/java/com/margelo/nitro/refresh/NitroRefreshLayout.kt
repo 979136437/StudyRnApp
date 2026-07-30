@@ -146,19 +146,22 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         return dragging
       }
       MotionEvent.ACTION_CANCEL -> {
-        if (dragging) settleToIdle()
+        val wasDragging = dragging
         dragging = false
+        if (wasDragging) settleToIdle()
         return true
       }
       MotionEvent.ACTION_UP -> {
-        if (dragging) {
+        val wasDragging = dragging
+        // beginRefreshing 会拒绝仍在进行的拖拽；先结束手势，再处理松手结果。
+        dragging = false
+        if (wasDragging) {
           if (phase == RefreshPhase.READY) {
             beginRefreshing(true)
           } else {
             settleToIdle()
           }
         }
-        dragging = false
         return true
       }
     }
