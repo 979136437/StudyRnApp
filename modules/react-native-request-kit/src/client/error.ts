@@ -28,7 +28,12 @@ export class RequestError extends Error {
 }
 
 export function isRequestCancelled(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' ||
+      error.name === 'CancelledError' ||
+      error.message === 'CancelledError')
+  );
 }
 
 export function isRetryableRequestError(error: unknown): boolean {
@@ -52,7 +57,7 @@ export async function normalizeRequestError(
   }
 
   if (error instanceof HTTPError) {
-    const responseBody = await readResponseBody(error.response);
+    const responseBody = error.data ?? (await readResponseBody(error.response));
     return new RequestError(
       readErrorMessage(responseBody) ??
         `Request failed with status ${error.response.status}`,

@@ -1,9 +1,13 @@
-import { createRequestStrategy } from 'react-native-request-strategy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  createAsyncStoragePersister,
+  createRequest,
+} from 'react-native-request-kit';
 
-export const requestStrategy = createRequestStrategy({
+export const request = createRequest({
   baseUrl: process.env.EXPO_PUBLIC_API_URL,
-  persistence: {
-    buster: '1',
+  StoragePersister: createAsyncStoragePersister({
     key: 'MY_APP_REQUEST_CACHE',
-  },
+    storage: AsyncStorage,
+  }),
 });

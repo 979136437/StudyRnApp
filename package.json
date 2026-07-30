@@ -3,12 +3,9 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "catalog:",
     "@quidone/react-native-wheel-picker": "^1.7.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/flash-list": "2.0.2",
-    "@tanstack/query-async-storage-persister": "^5.101.4",
-    "@tanstack/react-query": "^5.101.4",
-    "@tanstack/react-query-persist-client": "^5.101.4",
     "clsx": "^2.1.1",
     "expo": "~57.0.9",
     "expo-application": "~57.0.2",
@@ -31,18 +28,17 @@
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
     "expo-video-metadata": "^1.5.0",
-    "ky": "^2.0.2",
     "nativewind": "4.2.6",
-    "react": "19.2.3",
+    "react": "catalog:",
     "react-dom": "19.2.3",
     "react-modal-sheet": "^5.6.0",
-    "react-native": "0.86.2",
+    "react-native": "catalog:",
     "react-native-css-interop": "0.2.6",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "1.21.9",
     "react-native-nitro-modules": "0.36.3",
     "react-native-nitro-refresh": "workspace:*",
-    "react-native-request-strategy": "workspace:*",
+    "react-native-request-kit": "workspace:*",
     "react-native-pager-view": "8.0.2",
     "react-native-popover-view": "^6.1.0",
     "react-native-reanimated": "4.5.1",
@@ -56,10 +52,10 @@
     "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
+    "@types/react": "catalog:",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
-    "typescript": "~6.0.3"
+    "typescript": "catalog:"
   },
   "scripts": {
     "start": "expo start",

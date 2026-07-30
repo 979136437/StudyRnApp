@@ -2,21 +2,21 @@ import '@/global.css';
 import { Stack } from 'expo-router/stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { RequestStrategyProvider } from 'react-native-request-strategy';
+import { RequestProvider } from 'react-native-request-kit';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { requestStrategy } from '@/request';
+import { request } from '@/request';
 
 export default function RootLayout(): React.JSX.Element {
   return (
     <GestureHandlerRootView className="flex-1">
-      <RequestStrategyProvider runtime={requestStrategy}>
+      <RequestProvider request={request}>
         <KeyboardProvider>
           <SafeAreaProvider>
             <Stack screenOptions={{ headerShown: false }} />
           </SafeAreaProvider>
         </KeyboardProvider>
-      </RequestStrategyProvider>
+      </RequestProvider>
     </GestureHandlerRootView>
   );
 }
