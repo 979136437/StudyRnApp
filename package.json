@@ -42,6 +42,7 @@
     "react-native-keyboard-controller": "1.21.9",
     "react-native-nitro-modules": "0.36.3",
     "react-native-nitro-refresh": "workspace:*",
+    "react-native-request-strategy": "workspace:*",
     "react-native-pager-view": "8.0.2",
     "react-native-popover-view": "^6.1.0",
     "react-native-reanimated": "4.5.1",
