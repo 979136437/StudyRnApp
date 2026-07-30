@@ -41,11 +41,11 @@ export interface RefreshController extends HybridObject<{
   beginRefresh(): void;
   /** 取消当前下拉、刷新、结果展示或回弹，并复位到空闲状态。 */
   cancelRefresh(): void;
-  /** 以成功或失败结果结束当前刷新，并在指定时长后自动收起。 */
+  /** 从刷新中或程序化拉满状态显示结果，并在指定时长后自动收起。 */
   finishRefresh(refreshResult: RefreshResult, resultDuration: number): void;
   /** 同步读取原生视图最近一次发布的完整状态快照。 */
   getState(): RefreshStateSnapshot;
-  /** 程序化拉到最大距离并停留在 ready，等待开始或取消命令。 */
+  /** 程序化拉到最大距离并停留在 ready，等待开始、取消或结果命令。 */
   pullToMax(): void;
   /** 将 React 的受控 `refreshing` 状态同步到原生刷新容器。 */
   setRefreshing(refreshing: boolean): void;

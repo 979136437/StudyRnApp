@@ -56,11 +56,11 @@ export interface RefreshControlRef {
   beginRefresh(): void;
   /** 取消当前动作，不展示成功或失败结果。 */
   cancelRefresh(): void;
-  /** 以成功或失败结果结束当前刷新。 */
+  /** 从刷新中或程序化拉满状态显示成功或失败结果，并随后自动收起。 */
   finishRefresh(result: RefreshResult): void;
   /** 同步读取原生视图最近一次发布的完整状态。 */
   getState(): RefreshStateSnapshot;
-  /** 动画拉至 `maxPullDistance` 并停留，等待开始或取消。 */
+  /** 动画拉至 `maxPullDistance` 并停留，等待开始、取消或结果命令。 */
   pullToMax(): void;
 }
 

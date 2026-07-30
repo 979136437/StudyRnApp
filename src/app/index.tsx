@@ -196,6 +196,7 @@ export default function Home(): React.JSX.Element {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
+  const [snapshotReadCount, setSnapshotReadCount] = useState(0);
   const [snapshot, setSnapshot] = useState<RefreshStateSnapshot>({
     offset: 0,
     phase: RefreshPhase.IDLE,
@@ -221,10 +222,13 @@ export default function Home(): React.JSX.Element {
     }
   }, []);
 
-  const readSnapshot = useCallback(() => {
+  const readSnapshot = useCallback((showFeedback = false) => {
     const nextSnapshot = refreshControlRef.current?.getState();
     if (nextSnapshot !== undefined) {
       setSnapshot(nextSnapshot);
+      if (showFeedback) {
+        setSnapshotReadCount((count) => count + 1);
+      }
     }
   }, []);
 
@@ -298,7 +302,9 @@ export default function Home(): React.JSX.Element {
       <View style={styles.commandBand}>
         <View style={styles.commandHeadingRow}>
           <Text style={styles.commandTitle}>命令控制</Text>
-          <Text style={styles.commandHint}>Nitro 同步通道</Text>
+          <Text style={styles.commandHint}>
+            Nitro 同步通道 · 已读取 {snapshotReadCount} 次
+          </Text>
         </View>
         <View style={styles.commandGrid}>
           <CommandButton
@@ -318,18 +324,18 @@ export default function Home(): React.JSX.Element {
             onPress={cancelRefresh}
           />
           <CommandButton
-            disabled={!refreshing}
+            disabled={!refreshing && snapshot.phase !== RefreshPhase.READY}
             label="成功结束"
             onPress={() => finishRefresh(RefreshResult.SUCCESS)}
             tone="success"
           />
           <CommandButton
-            disabled={!refreshing}
+            disabled={!refreshing && snapshot.phase !== RefreshPhase.READY}
             label="失败结束"
             onPress={() => finishRefresh(RefreshResult.FAILURE)}
             tone="failure"
           />
-          <CommandButton label="读取状态" onPress={readSnapshot} />
+          <CommandButton label="读取状态" onPress={() => readSnapshot(true)} />
         </View>
       </View>
 

@@ -204,7 +204,10 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   private fun finishRefreshing(result: RefreshResult, resultDuration: Double) {
-    if (phase != RefreshPhase.REFRESHING) return
+    val canFinish =
+      phase == RefreshPhase.REFRESHING ||
+        (programmaticPull && phase == RefreshPhase.READY)
+    if (!canFinish) return
 
     cancelResultDismiss()
     programmaticPull = false

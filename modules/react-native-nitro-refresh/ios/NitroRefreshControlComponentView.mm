@@ -325,7 +325,8 @@ using namespace facebook::react;
 
 - (void)finishRefreshingWithResult:(NSString *)result resultDuration:(double)resultDuration
 {
-  if (!_refreshing ||
+  BOOL canFinish = _refreshing || (_programmaticPull && [_phase isEqualToString:@"ready"]);
+  if (!canFinish ||
       (![result isEqualToString:@"success"] && ![result isEqualToString:@"failure"])) {
     return;
   }

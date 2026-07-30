@@ -47,11 +47,13 @@ setRefreshing(false);
 
 - `beginRefresh()`：进入刷新并触发一次 `onRefresh`。
 - `cancelRefresh()`：取消当前下拉、刷新、结果展示或回弹，不显示结果态。
-- `finishRefresh(result)`：以 `success` 或 `failure` 结束刷新，停留 `resultDuration` 后自动收起。
+- `finishRefresh(result)`：从 `refreshing` 或程序化拉满后的 `ready` 阶段显示 `success` 或 `failure`，停留 `resultDuration` 后自动收起；其他阶段调用无操作。
 - `getState()`：同步返回 `{ phase, offset, refreshing }` 完整快照。
-- `pullToMax()`：动画拉到 `maxPullDistance` 并停在 `ready`，等待开始或取消。
+- `pullToMax()`：动画拉到 `maxPullDistance` 并停在 `ready`，等待开始、取消或结果命令。
 
 组件继续采用受控模型。调用 `finishRefresh()` 或 `cancelRefresh()` 时，调用方必须同时把 `refreshing` 更新为 `false`；调用 `beginRefresh()` 后，应在 `onRefresh` 中尽快把它更新为 `true`。
+
+`pullToMax()` 进入 `ready` 后，可调用 `beginRefresh()` 开始刷新、调用 `cancelRefresh()` 直接收起，也可以调用 `finishRefresh()` 展示结果后自动收起。
 
 `RefreshPhase` 包含 `idle`、`pulling`、`ready`、`refreshing`、`success`、`failure` 和 `settling`。运行时可使用 `RefreshPhase.SUCCESS`，也可以直接比较字符串。
 
