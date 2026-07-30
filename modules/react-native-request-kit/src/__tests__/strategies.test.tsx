@@ -55,8 +55,8 @@ describe('request strategies', () => {
     });
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (request: Request) =>
-        request.headers.get('authorization') === 'Bearer new'
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        new Headers(init?.headers).get('authorization') === 'Bearer new'
           ? Response.json({ ok: true })
           : Response.json({ message: 'expired' }, { status: 401 }),
       ),
@@ -119,8 +119,8 @@ describe('request strategies', () => {
     });
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (request: Request) =>
-        request.headers.get('authorization') === 'Bearer new'
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        new Headers(init?.headers).get('authorization') === 'Bearer new'
           ? Response.json({ value: 1 })
           : Response.json({ code: 'expired' }),
       ),

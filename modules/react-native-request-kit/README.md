@@ -1,7 +1,7 @@
 # react-native-request-kit
 
-An alova-style request layer for React Native and Expo, powered internally by
-Ky and TanStack Query.
+An alova-style request layer for React Native and Expo, powered by TanStack
+Query with interchangeable Fetch, Axios, ky, or custom transports.
 
 ## Create a request instance
 
@@ -40,7 +40,45 @@ export function AppProviders({ children }: React.PropsWithChildren) {
 Omit `StoragePersister` to keep all cached data in memory. AsyncStorage is
 unencrypted; never persist tokens, credentials, or other secrets.
 
-Ky is the default transport. It can also be configured explicitly:
+Fetch is the default transport. Configure it explicitly when you need standard
+`RequestInit` options or custom status validation:
+
+```ts
+import {
+  createFetchRequestAdapter,
+  createRequest,
+} from 'react-native-request-kit';
+
+const request = createRequest({
+  requestAdapter: createFetchRequestAdapter({
+    credentials: 'include',
+    validateStatus: (status) => status >= 200 && status < 400,
+  }),
+});
+```
+
+The package does not import Expo. Inject `expo/fetch` when its streaming native
+implementation is preferred:
+
+```ts
+import { fetch as expoFetch } from 'expo/fetch';
+import {
+  createFetchRequestAdapter,
+  createRequest,
+} from 'react-native-request-kit';
+
+const request = createRequest({
+  requestAdapter: createFetchRequestAdapter({
+    fetch: (input, init) => expoFetch(input, init),
+  }),
+});
+```
+
+Fetch download progress is emitted only when the runtime exposes a readable
+response stream. Unknown totals remain `0`, and upload byte progress is not
+fabricated.
+
+Use ky explicitly when its transport options are needed:
 
 ```ts
 import {
@@ -52,6 +90,30 @@ const request = createRequest({
   requestAdapter: createKyRequestAdapter({ credentials: 'include' }),
 });
 ```
+
+Axios is also included in the package. Its adapter returns the complete
+`AxiosResponse`, so extract business data in `responded.onSuccess`:
+
+```ts
+import {
+  createAxiosRequestAdapter,
+  createRequest,
+} from 'react-native-request-kit';
+
+type ApiResult<T> = { data: T };
+type Todo = { id: number; title: string };
+
+const request = createRequest({
+  requestAdapter: createAxiosRequestAdapter<ApiResult<Todo>>({
+    withCredentials: true,
+  }),
+  responded: {
+    onSuccess: (response) => response.data,
+  },
+});
+```
+
+Pass `client` to reuse an existing `AxiosInstance` and its interceptors.
 
 ## Custom request adapters
 
@@ -92,9 +154,16 @@ functions plus an idempotent `abort`. Progress callbacks receive
 `(loaded, total)`. Throw `RequestError` from custom transports when retry logic
 needs an HTTP-like status; other errors become `UNKNOWN_ERROR`.
 
-When no custom adapter is supplied, ky responses still honor `responseType`
-and default to JSON. A custom adapter without `responded.onSuccess` returns its
-raw response as the transform input.
+When no custom adapter is supplied, Fetch responses honor `responseType` and
+default to JSON. A custom adapter without `responded.onSuccess` returns its raw
+response as the transform input.
+
+### Migrating from 0.5
+
+- Fetch replaces ky as the default transport. Pass `createKyRequestAdapter()`
+  explicitly when ky-specific options or progress behavior are required.
+- Standard Fetch does not expose reliable upload progress. Upload strategies
+  continue reporting file state and completion counts without fabricated bytes.
 
 ### Migrating from 0.4
 

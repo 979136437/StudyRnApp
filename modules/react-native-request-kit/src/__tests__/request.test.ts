@@ -12,9 +12,11 @@ afterEach(() => {
 
 describe('createRequest', () => {
   it('applies request and response interceptors', async () => {
-    const fetchMock = vi.fn(async (request: Request) => {
-      expect(request.url).toBe('https://api.example.com/todos?page=1');
-      expect(request.headers.get('authorization')).toBe('Bearer token');
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://api.example.com/todos?page=1');
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        'Bearer token',
+      );
       return Response.json({ data: [{ id: 1 }] });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -152,9 +154,9 @@ describe('createRequest', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
-        (request: Request) =>
+        (_url: string, init?: RequestInit) =>
           new Promise<Response>((_resolve, reject) => {
-            request.signal.addEventListener('abort', () => {
+            init?.signal?.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'));
             });
           }),

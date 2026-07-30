@@ -3,7 +3,7 @@ import {
   QueryClient,
 } from '@tanstack/react-query';
 
-import { createKyRequestAdapter } from '../adapter/ky';
+import { createFetchRequestAdapter } from '../adapter/fetch';
 import type { RequestAdapter } from '../adapter/types';
 import type {
   AnyMethod,
@@ -65,7 +65,7 @@ export function createRequest<TResponse, TResponseHeaders, TTransformed>(
           },
     queryClient,
     requestAdapter: (options.requestAdapter ??
-      createKyRequestAdapter()) as RequestAdapter<any, any>,
+      createFetchRequestAdapter()) as RequestAdapter<any, any>,
     snapshots: [],
     stateUpdaters: new Map(),
   };

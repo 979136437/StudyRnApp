@@ -1,4 +1,6 @@
 export { createRequest } from './client/createRequest';
+export { createAxiosRequestAdapter } from './adapter/axios';
+export { createFetchRequestAdapter } from './adapter/fetch';
 export { createKyRequestAdapter } from './adapter/ky';
 export { Method } from './client/Method';
 export { RequestProvider } from './react/RequestProvider';
@@ -29,6 +31,11 @@ export {
   normalizeRequestError,
 } from './client/error';
 export type { KyRequestAdapterOptions } from './adapter/ky';
+export type { AxiosRequestAdapterOptions } from './adapter/axios';
+export type {
+  FetchImplementation,
+  FetchRequestAdapterOptions,
+} from './adapter/fetch';
 export type {
   ProgressUpdater,
   RequestAdapter,

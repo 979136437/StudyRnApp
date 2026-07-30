@@ -7,12 +7,8 @@ allowBuilds:
 
 catalog:
   '@react-native-async-storage/async-storage': 2.2.0
-  '@tanstack/query-async-storage-persister': ^5.101.4
-  '@tanstack/react-query': ^5.101.4
-  '@tanstack/react-query-persist-client': ^5.101.4
   '@types/react': ~19.2.2
   '@types/react-test-renderer': 19.1.0
-  ky: ^2.0.2
   nitrogen: 0.36.3
   react: 19.2.3
   react-native: 0.86.2

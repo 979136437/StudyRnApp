@@ -2,12 +2,16 @@ import ky, {
   HTTPError,
   isNetworkError,
   isTimeoutError,
-  type KyResponse,
   type Options as KyOptions,
 } from 'ky';
 
-import { RequestError } from '../client/error';
 import type { HttpMethod } from '../types';
+import {
+  createHttpError,
+  createNetworkError,
+  createTimeoutError,
+  readResponseBody,
+} from './shared';
 import type { RequestAdapter } from './types';
 
 export type KyRequestAdapterOptions = Omit<
@@ -88,61 +92,19 @@ function createBodyOptions(method: HttpMethod, data: unknown): KyOptions {
 async function normalizeKyError(error: unknown): Promise<never> {
   if (error instanceof HTTPError) {
     const responseBody = error.data ?? (await readResponseBody(error.response));
-    throw new RequestError(
-      readErrorMessage(responseBody) ??
-        `Request failed with status ${error.response.status}`,
-      {
-        cause: error,
-        code: readErrorCode(responseBody) ?? 'HTTP_ERROR',
-        response: error.response,
-        responseBody,
-        status: error.response.status,
-      },
+    throw createHttpError(
+      error.response,
+      responseBody,
+      error.response.status,
+      error.response.statusText,
+      error,
     );
   }
   if (isTimeoutError(error)) {
-    throw new RequestError('Request timed out', {
-      cause: error,
-      code: 'TIMEOUT',
-      status: 0,
-    });
+    throw createTimeoutError(error);
   }
   if (isNetworkError(error)) {
-    throw new RequestError('Network request failed', {
-      cause: error,
-      code: 'NETWORK_ERROR',
-      status: 0,
-    });
+    throw createNetworkError(error);
   }
   throw error;
-}
-
-async function readResponseBody(response: KyResponse): Promise<unknown> {
-  const contentType = response.headers.get('content-type') ?? '';
-  try {
-    if (contentType.includes('application/json')) {
-      return await response.clone().json();
-    }
-    const text = await response.clone().text();
-    return text.length > 0 ? text : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readErrorMessage(body: unknown): string | undefined {
-  if (typeof body === 'string') return body;
-  return isRecord(body) && typeof body.message === 'string'
-    ? body.message
-    : undefined;
-}
-
-function readErrorCode(body: unknown): string | undefined {
-  return isRecord(body) && typeof body.code === 'string'
-    ? body.code
-    : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
