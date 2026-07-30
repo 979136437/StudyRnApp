@@ -1,10 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
-import {
-  createAsyncStoragePersister,
-  createRequest,
-  useAutoRequest,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createAsyncStoragePersister } from 'react-native-request-kit/cache';
+import { useAutoRequest } from 'react-native-request-kit/strategy';
 
 useAutoRequest.onNetwork = (notify) => {
   const subscription = Network.addNetworkStateListener((state) => {

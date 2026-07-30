@@ -1,12 +1,56 @@
 {
   "name": "react-native-request-kit",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "An alova-style request and SWR layer for React Native.",
   "main": "src/index.ts",
   "module": "src/index.ts",
   "types": "src/index.ts",
   "react-native": "src/index.ts",
   "source": "src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./adapter": {
+      "types": "./src/adapter/index.ts",
+      "react-native": "./src/adapter/index.ts",
+      "default": "./src/adapter/index.ts"
+    },
+    "./adapter/fetch": {
+      "types": "./src/adapter/fetch.ts",
+      "react-native": "./src/adapter/fetch.ts",
+      "default": "./src/adapter/fetch.ts"
+    },
+    "./adapter/axios": {
+      "types": "./src/adapter/axios.ts",
+      "react-native": "./src/adapter/axios.ts",
+      "default": "./src/adapter/axios.ts"
+    },
+    "./adapter/ky": {
+      "types": "./src/adapter/ky.ts",
+      "react-native": "./src/adapter/ky.ts",
+      "default": "./src/adapter/ky.ts"
+    },
+    "./cache": {
+      "types": "./src/cache/index.ts",
+      "react-native": "./src/cache/index.ts",
+      "default": "./src/cache/index.ts"
+    },
+    "./react": {
+      "types": "./src/react/index.ts",
+      "react-native": "./src/react/index.ts",
+      "default": "./src/react/index.ts"
+    },
+    "./strategy": {
+      "types": "./src/strategy/index.ts",
+      "react-native": "./src/strategy/index.ts",
+      "default": "./src/strategy/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "src",
     "README.md"

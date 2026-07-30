@@ -7,11 +7,9 @@ Query with interchangeable Fetch, Axios, ky, or custom transports.
 
 ```tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  createAsyncStoragePersister,
-  createRequest,
-  RequestProvider,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createAsyncStoragePersister } from 'react-native-request-kit/cache';
+import { RequestProvider } from 'react-native-request-kit/react';
 
 export const request = createRequest({
   baseUrl: process.env.EXPO_PUBLIC_API_URL,
@@ -44,10 +42,8 @@ Fetch is the default transport. Configure it explicitly when you need standard
 `RequestInit` options or custom status validation:
 
 ```ts
-import {
-  createFetchRequestAdapter,
-  createRequest,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createFetchRequestAdapter } from 'react-native-request-kit/adapter/fetch';
 
 const request = createRequest({
   requestAdapter: createFetchRequestAdapter({
@@ -62,10 +58,8 @@ implementation is preferred:
 
 ```ts
 import { fetch as expoFetch } from 'expo/fetch';
-import {
-  createFetchRequestAdapter,
-  createRequest,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createFetchRequestAdapter } from 'react-native-request-kit/adapter/fetch';
 
 const request = createRequest({
   requestAdapter: createFetchRequestAdapter({
@@ -81,10 +75,8 @@ fabricated.
 Use ky explicitly when its transport options are needed:
 
 ```ts
-import {
-  createKyRequestAdapter,
-  createRequest,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createKyRequestAdapter } from 'react-native-request-kit/adapter/ky';
 
 const request = createRequest({
   requestAdapter: createKyRequestAdapter({ credentials: 'include' }),
@@ -95,10 +87,8 @@ Axios is also included in the package. Its adapter returns the complete
 `AxiosResponse`, so extract business data in `responded.onSuccess`:
 
 ```ts
-import {
-  createAxiosRequestAdapter,
-  createRequest,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createAxiosRequestAdapter } from 'react-native-request-kit/adapter/axios';
 
 type ApiResult<T> = { data: T };
 type Todo = { id: number; title: string };
@@ -158,6 +148,16 @@ When no custom adapter is supplied, Fetch responses honor `responseType` and
 default to JSON. A custom adapter without `responded.onSuccess` returns its raw
 response as the transform input.
 
+### Migrating from 0.6
+
+- Import optional features from their subpaths. The root entry now contains
+  only the request client, Method, errors, and core types.
+- Import Fetch, Axios, and ky from `adapter/fetch`, `adapter/axios`, and
+  `adapter/ky`. This keeps unused transports out of Metro's module graph.
+- Import React APIs, cache helpers, and request strategies from the `react`,
+  `cache`, and `strategy` directory entries. Only adapters keep granular
+  entries so unused Axios and ky transports stay out of Metro's module graph.
+
 ### Migrating from 0.5
 
 - Fetch replaces ky as the default transport. Pass `createKyRequestAdapter()`
@@ -216,7 +216,7 @@ request.Get('feed', {
 ## React hooks
 
 ```tsx
-import { useRequest, useWatcher } from 'react-native-request-kit';
+import { useRequest, useWatcher } from 'react-native-request-kit/react';
 
 function TodoList({ page }: { page: number }) {
   const todos = useWatcher(() => getTodos(page), [page], {
@@ -256,6 +256,8 @@ progress, `send`, `abort`, `update`, and success/error/complete event binders.
 ## Fetching and pagination
 
 ```tsx
+import { useFetcher, usePagination } from 'react-native-request-kit/react';
+
 const preloader = useFetcher<Todo[]>();
 await preloader.fetch(getTodos(2));
 
@@ -284,7 +286,7 @@ import {
   queryCache,
   setCache,
   updateState,
-} from 'react-native-request-kit';
+} from 'react-native-request-kit/cache';
 
 const firstPage = getTodos(1);
 const cached = queryCache(firstPage);
@@ -304,7 +306,7 @@ await request.clear();
 
 ```tsx
 import * as Network from 'expo-network';
-import { useAutoRequest } from 'react-native-request-kit';
+import { useAutoRequest } from 'react-native-request-kit/strategy';
 
 useAutoRequest.onNetwork = (notify) => {
   const subscription = Network.addNetworkStateListener((state) => {
@@ -341,10 +343,8 @@ useAutoRequest.onNetwork = (notify, config) => subscribeNetwork(notify);
 
 ```ts
 import * as SecureStore from 'expo-secure-store';
-import {
-  createRequest,
-  createServerTokenAuthentication,
-} from 'react-native-request-kit';
+import { createRequest } from 'react-native-request-kit';
+import { createServerTokenAuthentication } from 'react-native-request-kit/strategy';
 
 const authentication = createServerTokenAuthentication({
   assignToken: async (method) => {
@@ -377,6 +377,11 @@ owned by the application.
 ### Captcha and controlled retry
 
 ```tsx
+import {
+  useCaptcha,
+  useRetriableRequest,
+} from 'react-native-request-kit/strategy';
+
 const captcha = useCaptcha(() => request.Post('captcha'), {
   initialCountdown: 60,
 });
@@ -400,7 +405,7 @@ attempt or a pending backoff.
 
 ```tsx
 import * as ImagePicker from 'expo-image-picker';
-import { useUploader } from 'react-native-request-kit';
+import { useUploader } from 'react-native-request-kit/strategy';
 
 useUploader.selectFile = async () => {
   const result = await ImagePicker.launchImageLibraryAsync({
