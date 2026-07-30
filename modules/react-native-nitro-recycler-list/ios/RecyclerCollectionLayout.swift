@@ -22,7 +22,7 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
     if horizontal {
       var x: CGFloat = 0
       for (index, descriptor) in descriptors.enumerated() {
-        let size = measuredSizes[descriptor.key] ?? CGSize(width: descriptor.estimatedSize, height: height)
+        let size = measuredSizes[descriptor.key] ?? CGSize(width: CGFloat(descriptor.estimatedSize), height: height)
         let attribute = UICollectionViewLayoutAttributes(forCellWith: IndexPath(item: index, section: 0))
         attribute.frame = CGRect(x: x, y: 0, width: max(1, size.width), height: height)
         attributes.append(attribute)
@@ -41,7 +41,7 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
 
     for (index, descriptor) in descriptors.enumerated() {
       let span = mode == .list ? columnCount : min(columnCount, max(1, Int(descriptor.span)))
-      let itemHeight = max(1, measuredSizes[descriptor.key]?.height ?? descriptor.estimatedSize)
+      let itemHeight = max(1, measuredSizes[descriptor.key]?.height ?? CGFloat(descriptor.estimatedSize))
       let frame: CGRect
 
       if mode == .masonry {
@@ -88,7 +88,7 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
 
   override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
     guard let collectionView else { return attributes.filter { $0.frame.intersects(rect) } }
-    let visible = attributes.filter { $0.frame.intersects(rect) }.map { $0.copy() as! UICollectionViewLayoutAttributes }
+    var visible = attributes.filter { $0.frame.intersects(rect) }.map { $0.copy() as! UICollectionViewLayoutAttributes }
     let offsetY = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
     var levelOffsets: [Int: CGFloat] = [:]
     guard let activeMarker = attributes.last(where: {
