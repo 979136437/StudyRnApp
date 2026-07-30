@@ -194,9 +194,6 @@ workflows:
           cd android
           chmod +x gradlew
 
-          # 💡 防 OOM 护城河：主动限制 JVM 内存，确保在基础实例上稳定不崩
-          echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
-
           echo "🚀 启动 Gradle 物理级构建与增量加速..."
           # 移除 --parallel，用稳定的线性编译换取内存安全
           ./gradlew :app:assembleDebug \
