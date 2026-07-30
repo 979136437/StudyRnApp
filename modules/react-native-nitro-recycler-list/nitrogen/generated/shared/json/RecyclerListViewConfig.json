@@ -1,0 +1,25 @@
+{
+  "uiViewClassName": "RecyclerListView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "listId": true,
+    "descriptors": true,
+    "layout": true,
+    "horizontal": true,
+    "numColumns": true,
+    "overscan": true,
+    "refreshing": true,
+    "refreshEnabled": true,
+    "refreshThreshold": true,
+    "endReachedThreshold": true,
+    "endReachedEnabled": true,
+    "onSlotsChanged": true,
+    "onRefreshRequested": true,
+    "onRefreshProgress": true,
+    "onEndReached": true,
+    "onVisibleRangeChanged": true,
+    "hybridRef": true
+  }
+}

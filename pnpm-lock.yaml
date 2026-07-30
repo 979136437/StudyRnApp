@@ -153,6 +153,9 @@ importers:
       react-native-nitro-modules:
         specifier: 'catalog:'
         version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      react-native-nitro-recycler-list:
+        specifier: workspace:*
+        version: link:modules/react-native-nitro-recycler-list
       react-native-nitro-refresh:
         specifier: workspace:*
         version: link:modules/react-native-nitro-refresh
@@ -208,6 +211,30 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  modules/react-native-nitro-recycler-list:
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      nitrogen:
+        specifier: 'catalog:'
+        version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-native:
+        specifier: 'catalog:'
+        version: 0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)
+      react-native-nitro-modules:
+        specifier: 'catalog:'
+        version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@types/node@26.1.1)(jiti@1.21.7)(lightningcss@1.30.1)(terser@5.49.0)(yaml@2.9.0)
 
   modules/react-native-nitro-refresh:
     devDependencies:

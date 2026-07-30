@@ -1,0 +1,13 @@
+{
+  "uiViewClassName": "RecyclerCellHostView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "listId": true,
+    "slotId": true,
+    "itemKey": true,
+    "itemType": true,
+    "hybridRef": true
+  }
+}

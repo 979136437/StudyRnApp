@@ -1,0 +1,48 @@
+{
+  "name": "react-native-nitro-recycler-list",
+  "version": "0.1.0",
+  "description": "A native recycling list for React Native built with Nitro Modules.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "android",
+    "ios",
+    "nitrogen",
+    "nitro.json",
+    "react-native.config.js",
+    "NitroRecyclerList.podspec",
+    "README.md"
+  ],
+  "scripts": {
+    "specs": "nitrogen",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "nitrogen": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [
+    "react-native",
+    "nitro",
+    "recycler-view",
+    "collection-view",
+    "masonry"
+  ],
+  "license": "MIT",
+  "private": true
+}
