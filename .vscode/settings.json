@@ -21,5 +21,6 @@
     "source.format.oxc": "always",
     "source.fixAll.oxc": "always",
     "source.organizeImports": "never"
-  }
+  },
+  "yaml.schemaStore.enable": false
 }
