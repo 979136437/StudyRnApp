@@ -83,9 +83,9 @@ namespace margelo::nitro::refresh {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("cancelRefresh");
     method(_javaPart);
   }
-  void JHybridRefreshControllerSpec::finishRefresh(RefreshResult result, double resultDuration) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JRefreshResult> /* result */, double /* resultDuration */)>("finishRefresh");
-    method(_javaPart, JRefreshResult::fromCpp(result), resultDuration);
+  void JHybridRefreshControllerSpec::finishRefresh(RefreshResult refreshResult, double resultDuration) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JRefreshResult> /* refreshResult */, double /* resultDuration */)>("finishRefresh");
+    method(_javaPart, JRefreshResult::fromCpp(refreshResult), resultDuration);
   }
   RefreshStateSnapshot JHybridRefreshControllerSpec::getState() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JRefreshStateSnapshot>()>("getState");

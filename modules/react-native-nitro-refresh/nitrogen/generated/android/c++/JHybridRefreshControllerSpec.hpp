@@ -59,7 +59,7 @@ namespace margelo::nitro::refresh {
     void clearCallbacks() override;
     void beginRefresh() override;
     void cancelRefresh() override;
-    void finishRefresh(RefreshResult result, double resultDuration) override;
+    void finishRefresh(RefreshResult refreshResult, double resultDuration) override;
     RefreshStateSnapshot getState() override;
     void pullToMax() override;
     void setRefreshing(bool refreshing) override;

@@ -62,7 +62,7 @@ abstract class HybridRefreshControllerSpec: HybridObject() {
   
   @DoNotStrip
   @Keep
-  abstract fun finishRefresh(result: RefreshResult, resultDuration: Double): Unit
+  abstract fun finishRefresh(refreshResult: RefreshResult, resultDuration: Double): Unit
   
   @DoNotStrip
   @Keep

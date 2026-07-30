@@ -156,11 +156,11 @@ final class HybridRefreshController: HybridRefreshControllerSpec {
     }
   }
 
-  func finishRefresh(result: RefreshResult, resultDuration: Double) throws {
+  func finishRefresh(refreshResult: RefreshResult, resultDuration: Double) throws {
     requestedRefreshing = false
     DispatchQueue.main.async { [weak self] in
       self?.binding?.finishRefreshFromController(
-        result.stringValue,
+        refreshResult.stringValue,
         resultDuration: resultDuration
       )
     }

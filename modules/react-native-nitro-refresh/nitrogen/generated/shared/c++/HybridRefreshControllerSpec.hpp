@@ -62,7 +62,7 @@ namespace margelo::nitro::refresh {
       virtual void clearCallbacks() = 0;
       virtual void beginRefresh() = 0;
       virtual void cancelRefresh() = 0;
-      virtual void finishRefresh(RefreshResult result, double resultDuration) = 0;
+      virtual void finishRefresh(RefreshResult refreshResult, double resultDuration) = 0;
       virtual RefreshStateSnapshot getState() = 0;
       virtual void pullToMax() = 0;
       virtual void setRefreshing(bool refreshing) = 0;

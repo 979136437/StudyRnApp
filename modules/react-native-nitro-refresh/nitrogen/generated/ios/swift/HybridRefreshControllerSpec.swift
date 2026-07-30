@@ -18,7 +18,7 @@ public protocol HybridRefreshControllerSpec_protocol: HybridObject {
   func clearCallbacks() throws -> Void
   func beginRefresh() throws -> Void
   func cancelRefresh() throws -> Void
-  func finishRefresh(result: RefreshResult, resultDuration: Double) throws -> Void
+  func finishRefresh(refreshResult: RefreshResult, resultDuration: Double) throws -> Void
   func getState() throws -> RefreshStateSnapshot
   func pullToMax() throws -> Void
   func setRefreshing(refreshing: Bool) throws -> Void

@@ -108,8 +108,8 @@ namespace margelo::nitro::refresh {
         std::rethrow_exception(__result.error());
       }
     }
-    inline void finishRefresh(RefreshResult result, double resultDuration) override {
-      auto __result = _swiftPart.finishRefresh(static_cast<int>(result), std::forward<decltype(resultDuration)>(resultDuration));
+    inline void finishRefresh(RefreshResult refreshResult, double resultDuration) override {
+      auto __result = _swiftPart.finishRefresh(static_cast<int>(refreshResult), std::forward<decltype(resultDuration)>(resultDuration));
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

@@ -195,9 +195,9 @@ open class HybridRefreshControllerSpec_cxx {
   }
   
   @inline(__always)
-  public final func finishRefresh(result: Int32, resultDuration: Double) -> bridge.Result_void_ {
+  public final func finishRefresh(refreshResult: Int32, resultDuration: Double) -> bridge.Result_void_ {
     do {
-      try self.__implementation.finishRefresh(result: margelo.nitro.refresh.RefreshResult(rawValue: result)!, resultDuration: resultDuration)
+      try self.__implementation.finishRefresh(refreshResult: margelo.nitro.refresh.RefreshResult(rawValue: refreshResult)!, resultDuration: resultDuration)
       return bridge.create_Result_void_()
     } catch (let __error) {
       let __exceptionPtr = __error.toCpp()

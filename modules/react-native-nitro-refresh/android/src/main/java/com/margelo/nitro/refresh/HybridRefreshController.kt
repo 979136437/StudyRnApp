@@ -53,9 +53,9 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
     binding.get()?.cancelRefreshFromController()
   }
 
-  override fun finishRefresh(result: RefreshResult, resultDuration: Double) {
+  override fun finishRefresh(refreshResult: RefreshResult, resultDuration: Double) {
     requestedRefreshing = false
-    binding.get()?.finishRefreshFromController(result, resultDuration)
+    binding.get()?.finishRefreshFromController(refreshResult, resultDuration)
   }
 
   override fun getState(): RefreshStateSnapshot = latestState

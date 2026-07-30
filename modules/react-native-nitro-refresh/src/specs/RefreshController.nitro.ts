@@ -42,7 +42,7 @@ export interface RefreshController extends HybridObject<{
   /** 取消当前下拉、刷新、结果展示或回弹，并复位到空闲状态。 */
   cancelRefresh(): void;
   /** 以成功或失败结果结束当前刷新，并在指定时长后自动收起。 */
-  finishRefresh(result: RefreshResult, resultDuration: number): void;
+  finishRefresh(refreshResult: RefreshResult, resultDuration: number): void;
   /** 同步读取原生视图最近一次发布的完整状态快照。 */
   getState(): RefreshStateSnapshot;
   /** 程序化拉到最大距离并停留在 ready，等待开始或取消命令。 */
