@@ -2,7 +2,7 @@ workflows:
   ios-dev-client-unsigned:
     name: 打包 iOS iap
     # 强力赋能：调用 Codemagic 性能极悍的 Apple M2 芯片，提升 C++ 编译吞吐量
-    instance_type: mac_mini_m2
+    instance_type: mac_mini_m1
     # 核心安全契约：强制把最大超时锁死在 20 分钟，严格捍卫你的 500 分钟免费额度
     max_build_duration: 20
     environment:
@@ -22,8 +22,8 @@ workflows:
       - name: ⚙️ 激活 pnpm 10 包管理器与依赖构建
         script: |
           set -e
-          # 规避 Node 未来剥离 Corepack 的风险，采用更具韧性的全局直装方案
-          npm install -g pnpm@10.33.0
+          # 💡 核心修复：加上 --force 强制抹除 Codemagic 镜像自带的 pnpm，确保我们使用的是 10.33.0 版本
+          npm install -g pnpm@10.33.0 --force
           pnpm install --frozen-lockfile
 
       - name: 🏗️ 智能状态防崩溃：动态依赖嗅探与 Expo 引擎驱动
@@ -142,9 +142,10 @@ workflows:
 
   android-dev-client:
     name: 打包 Android apk
-    # Linux 算力足以支撑并发编译，x2 实例性价比最高
-    instance_type: linux_x2
-    max_build_duration: 20
+    # 🎯 实例降级：统一使用免费的 mac_mini_m1 实例，避开 linux_x2 计费墙
+    instance_type: mac_mini_m1
+    # ⏳ 同样放宽超时红线
+    max_build_duration: 40
     environment:
       node: 20.19.4
       java: 17
@@ -154,25 +155,25 @@ workflows:
     cache:
       cache_paths:
         - $HOME/.local/share/pnpm/store
-        - $HOME/.gradle/caches # 全局 Gradle 依赖与编译对象缓存区
+        - $HOME/.gradle/caches # 全局 Gradle 依赖缓存区
         - $HOME/.gradle/wrapper # 固化 Gradle 宿主引擎
-        - android/.gradle # 💡 核心修复：持久化工程级配置缓存与增量状态
-        - android/build # 💡 核心修复：根工程物理中间件
-        - android/app/build # 💡 核心修复：App 模块 C++/Java/Kotlin 增量产物
+        - android/.gradle # 持久化工程级配置缓存与增量状态
+        - android/build # 根工程物理中间件
+        - android/app/build # App 模块增量产物
 
     scripts:
       - name: ⚙️ 激活 pnpm 10 引擎与依赖构建
         script: |
           set -e
-          # 规避 Node 未来剥离 Corepack 的风险
-          npm install -g pnpm@10.33.0
+          # 💡 核心修复：加上 --force 强制抹除 Codemagic 镜像自带的 pnpm，确保我们使用的是 10.33.0 版本
+          npm install -g pnpm@10.33.0 --force
           pnpm install --frozen-lockfile
 
       - name: 🏗️ 智能状态防崩溃：动态依赖嗅探与原生工程生成
         script: |
           set -e
-          # 1. 提取依赖拓扑物理特征码
-          LOCK_HASH=$(sha1sum pnpm-lock.yaml | awk '{print $1}')
+          # 1. 提取依赖拓扑物理特征码 (MacOS 下统一使用 shasum)
+          LOCK_HASH=$(shasum pnpm-lock.yaml | awk '{print $1}')
           CACHE_FLAG_FILE="android_dependency_hash.txt"
 
           # 2. 🔥 幽灵防线：严格对比依赖拓扑状态
@@ -181,12 +182,9 @@ workflows:
             npx expo prebuild --platform android --clean=false
           else
             echo "⚠️ 检测到底层依赖矩阵发生重组！"
-            echo "🧹 正在彻底粉碎旧纪元的 Android 原生缓存，严防 C++ 桥接与 Java 签名冲突..."
-            # 物理级抹杀旧缓存，防止 Gradle 状态机错乱
+            echo "🧹 正在彻底粉碎旧纪元的 Android 原生缓存，严防构建冲突..."
             rm -rf android/.gradle android/build android/app/build
-            # 强制触发纯净生成
             npx expo prebuild --platform android --clean
-            # 烙印特征码
             echo "$LOCK_HASH" > "$CACHE_FLAG_FILE"
           fi
 
@@ -196,12 +194,14 @@ workflows:
           cd android
           chmod +x gradlew
 
-          echo "🚀 启动 Gradle 物理级构建缓存与并行加速并发..."
-          # 💡 核心修复：显式注入 --build-cache 和 --parallel，彻底榨干 CI 算力
+          # 💡 防 OOM 护城河：主动限制 JVM 内存，确保在基础实例上稳定不崩
+          echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
+
+          echo "🚀 启动 Gradle 物理级构建与增量加速..."
+          # 移除 --parallel，用稳定的线性编译换取内存安全
           ./gradlew :app:assembleDebug \
             --build-cache \
-            --parallel \
-            --no-daemon # 在 CI 容器环境中，守护进程无意义且浪费内存，显式关闭
+            --no-daemon
 
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
