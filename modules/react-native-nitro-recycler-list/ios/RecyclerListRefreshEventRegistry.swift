@@ -1,6 +1,6 @@
 import Foundation
 
-@objc protocol RecyclerListRefreshEventSink: AnyObject {
+@objc public protocol RecyclerListRefreshEventSink: AnyObject {
   func emitRefresh(
     phase: String,
     offset: Double,
@@ -18,12 +18,12 @@ private final class WeakRefreshEventSink {
 
 /// 用 `listId` 将 Swift 列表与 Objective-C++ Fabric EventEmitter 配对。
 @objc(NitroRecyclerListRefreshEventRegistry)
-final class RecyclerListRefreshEventRegistry: NSObject {
+public final class RecyclerListRefreshEventRegistry: NSObject {
   private static var sources: [String: WeakRefreshEventSink] = [:]
   private static let lock = NSLock()
 
   @objc(registerSource:listId:)
-  static func register(source: RecyclerListRefreshEventSink, listId: String) {
+  public static func register(source: RecyclerListRefreshEventSink, listId: String) {
     guard !listId.isEmpty else { return }
     lock.lock()
     sources[listId] = WeakRefreshEventSink(source)
@@ -31,7 +31,7 @@ final class RecyclerListRefreshEventRegistry: NSObject {
   }
 
   @objc(unregisterSource:listId:)
-  static func unregister(source: RecyclerListRefreshEventSink, listId: String) {
+  public static func unregister(source: RecyclerListRefreshEventSink, listId: String) {
     lock.lock()
     if sources[listId]?.value === source { sources.removeValue(forKey: listId) }
     lock.unlock()
