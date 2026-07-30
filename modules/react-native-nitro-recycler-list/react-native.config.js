@@ -1,7 +1,12 @@
 module.exports = {
   dependency: {
     platforms: {
-      android: {},
+      android: {
+        libraryName: 'NitroRecyclerListRefreshSpec',
+        componentDescriptors: [
+          'RecyclerListRefreshEventSourceViewComponentDescriptor',
+        ],
+      },
       ios: {},
     },
   },

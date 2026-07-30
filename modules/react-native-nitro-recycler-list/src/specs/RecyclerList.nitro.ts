@@ -120,12 +120,8 @@ export interface RecyclerListViewProps extends HybridViewProps {
   /** 用户越过阈值并释放下拉手势时调用。 */
   onRefreshRequested: () => void;
 
-  /** 下拉阶段、位移或进度变化时调用。 */
-  onRefreshProgress: (
-    phase: NativeRefreshPhase,
-    offset: number,
-    progress: number,
-  ) => void;
+  /** 下拉刷新阶段真正发生变化时调用，不承载逐帧位移数据。 */
+  onRefreshPhaseChanged: (phase: NativeRefreshPhase) => void;
 
   /** 当前内容进入触底阈值且满足去重条件时调用。 */
   onEndReached: () => void;

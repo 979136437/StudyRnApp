@@ -61,7 +61,7 @@ namespace margelo::nitro::recyclerlist::views {
     CachedProp<bool> endReachedEnabled;
     CachedProp<std::function<void(const std::vector<SlotBinding>& /* bindings */)>> onSlotsChanged;
     CachedProp<std::function<void()>> onRefreshRequested;
-    CachedProp<std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>> onRefreshProgress;
+    CachedProp<std::function<void(NativeRefreshPhase /* phase */)>> onRefreshPhaseChanged;
     CachedProp<std::function<void()>> onEndReached;
     CachedProp<std::function<void(const VisibleRange& /* range */)>> onVisibleRangeChanged;
     CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridRecyclerListViewSpec>& /* ref */)>>> hybridRef;

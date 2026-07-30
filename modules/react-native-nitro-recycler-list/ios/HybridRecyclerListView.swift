@@ -61,6 +61,8 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   private var lastRange = VisibleRange(first: -1, last: -1)
   private var endReachedArmed = true
   private var previousDescriptorVersion = ""
+  private let refreshEvents = RecyclerListRefreshEventState()
+  private let refreshTransition = RecyclerListRefreshTransitionDriver()
 
   var listId: String = ""
   var descriptors: [ItemDescriptor] = []
@@ -75,7 +77,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   var endReachedEnabled = false
   var onSlotsChanged: ([SlotBinding]) -> Void = { _ in }
   var onRefreshRequested: () -> Void = {}
-  var onRefreshProgress: (NativeRefreshPhase, Double, Double) -> Void = { _, _, _ in }
+  var onRefreshPhaseChanged: (NativeRefreshPhase) -> Void = { _ in }
   var onEndReached: () -> Void = {}
   var onVisibleRangeChanged: (VisibleRange) -> Void = { _ in }
 
@@ -89,7 +91,10 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   func afterUpdate() {
     if previousListId != listId {
-      if !previousListId.isEmpty { RecyclerListRegistry.unregister(list: self, id: previousListId) }
+      if !previousListId.isEmpty {
+        publishRefresh(.idle, offset: 0, progress: 0, targetListId: previousListId)
+        RecyclerListRegistry.unregister(list: self, id: previousListId)
+      }
       previousListId = listId
       RecyclerListRegistry.register(list: self, id: listId)
     }
@@ -104,7 +109,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     view.layout.horizontal = horizontal
     view.collectionView.alwaysBounceVertical = refreshEnabled && !horizontal
     view.collectionView.reloadData()
-    updateRefreshing(animated: true)
+    updateRefreshing(active: refreshEnabled && !horizontal && refreshing, animated: true)
   }
 
   func attachHost(_ host: HybridRecyclerCellHostView) {
@@ -147,11 +152,14 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     publishBindings()
     checkEndReached()
 
-    guard refreshEnabled, !horizontal, !refreshing else { return }
+    if view.collectionView.isDragging && refreshTransition.isRunning {
+      refreshTransition.cancel()
+    }
+    guard refreshEnabled, !horizontal, !refreshing, !refreshTransition.isRunning else { return }
     let pull = max(0, -(view.collectionView.contentOffset.y + view.collectionView.adjustedContentInset.top))
     let progress = min(1, pull / max(1, refreshThreshold))
     let phase: NativeRefreshPhase = pull >= refreshThreshold ? .ready : pull > 0 ? .pulling : .idle
-    onRefreshProgress(phase, pull, progress)
+    publishRefresh(phase, offset: pull, progress: progress)
   }
 
   func didEndDragging() {
@@ -208,6 +216,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   }
 
   func prepareForRecycle() {
+    resetRefresh()
     view.collectionView.setContentOffset(.zero, animated: false)
     hosts.removeAll()
     cells.removeAll()
@@ -216,6 +225,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   }
 
   func onDropView() {
+    resetRefresh()
     RecyclerListRegistry.unregister(list: self, id: listId)
     view.collectionView.dataSource = nil
     view.collectionView.delegate = nil
@@ -264,24 +274,86 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     }
   }
 
-  private func updateRefreshing(animated: Bool) {
-    let inset = refreshing && !horizontal ? CGFloat(refreshThreshold) : 0
+  private func updateRefreshing(active: Bool, animated: Bool) {
+    let inset = active ? CGFloat(refreshThreshold) : 0
     var contentInset = view.collectionView.contentInset
-    guard contentInset.top != inset else { return }
+    let targetPhase: NativeRefreshPhase = active ? .refreshing : .idle
+    guard contentInset.top != inset else {
+      publishRefresh(
+        targetPhase,
+        offset: Double(inset),
+        progress: active ? 1 : 0
+      )
+      return
+    }
     contentInset.top = inset
     let changes = {
       self.view.collectionView.contentInset = contentInset
-      if self.refreshing {
+      if active {
         self.view.collectionView.contentOffset.y = -inset
-        self.onRefreshProgress(.refreshing, inset, 1)
-      } else {
-        self.onRefreshProgress(.settling, 0, 0)
       }
     }
     if animated {
-      UIView.animate(withDuration: 0.2, animations: changes)
+      let startOffset = refreshEvents.offset
+      let transitionPhase: NativeRefreshPhase = active ? .refreshing : .settling
+      UIView.animate(
+        withDuration: 0.2,
+        delay: 0,
+        options: [.curveEaseInOut, .beginFromCurrentState],
+        animations: changes
+      )
+      refreshTransition.start(
+        from: startOffset,
+        to: Double(inset),
+        duration: 0.2,
+        onUpdate: { [weak self] value in
+          guard let self else { return }
+          self.publishRefresh(
+            transitionPhase,
+            offset: value,
+            progress: value / max(1, self.refreshThreshold)
+          )
+        },
+        onCompletion: { [weak self] in
+          guard let self else { return }
+          self.publishRefresh(
+            targetPhase,
+            offset: Double(inset),
+            progress: active ? 1 : 0
+          )
+        }
+      )
     } else {
       changes()
+      publishRefresh(targetPhase, offset: Double(inset), progress: active ? 1 : 0)
     }
+  }
+
+  private func publishRefresh(
+    _ phase: NativeRefreshPhase,
+    offset: Double,
+    progress: Double,
+    targetListId: String? = nil
+  ) {
+    refreshEvents.publish(
+      phase: phase,
+      offset: offset,
+      progress: progress,
+      onPull: { snapshot in
+        RecyclerListRefreshEventRegistry.emit(
+          listId: targetListId ?? self.listId,
+          snapshot: snapshot
+        )
+      },
+      onPhaseChanged: { nextPhase in self.onRefreshPhaseChanged(nextPhase) }
+    )
+  }
+
+  private func resetRefresh() {
+    refreshTransition.cancel()
+    var inset = view.collectionView.contentInset
+    inset.top = 0
+    view.collectionView.contentInset = inset
+    publishRefresh(.idle, offset: 0, progress: 0)
   }
 }

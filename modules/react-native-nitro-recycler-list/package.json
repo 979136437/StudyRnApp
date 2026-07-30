@@ -25,7 +25,8 @@
   "peerDependencies": {
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-native-nitro-modules": "catalog:"
+    "react-native-nitro-modules": "catalog:",
+    "react-native-reanimated": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
@@ -33,8 +34,22 @@
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
+    "react-native-reanimated": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "codegenConfig": {
+    "name": "NitroRecyclerListRefreshSpec",
+    "type": "components",
+    "jsSrcsDir": "./src/fabric",
+    "android": {
+      "javaPackageName": "com.margelo.nitro.recyclerlist"
+    },
+    "ios": {
+      "componentProvider": {
+        "RecyclerListRefreshEventSourceView": "RecyclerListRefreshEventSourceComponentView"
+      }
+    }
   },
   "keywords": [
     "react-native",

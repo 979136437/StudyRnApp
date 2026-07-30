@@ -292,20 +292,20 @@ open class HybridRecyclerListViewSpec_cxx {
     }
   }
   
-  public final var onRefreshProgress: bridge.Func_void_NativeRefreshPhase_double_double {
+  public final var onRefreshPhaseChanged: bridge.Func_void_NativeRefreshPhase {
     @inline(__always)
     get {
-      return { () -> bridge.Func_void_NativeRefreshPhase_double_double in
-        let __closureWrapper = Func_void_NativeRefreshPhase_double_double(self.__implementation.onRefreshProgress)
-        return bridge.create_Func_void_NativeRefreshPhase_double_double(__closureWrapper.toUnsafe())
+      return { () -> bridge.Func_void_NativeRefreshPhase in
+        let __closureWrapper = Func_void_NativeRefreshPhase(self.__implementation.onRefreshPhaseChanged)
+        return bridge.create_Func_void_NativeRefreshPhase(__closureWrapper.toUnsafe())
       }()
     }
     @inline(__always)
     set {
-      self.__implementation.onRefreshProgress = { () -> (NativeRefreshPhase, Double, Double) -> Void in
-        let __wrappedFunction = bridge.wrap_Func_void_NativeRefreshPhase_double_double(newValue)
-        return { (__phase: NativeRefreshPhase, __offset: Double, __progress: Double) -> Void in
-          __wrappedFunction.call(__phase.rawValue, __offset, __progress)
+      self.__implementation.onRefreshPhaseChanged = { () -> (NativeRefreshPhase) -> Void in
+        let __wrappedFunction = bridge.wrap_Func_void_NativeRefreshPhase(newValue)
+        return { (__phase: NativeRefreshPhase) -> Void in
+          __wrappedFunction.call(__phase.rawValue)
         }
       }()
     }

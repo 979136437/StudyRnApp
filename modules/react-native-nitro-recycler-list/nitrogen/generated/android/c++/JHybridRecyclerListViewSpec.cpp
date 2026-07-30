@@ -33,7 +33,7 @@ namespace margelo::nitro::recyclerlist { struct RecyclerListState; }
 #include "JSlotBinding.hpp"
 #include "JFunc_void.hpp"
 #include "NativeRefreshPhase.hpp"
-#include "JFunc_void_NativeRefreshPhase_double_double.hpp"
+#include "JFunc_void_NativeRefreshPhase.hpp"
 #include "JNativeRefreshPhase.hpp"
 #include "VisibleRange.hpp"
 #include "JFunc_void_VisibleRange.hpp"
@@ -222,22 +222,22 @@ namespace margelo::nitro::recyclerlist {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void::javaobject> /* onRefreshRequested */)>("setOnRefreshRequested_cxx");
     method(_javaPart, JFunc_void_cxx::fromCpp(onRefreshRequested));
   }
-  std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)> JHybridRecyclerListViewSpec::getOnRefreshProgress() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void_NativeRefreshPhase_double_double::javaobject>()>("getOnRefreshProgress_cxx");
+  std::function<void(NativeRefreshPhase /* phase */)> JHybridRecyclerListViewSpec::getOnRefreshPhaseChanged() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void_NativeRefreshPhase::javaobject>()>("getOnRefreshPhaseChanged_cxx");
     auto __result = method(_javaPart);
-    return [&]() -> std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)> {
-      if (__result->isInstanceOf(JFunc_void_NativeRefreshPhase_double_double_cxx::javaClassStatic())) [[likely]] {
-        auto downcast = jni::static_ref_cast<JFunc_void_NativeRefreshPhase_double_double_cxx::javaobject>(__result);
+    return [&]() -> std::function<void(NativeRefreshPhase /* phase */)> {
+      if (__result->isInstanceOf(JFunc_void_NativeRefreshPhase_cxx::javaClassStatic())) [[likely]] {
+        auto downcast = jni::static_ref_cast<JFunc_void_NativeRefreshPhase_cxx::javaobject>(__result);
         return downcast->cthis()->getFunction();
       } else {
         auto __resultRef = jni::make_global(__result);
-        return JNICallable<JFunc_void_NativeRefreshPhase_double_double, void(NativeRefreshPhase, double, double)>(std::move(__resultRef));
+        return JNICallable<JFunc_void_NativeRefreshPhase, void(NativeRefreshPhase)>(std::move(__resultRef));
       }
     }();
   }
-  void JHybridRecyclerListViewSpec::setOnRefreshProgress(const std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>& onRefreshProgress) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_NativeRefreshPhase_double_double::javaobject> /* onRefreshProgress */)>("setOnRefreshProgress_cxx");
-    method(_javaPart, JFunc_void_NativeRefreshPhase_double_double_cxx::fromCpp(onRefreshProgress));
+  void JHybridRecyclerListViewSpec::setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_NativeRefreshPhase::javaobject> /* onRefreshPhaseChanged */)>("setOnRefreshPhaseChanged_cxx");
+    method(_javaPart, JFunc_void_NativeRefreshPhase_cxx::fromCpp(onRefreshPhaseChanged));
   }
   std::function<void()> JHybridRecyclerListViewSpec::getOnEndReached() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>()>("getOnEndReached_cxx");

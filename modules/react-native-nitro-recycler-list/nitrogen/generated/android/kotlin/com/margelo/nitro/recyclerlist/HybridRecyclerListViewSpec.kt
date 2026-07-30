@@ -120,18 +120,18 @@ abstract class HybridRecyclerListViewSpec: HybridView() {
       onRefreshRequested = value
     }
   
-  abstract var onRefreshProgress: (phase: NativeRefreshPhase, offset: Double, progress: Double) -> Unit
+  abstract var onRefreshPhaseChanged: (phase: NativeRefreshPhase) -> Unit
   
-  private var onRefreshProgress_cxx: Func_void_NativeRefreshPhase_double_double
+  private var onRefreshPhaseChanged_cxx: Func_void_NativeRefreshPhase
     @Keep
     @DoNotStrip
     get() {
-      return Func_void_NativeRefreshPhase_double_double_java(onRefreshProgress)
+      return Func_void_NativeRefreshPhase_java(onRefreshPhaseChanged)
     }
     @Keep
     @DoNotStrip
     set(value) {
-      onRefreshProgress = value
+      onRefreshPhaseChanged = value
     }
   
   abstract var onEndReached: () -> Unit

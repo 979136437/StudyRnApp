@@ -89,8 +89,8 @@ namespace margelo::nitro::recyclerlist {
       virtual void setOnSlotsChanged(const std::function<void(const std::vector<SlotBinding>& /* bindings */)>& onSlotsChanged) = 0;
       virtual std::function<void()> getOnRefreshRequested() = 0;
       virtual void setOnRefreshRequested(const std::function<void()>& onRefreshRequested) = 0;
-      virtual std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)> getOnRefreshProgress() = 0;
-      virtual void setOnRefreshProgress(const std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>& onRefreshProgress) = 0;
+      virtual std::function<void(NativeRefreshPhase /* phase */)> getOnRefreshPhaseChanged() = 0;
+      virtual void setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) = 0;
       virtual std::function<void()> getOnEndReached() = 0;
       virtual void setOnEndReached(const std::function<void()>& onEndReached) = 0;
       virtual std::function<void(const VisibleRange& /* range */)> getOnVisibleRangeChanged() = 0;

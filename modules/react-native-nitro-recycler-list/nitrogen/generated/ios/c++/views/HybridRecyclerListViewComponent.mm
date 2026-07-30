@@ -144,10 +144,10 @@ using namespace margelo::nitro::recyclerlist::views;
     swiftPart.setOnRefreshRequested(newViewProps.onRefreshRequested.value);
     newViewProps.onRefreshRequested.isDirty = false;
   }
-  // onRefreshProgress: function
-  if (newViewProps.onRefreshProgress.isDirty) {
-    swiftPart.setOnRefreshProgress(newViewProps.onRefreshProgress.value);
-    newViewProps.onRefreshProgress.isDirty = false;
+  // onRefreshPhaseChanged: function
+  if (newViewProps.onRefreshPhaseChanged.isDirty) {
+    swiftPart.setOnRefreshPhaseChanged(newViewProps.onRefreshPhaseChanged.value);
+    newViewProps.onRefreshPhaseChanged.isDirty = false;
   }
   // onEndReached: function
   if (newViewProps.onEndReached.isDirty) {

@@ -116,26 +116,26 @@ namespace margelo::nitro::recyclerlist::bridge::swift {
     return Func_void_Wrapper(std::move(value));
   }
   
-  // pragma MARK: std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>
+  // pragma MARK: std::function<void(NativeRefreshPhase /* phase */)>
   /**
-   * Specialized version of `std::function<void(NativeRefreshPhase, double, double)>`.
+   * Specialized version of `std::function<void(NativeRefreshPhase)>`.
    */
-  using Func_void_NativeRefreshPhase_double_double = std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>;
+  using Func_void_NativeRefreshPhase = std::function<void(NativeRefreshPhase /* phase */)>;
   /**
-   * Wrapper class for a `std::function<void(NativeRefreshPhase / * phase * /, double / * offset * /, double / * progress * /)>`, this can be used from Swift.
+   * Wrapper class for a `std::function<void(NativeRefreshPhase / * phase * /)>`, this can be used from Swift.
    */
-  class Func_void_NativeRefreshPhase_double_double_Wrapper final {
+  class Func_void_NativeRefreshPhase_Wrapper final {
   public:
-    explicit Func_void_NativeRefreshPhase_double_double_Wrapper(std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>&& func): _function(std::make_unique<std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>>(std::move(func))) {}
-    inline void call(int phase, double offset, double progress) const noexcept {
-      _function->operator()(static_cast<NativeRefreshPhase>(phase), offset, progress);
+    explicit Func_void_NativeRefreshPhase_Wrapper(std::function<void(NativeRefreshPhase /* phase */)>&& func): _function(std::make_unique<std::function<void(NativeRefreshPhase /* phase */)>>(std::move(func))) {}
+    inline void call(int phase) const noexcept {
+      _function->operator()(static_cast<NativeRefreshPhase>(phase));
     }
   private:
-    std::unique_ptr<std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>> _function;
+    std::unique_ptr<std::function<void(NativeRefreshPhase /* phase */)>> _function;
   } SWIFT_NONCOPYABLE;
-  Func_void_NativeRefreshPhase_double_double create_Func_void_NativeRefreshPhase_double_double(void* NON_NULL swiftClosureWrapper) noexcept;
-  inline Func_void_NativeRefreshPhase_double_double_Wrapper wrap_Func_void_NativeRefreshPhase_double_double(Func_void_NativeRefreshPhase_double_double value) noexcept {
-    return Func_void_NativeRefreshPhase_double_double_Wrapper(std::move(value));
+  Func_void_NativeRefreshPhase create_Func_void_NativeRefreshPhase(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_NativeRefreshPhase_Wrapper wrap_Func_void_NativeRefreshPhase(Func_void_NativeRefreshPhase value) noexcept {
+    return Func_void_NativeRefreshPhase_Wrapper(std::move(value));
   }
   
   // pragma MARK: std::function<void(const VisibleRange& /* range */)>

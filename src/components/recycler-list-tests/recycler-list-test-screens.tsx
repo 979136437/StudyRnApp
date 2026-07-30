@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Pressable,
   StyleSheet,
   Switch,
@@ -15,6 +14,7 @@ import {
   type RefreshHeaderContext,
   type RecyclerRenderItemInfo,
 } from 'react-native-nitro-recycler-list';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const COLORS = {
@@ -50,11 +50,9 @@ function RecyclerTestRefreshHeader({
   const [lastRefreshTime, setLastRefreshTime] = useState(() =>
     formatRefreshTime(new Date()),
   );
-  const arrowRotation = progress.interpolate({
-    extrapolate: 'clamp',
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
+  const arrowStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${progress.value * 180}deg` }],
+  }));
 
   useEffect(() => {
     if (
@@ -72,12 +70,7 @@ function RecyclerTestRefreshHeader({
         {phase === NativeRefreshPhase.REFRESHING ? (
           <ActivityIndicator color={COLORS.dark} size="small" />
         ) : (
-          <Animated.Text
-            style={[
-              styles.refreshArrow,
-              { transform: [{ rotate: arrowRotation }] },
-            ]}
-          >
+          <Animated.Text style={[styles.refreshArrow, arrowStyle]}>
             ↓
           </Animated.Text>
         )}

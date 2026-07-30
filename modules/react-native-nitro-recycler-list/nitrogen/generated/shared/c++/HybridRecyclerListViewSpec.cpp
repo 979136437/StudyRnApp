@@ -40,8 +40,8 @@ namespace margelo::nitro::recyclerlist {
       prototype.registerHybridSetter("onSlotsChanged", &HybridRecyclerListViewSpec::setOnSlotsChanged);
       prototype.registerHybridGetter("onRefreshRequested", &HybridRecyclerListViewSpec::getOnRefreshRequested);
       prototype.registerHybridSetter("onRefreshRequested", &HybridRecyclerListViewSpec::setOnRefreshRequested);
-      prototype.registerHybridGetter("onRefreshProgress", &HybridRecyclerListViewSpec::getOnRefreshProgress);
-      prototype.registerHybridSetter("onRefreshProgress", &HybridRecyclerListViewSpec::setOnRefreshProgress);
+      prototype.registerHybridGetter("onRefreshPhaseChanged", &HybridRecyclerListViewSpec::getOnRefreshPhaseChanged);
+      prototype.registerHybridSetter("onRefreshPhaseChanged", &HybridRecyclerListViewSpec::setOnRefreshPhaseChanged);
       prototype.registerHybridGetter("onEndReached", &HybridRecyclerListViewSpec::getOnEndReached);
       prototype.registerHybridSetter("onEndReached", &HybridRecyclerListViewSpec::setOnEndReached);
       prototype.registerHybridGetter("onVisibleRangeChanged", &HybridRecyclerListViewSpec::getOnVisibleRangeChanged);

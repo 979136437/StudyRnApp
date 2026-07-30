@@ -156,14 +156,14 @@ namespace margelo::nitro::recyclerlist::views {
         throw std::runtime_error(std::string("RecyclerListView.onRefreshRequested: ") + exc.what());
       }
     }()),
-    onRefreshProgress([&]() -> CachedProp<std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>> {
+    onRefreshPhaseChanged([&]() -> CachedProp<std::function<void(NativeRefreshPhase /* phase */)>> {
       try {
-        const react::RawValue* rawValue = rawProps.at("onRefreshProgress", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.onRefreshProgress;
+        const react::RawValue* rawValue = rawProps.at("onRefreshPhaseChanged", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.onRefreshPhaseChanged;
         const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onRefreshProgress);
+        return CachedProp<std::function<void(NativeRefreshPhase /* phase */)>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onRefreshPhaseChanged);
       } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("RecyclerListView.onRefreshProgress: ") + exc.what());
+        throw std::runtime_error(std::string("RecyclerListView.onRefreshPhaseChanged: ") + exc.what());
       }
     }()),
     onEndReached([&]() -> CachedProp<std::function<void()>> {
@@ -212,7 +212,7 @@ namespace margelo::nitro::recyclerlist::views {
       case hashString("endReachedEnabled"): return true;
       case hashString("onSlotsChanged"): return true;
       case hashString("onRefreshRequested"): return true;
-      case hashString("onRefreshProgress"): return true;
+      case hashString("onRefreshPhaseChanged"): return true;
       case hashString("onEndReached"): return true;
       case hashString("onVisibleRangeChanged"): return true;
       case hashString("hybridRef"): return true;

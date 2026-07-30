@@ -17,7 +17,7 @@
     "endReachedEnabled": true,
     "onSlotsChanged": true,
     "onRefreshRequested": true,
-    "onRefreshProgress": true,
+    "onRefreshPhaseChanged": true,
     "onEndReached": true,
     "onVisibleRangeChanged": true,
     "hybridRef": true

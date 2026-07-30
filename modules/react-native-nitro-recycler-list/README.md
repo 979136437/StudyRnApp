@@ -12,7 +12,7 @@ import { RecyclerList } from 'react-native-nitro-recycler-list';
   estimatedItemSize={120}
   keyExtractor={(item) => item.id}
   renderItem={({ item }) => <Card item={item} />}
-/>
+/>;
 ```
 
 ## 瀑布流与吸顶
@@ -24,8 +24,8 @@ import { RecyclerList } from 'react-native-nitro-recycler-list';
   numColumns={2}
   keyExtractor={(item) => item.id}
   getItemType={(item) => item.type}
-  getItemSpan={(item) => item.type === 'header' ? 2 : 1}
-  getStickyLevel={(item) => item.type === 'header' ? item.level : undefined}
+  getItemSpan={(item) => (item.type === 'header' ? 2 : 1)}
+  getStickyLevel={(item) => (item.type === 'header' ? item.level : undefined)}
   renderItem={renderItem}
 />
 ```
@@ -51,6 +51,38 @@ import { RecyclerList } from 'react-native-nitro-recycler-list';
   )}
 />
 ```
+
+刷新头上下文中的 `offset`、`progress` 和 `phaseValue` 均为 Reanimated
+`SharedValue`。Android 与 iOS 通过 Fabric 直接事件在 UI Runtime 中更新这些值，
+逐帧下拉动画不会依赖 React 重新渲染或普通 JavaScript 回调。
+
+### Lottie 接入预留
+
+本包不直接依赖 `lottie-react-native`。业务安装 Lottie 后，可以用
+`useAnimatedProps` 将标准化的 `progress.value` 直接传给动画组件：
+
+```tsx
+const AnimatedLottieView = Animated.createAnimatedComponent(LottieView);
+
+function LottieRefreshHeader({ progress }: RefreshHeaderContext) {
+  const animatedProps = useAnimatedProps(() => ({
+    progress: progress.value,
+  }));
+
+  return (
+    <AnimatedLottieView
+      animatedProps={animatedProps}
+      autoPlay={false}
+      loop={false}
+      source={refreshAnimation}
+    />
+  );
+}
+```
+
+下拉阶段使用 `progress` 映射动画帧；超过阈值后的弹性效果读取 `offset`；刷新循环
+和结束片段根据低频 `phase` 或 UI Runtime 中的 `phaseValue` 切换。这样后续接入
+Lottie 时不需要修改列表公共接口。
 
 ## 嵌套列表
 

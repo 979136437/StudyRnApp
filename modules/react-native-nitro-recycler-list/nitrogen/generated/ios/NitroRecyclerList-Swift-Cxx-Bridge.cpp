@@ -31,11 +31,11 @@ namespace margelo::nitro::recyclerlist::bridge::swift {
     };
   }
   
-  // pragma MARK: std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>
-  Func_void_NativeRefreshPhase_double_double create_Func_void_NativeRefreshPhase_double_double(void* NON_NULL swiftClosureWrapper) noexcept {
-    auto swiftClosure = NitroRecyclerList::Func_void_NativeRefreshPhase_double_double::fromUnsafe(swiftClosureWrapper);
-    return [swiftClosure = std::move(swiftClosure)](NativeRefreshPhase phase, double offset, double progress) mutable -> void {
-      swiftClosure.call(static_cast<int>(phase), offset, progress);
+  // pragma MARK: std::function<void(NativeRefreshPhase /* phase */)>
+  Func_void_NativeRefreshPhase create_Func_void_NativeRefreshPhase(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroRecyclerList::Func_void_NativeRefreshPhase::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](NativeRefreshPhase phase) mutable -> void {
+      swiftClosure.call(static_cast<int>(phase));
     };
   }
   

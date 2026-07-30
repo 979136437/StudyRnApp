@@ -164,12 +164,12 @@ namespace margelo::nitro::recyclerlist {
     inline void setOnRefreshRequested(const std::function<void()>& onRefreshRequested) noexcept override {
       _swiftPart.setOnRefreshRequested(onRefreshRequested);
     }
-    inline std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)> getOnRefreshProgress() noexcept override {
-      auto __result = _swiftPart.getOnRefreshProgress();
+    inline std::function<void(NativeRefreshPhase /* phase */)> getOnRefreshPhaseChanged() noexcept override {
+      auto __result = _swiftPart.getOnRefreshPhaseChanged();
       return __result;
     }
-    inline void setOnRefreshProgress(const std::function<void(NativeRefreshPhase /* phase */, double /* offset */, double /* progress */)>& onRefreshProgress) noexcept override {
-      _swiftPart.setOnRefreshProgress(onRefreshProgress);
+    inline void setOnRefreshPhaseChanged(const std::function<void(NativeRefreshPhase /* phase */)>& onRefreshPhaseChanged) noexcept override {
+      _swiftPart.setOnRefreshPhaseChanged(onRefreshPhaseChanged);
     }
     inline std::function<void()> getOnEndReached() noexcept override {
       auto __result = _swiftPart.getOnEndReached();

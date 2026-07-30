@@ -23,7 +23,7 @@ public protocol HybridRecyclerListViewSpec_protocol: HybridObject, HybridView {
   var endReachedEnabled: Bool { get set }
   var onSlotsChanged: (_ bindings: [SlotBinding]) -> Void { get set }
   var onRefreshRequested: () -> Void { get set }
-  var onRefreshProgress: (_ phase: NativeRefreshPhase, _ offset: Double, _ progress: Double) -> Void { get set }
+  var onRefreshPhaseChanged: (_ phase: NativeRefreshPhase) -> Void { get set }
   var onEndReached: () -> Void { get set }
   var onVisibleRangeChanged: (_ range: VisibleRange) -> Void { get set }
 

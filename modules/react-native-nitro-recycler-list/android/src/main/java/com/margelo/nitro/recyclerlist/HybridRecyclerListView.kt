@@ -1,5 +1,8 @@
 package com.margelo.nitro.recyclerlist
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.view.MotionEvent
 import android.view.View
@@ -9,6 +12,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import com.facebook.react.uimanager.PixelUtil
 import com.margelo.nitro.NitroModules
 import com.margelo.nitro.views.RecyclableView
 import kotlin.math.abs
@@ -34,6 +38,9 @@ class HybridRecyclerListView(
   private var downY = 0f
   private var pullOffset = 0f
   private var draggingRefresh = false
+  private var settlingRefresh = false
+  private var refreshAnimator: ValueAnimator? = null
+  private val refreshEvents = RecyclerListRefreshEventState()
 
   override var listId: String = ""
   override var descriptors: Array<ItemDescriptor> = emptyArray()
@@ -48,7 +55,7 @@ class HybridRecyclerListView(
   override var endReachedEnabled: Boolean = false
   override var onSlotsChanged: (Array<SlotBinding>) -> Unit = {}
   override var onRefreshRequested: () -> Unit = {}
-  override var onRefreshProgress: (NativeRefreshPhase, Double, Double) -> Unit = { _, _, _ -> }
+  override var onRefreshPhaseChanged: (NativeRefreshPhase) -> Unit = {}
   override var onEndReached: () -> Unit = {}
   override var onVisibleRangeChanged: (VisibleRange) -> Unit = {}
 
@@ -68,7 +75,10 @@ class HybridRecyclerListView(
 
   override fun afterUpdate() {
     if (previousListId != listId) {
-      if (previousListId.isNotEmpty()) RecyclerListRegistry.unregisterList(previousListId, this)
+      if (previousListId.isNotEmpty()) {
+        publishRefresh(NativeRefreshPhase.IDLE, 0.0, 0.0, previousListId)
+        RecyclerListRegistry.unregisterList(previousListId, this)
+      }
       previousListId = listId
       RecyclerListRegistry.registerList(listId, this)
     }
@@ -79,7 +89,13 @@ class HybridRecyclerListView(
     }
     configureLayoutManager()
     adapter.notifyDataSetChanged()
-    if (refreshing) settleRefresh(refreshThreshold.toFloat()) else if (!draggingRefresh) settleRefresh(0f)
+    if (!refreshEnabled || horizontal) {
+      resetRefresh()
+    } else if (refreshing) {
+      settleRefresh(refreshThresholdPx())
+    } else if (!draggingRefresh) {
+      settleRefresh(0f)
+    }
     recyclerView.post {
       publishVisibleState()
       checkEndReached()
@@ -159,11 +175,11 @@ class HybridRecyclerListView(
     hosts.clear()
     measuredSizes.clear()
     endReachedArmed = true
-    pullOffset = 0f
-    draggingRefresh = false
+    resetRefresh()
   }
 
   override fun onDropView() {
+    resetRefresh()
     RecyclerListRegistry.unregisterList(listId, this)
     recyclerView.adapter = null
   }
@@ -308,6 +324,9 @@ class HybridRecyclerListView(
       if (!refreshEnabled || horizontal) return@setOnTouchListener false
       when (event.actionMasked) {
         MotionEvent.ACTION_DOWN -> {
+          refreshAnimator?.cancel()
+          refreshAnimator = null
+          settlingRefresh = false
           downY = event.y
           draggingRefresh = false
         }
@@ -315,15 +334,15 @@ class HybridRecyclerListView(
           val distance = event.y - downY
           if (distance > 0 && !recyclerView.canScrollVertically(-1)) {
             draggingRefresh = true
-            setPullOffset(min(refreshThreshold.toFloat() * 1.5f, distance * 0.5f))
+            setPullOffset(min(refreshThresholdPx() * 1.5f, distance * 0.5f))
           }
         }
         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
           if (draggingRefresh) {
-            val shouldRefresh = pullOffset >= refreshThreshold.toFloat()
+            val shouldRefresh = pullOffset >= refreshThresholdPx()
             draggingRefresh = false
             if (shouldRefresh) {
-              setPullOffset(refreshThreshold.toFloat())
+              setPullOffset(refreshThresholdPx())
               onRefreshRequested()
             } else {
               settleRefresh(0f)
@@ -338,20 +357,76 @@ class HybridRecyclerListView(
   private fun setPullOffset(value: Float) {
     pullOffset = value
     recyclerView.translationY = value
-    val threshold = max(1f, refreshThreshold.toFloat())
+    val threshold = refreshThresholdPx()
     val phase = if (refreshing) NativeRefreshPhase.REFRESHING
+      else if (settlingRefresh) NativeRefreshPhase.SETTLING
       else if (value >= threshold) NativeRefreshPhase.READY
       else if (value > 0) NativeRefreshPhase.PULLING
       else NativeRefreshPhase.IDLE
-    onRefreshProgress(phase, value.toDouble(), min(1f, value / threshold).toDouble())
+    publishRefresh(
+      phase,
+      PixelUtil.toDIPFromPixel(value).toDouble(),
+      min(1f, value / threshold).toDouble(),
+    )
   }
 
   private fun settleRefresh(target: Float) {
-    if (abs(recyclerView.translationY - target) < 0.5f) return
-    recyclerView.animate().translationY(target).setDuration(180).withEndAction {
+    refreshAnimator?.cancel()
+    refreshAnimator = null
+    if (abs(pullOffset - target) < 0.5f) {
+      settlingRefresh = false
       setPullOffset(target)
-      if (target == 0f) onRefreshProgress(NativeRefreshPhase.IDLE, 0.0, 0.0)
-    }.start()
+      return
+    }
+    settlingRefresh = target == 0f
+    refreshAnimator = ValueAnimator.ofFloat(pullOffset, target).apply {
+      duration = 180
+      addUpdateListener { animator -> setPullOffset(animator.animatedValue as Float) }
+      addListener(object : AnimatorListenerAdapter() {
+        private var cancelled = false
+
+        override fun onAnimationCancel(animation: Animator) {
+          cancelled = true
+        }
+
+        override fun onAnimationEnd(animation: Animator) {
+          if (!cancelled) {
+            settlingRefresh = false
+            setPullOffset(target)
+          }
+          if (refreshAnimator === animation) refreshAnimator = null
+        }
+      })
+      start()
+    }
+  }
+
+  private fun refreshThresholdPx(): Float =
+    PixelUtil.toPixelFromDIP(max(1.0, refreshThreshold)).toFloat()
+
+  private fun publishRefresh(
+    phase: NativeRefreshPhase,
+    offset: Double,
+    progress: Double,
+    targetListId: String = listId,
+  ) {
+    refreshEvents.publish(
+      phase,
+      offset,
+      progress,
+      { snapshot -> RecyclerListRegistry.emitRefresh(targetListId, snapshot) },
+      { nextPhase -> onRefreshPhaseChanged(nextPhase) },
+    )
+  }
+
+  private fun resetRefresh() {
+    refreshAnimator?.cancel()
+    refreshAnimator = null
+    draggingRefresh = false
+    settlingRefresh = false
+    pullOffset = 0f
+    recyclerView.translationY = 0f
+    publishRefresh(NativeRefreshPhase.IDLE, 0.0, 0.0)
   }
 
   private inner class NativeAdapter : RecyclerView.Adapter<NativeHolder>() {

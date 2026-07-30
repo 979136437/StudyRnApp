@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { Animated, StyleProp, ViewStyle } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type {
   NativeRefreshPhase as NativeRefreshPhaseValue,
@@ -71,20 +72,24 @@ export interface RefreshHeaderContext {
   /** 当前刷新阶段，用于切换提示文字、图标等离散界面状态。 */
   phase: RefreshPhase;
 
-  /**
-   * 当前下拉进度对应的 `Animated.Value`。
-   *
-   * `0` 表示未下拉，`1` 表示达到 `threshold`；过拉时可能大于 `1`。
-   * 该值会原地更新，渲染方不应修改或替换它。
-   */
-  progress: Animated.Value;
+  /** `phase` 的 Reanimated `SharedValue` 版本，可在 worklet 中直接读取。 */
+  phaseValue: SharedValue<RefreshPhase>;
 
   /**
-   * 当前刷新头可见位移对应的 `Animated.Value`，单位为逻辑像素。
+   * 当前下拉进度对应的 Reanimated `SharedValue`。
    *
-   * 该值会原地更新，适合直接驱动刷新头的平移、旋转或透明度动画。
+   * `0` 表示未下拉，`1` 表示达到或超过 `threshold`，值始终限制在 `0...1`。
+   * 该值会原地更新，适合通过 `useAnimatedStyle` 驱动连续动画；渲染方不应修改
+   * 或替换它。
    */
-  offset: Animated.Value;
+  progress: SharedValue<number>;
+
+  /**
+   * 当前刷新头可见位移对应的 Reanimated `SharedValue`，单位为逻辑像素。
+   *
+   * 该值保留超过阈值后的过拉距离，适合驱动刷新头的平移、缩放或透明度动画。
+   */
+  offset: SharedValue<number>;
 
   /** 当前生效的刷新触发距离，单位为逻辑像素。 */
   threshold: number;
@@ -261,8 +266,9 @@ export interface RecyclerListProps<T> {
   /**
    * 渲染自定义刷新头。
    *
-   * `phase` 用于切换离散状态；`progress` 和 `offset` 是可用于 RN `Animated`
-   * 动画的值。刷新头覆盖在列表顶部，不占用普通数据项的回收槽位。
+   * `phase` 用于切换离散状态；`phaseValue`、`progress` 和 `offset` 是可在
+   * Reanimated worklet 中直接读取的 `SharedValue`。刷新头覆盖在列表顶部，不占用
+   * 普通数据项的回收槽位。
    */
   renderRefreshHeader?: (context: RefreshHeaderContext) => ReactNode;
 

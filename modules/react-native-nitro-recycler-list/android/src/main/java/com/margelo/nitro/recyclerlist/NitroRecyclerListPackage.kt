@@ -19,6 +19,7 @@ class NitroRecyclerListPackage : BaseReactPackage() {
   ): List<ViewManager<*, *>> = listOf(
     RecyclerListViewGroupManager(),
     RecyclerCellHostViewGroupManager(),
+    RecyclerListRefreshEventSourceManager(),
   )
 
   companion object {

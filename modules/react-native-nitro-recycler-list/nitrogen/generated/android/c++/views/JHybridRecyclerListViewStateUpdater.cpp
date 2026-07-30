@@ -89,9 +89,9 @@ void JHybridRecyclerListViewStateUpdater::updateViewProps(jni::alias_ref<jni::JC
     hybridView->setOnRefreshRequested(props->onRefreshRequested.value);
     props->onRefreshRequested.isDirty = false;
   }
-  if (props->onRefreshProgress.isDirty) {
-    hybridView->setOnRefreshProgress(props->onRefreshProgress.value);
-    props->onRefreshProgress.isDirty = false;
+  if (props->onRefreshPhaseChanged.isDirty) {
+    hybridView->setOnRefreshPhaseChanged(props->onRefreshPhaseChanged.value);
+    props->onRefreshPhaseChanged.isDirty = false;
   }
   if (props->onEndReached.isDirty) {
     hybridView->setOnEndReached(props->onEndReached.value);

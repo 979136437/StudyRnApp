@@ -9,12 +9,21 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { callback, type HybridRef } from 'react-native-nitro-modules';
+import Animated, {
+  useAnimatedStyle,
+  useEvent,
+  useSharedValue,
+} from 'react-native-reanimated';
 
 import { createDescriptors, normalizeListOptions } from './core/descriptors';
 import { EndReachedGate } from './core/endReachedGate';
 import { readSavedOffset, saveOffset } from './core/scrollState';
+import NativeRecyclerListRefreshEventSource, {
+  type NativeProps as RefreshEventSourceProps,
+  type RecyclerListRefreshPullEvent,
+} from './fabric/NativeRecyclerListRefreshEventSource';
 import { NativeRecyclerCellHost } from './native/NativeRecyclerCellHost';
 import { NativeRecyclerList } from './native/NativeRecyclerList';
 import type {
@@ -83,8 +92,10 @@ function RecyclerListInner<T>(
     RecyclerListViewMethods
   > | null>(null);
   const gate = useRef(new EndReachedGate());
-  const progress = useRef(new Animated.Value(0)).current;
-  const offset = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
+  const offset = useSharedValue(0);
+  const phaseValue = useSharedValue<RefreshPhase>('idle');
+  const phaseRef = useRef<RefreshPhase>('idle');
   const [phase, setPhase] = useState<RefreshPhase>('idle');
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
 
@@ -245,6 +256,14 @@ function RecyclerListInner<T>(
     [listKey, preserveNestedScrollPosition],
   );
 
+  useEffect(() => {
+    offset.value = 0;
+    progress.value = 0;
+    phaseValue.value = 'idle';
+    phaseRef.current = 'idle';
+    setPhase('idle');
+  }, [listId, offset, phaseValue, progress]);
+
   const handleHybridRef = useCallback(
     (ref: HybridRef<RecyclerListViewProps, RecyclerListViewMethods>) => {
       nativeRef.current = ref;
@@ -256,12 +275,40 @@ function RecyclerListInner<T>(
     [listKey, preserveNestedScrollPosition],
   );
 
-  const refreshHeader = renderRefreshHeader?.({
-    phase,
-    progress,
-    offset,
-    threshold: refreshThreshold,
-  });
+  const refreshHeader = useMemo(
+    () =>
+      renderRefreshHeader?.({
+        offset,
+        phase,
+        phaseValue,
+        progress,
+        threshold: refreshThreshold,
+      }),
+    [
+      offset,
+      phase,
+      phaseValue,
+      progress,
+      refreshThreshold,
+      renderRefreshHeader,
+    ],
+  );
+  const refreshHeaderStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: Math.min(offset.value, refreshThreshold) - refreshThreshold,
+      },
+    ],
+  }));
+  const pullEventHandler = useEvent<RecyclerListRefreshPullEvent>(
+    (event) => {
+      'worklet';
+      offset.value = Math.max(0, event.offset);
+      progress.value = Math.max(0, Math.min(1, event.progress));
+      phaseValue.value = event.phase as RefreshPhase;
+    },
+    ['onPull'],
+  );
 
   return (
     <View style={[styles.container, style]} testID={testID}>
@@ -279,10 +326,11 @@ function RecyclerListInner<T>(
         listId={listId}
         numColumns={options.numColumns}
         onEndReached={callback(handleEndReached)}
-        onRefreshProgress={callback((nextPhase, nextOffset, nextProgress) => {
-          offset.setValue(nextOffset);
-          progress.setValue(nextProgress);
-          setPhase(nextPhase);
+        onRefreshPhaseChanged={callback((nextPhase) => {
+          if (phaseRef.current !== nextPhase) {
+            phaseRef.current = nextPhase;
+            setPhase(nextPhase);
+          }
         })}
         onRefreshRequested={callback(() => onRefresh?.())}
         onSlotsChanged={callback(setBindings)}
@@ -337,8 +385,20 @@ function RecyclerListInner<T>(
           );
         })}
       </NativeRecyclerList>
+      <NativeRecyclerListRefreshEventSource
+        collapsable={false}
+        listId={listId}
+        onPull={
+          pullEventHandler as unknown as RefreshEventSourceProps['onPull']
+        }
+        pointerEvents="none"
+        style={styles.refreshEventSource}
+      />
       {refreshHeader == null ? null : (
-        <Animated.View pointerEvents="none" style={styles.refreshHeader}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.refreshHeader, refreshHeaderStyle]}
+        >
           {refreshHeader}
         </Animated.View>
       )}
@@ -363,6 +423,13 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10,
+  },
+  refreshEventSource: {
+    height: 0,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 0,
   },
 });
 
