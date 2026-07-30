@@ -1,6 +1,7 @@
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
+import { Link, type Href } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   RefreshControl,
   RefreshPhase,
@@ -22,6 +23,33 @@ type ActivityItem = {
   time: string;
   accent: string;
 };
+
+const RECYCLER_TEST_ROUTES = [
+  {
+    href: '/recycler-list-tests/featured-content',
+    label: '精选内容',
+  },
+  {
+    href: '/recycler-list-tests/dynamic-height-cards',
+    label: '动态高度卡片',
+  },
+  {
+    href: '/recycler-list-tests/short-content',
+    label: '较短内容',
+  },
+  {
+    href: '/recycler-list-tests/nested-horizontal-lists',
+    label: '横向嵌套列表',
+  },
+  {
+    href: '/recycler-list-tests/more-content',
+    label: '更多内容',
+  },
+  {
+    href: '/recycler-list-tests/recycled-items',
+    label: '回收项',
+  },
+] as const;
 
 const BASE_ITEMS: ActivityItem[] = [
   {
@@ -297,6 +325,39 @@ export default function Home(): React.JSX.Element {
             {refreshCount === 0 ? '尚未同步' : `已完成 ${refreshCount} 次`}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.testNavBand}>
+        <View style={styles.testNavHeading}>
+          <Text style={styles.testNavTitle}>回收列表测试</Text>
+          <Text style={styles.testNavCount}>
+            {RECYCLER_TEST_ROUTES.length} 个场景
+          </Text>
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.testNavContent}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          {RECYCLER_TEST_ROUTES.map((route, index) => (
+            <Link asChild href={route.href as Href} key={route.href}>
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.testNavItem,
+                  pressed && styles.testNavPressed,
+                ]}
+              >
+                <Text style={styles.testNavIndex}>
+                  {String(index + 1).padStart(2, '0')}
+                </Text>
+                <Text numberOfLines={1} style={styles.testNavLabel}>
+                  {route.label}
+                </Text>
+              </Pressable>
+            </Link>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.commandBand}>
@@ -627,6 +688,56 @@ const styles = StyleSheet.create({
     color: '#24332e',
     fontSize: 12,
     fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+  },
+  testNavBand: {
+    backgroundColor: '#ffffff',
+    borderBottomColor: '#dfe3de',
+    borderBottomWidth: 1,
+    paddingBottom: 11,
+    paddingTop: 10,
+  },
+  testNavContent: {
+    gap: 8,
+    paddingHorizontal: 18,
+  },
+  testNavCount: {
+    color: '#708078',
+    fontSize: 10,
+  },
+  testNavHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    paddingHorizontal: 18,
+  },
+  testNavIndex: {
+    color: '#e05a47',
+    fontSize: 9,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '900',
+  },
+  testNavItem: {
+    backgroundColor: '#e7ece8',
+    borderRadius: 5,
+    justifyContent: 'center',
+    minHeight: 46,
+    paddingHorizontal: 11,
+    width: 126,
+  },
+  testNavLabel: {
+    color: '#24332e',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  testNavPressed: {
+    opacity: 0.68,
+  },
+  testNavTitle: {
+    color: '#17211e',
+    fontSize: 12,
     fontWeight: '800',
   },
   title: {
