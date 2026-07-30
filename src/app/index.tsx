@@ -245,7 +245,7 @@ export default function Home(): React.JSX.Element {
     setRefreshing(true);
     refreshTimerRef.current = setTimeout(() => {
       finishRefresh(RefreshResult.SUCCESS);
-    }, 1600);
+    }, 5600);
   }, [clearPendingRefresh, finishRefresh]);
 
   const cancelRefresh = useCallback(() => {
@@ -369,7 +369,7 @@ export default function Home(): React.JSX.Element {
             refreshing={refreshing}
             onRefresh={onRefresh}
             onStateChange={onStateChange}
-            pullDistance={96}
+            pullDistance={46}
             maxPullDistance={176}
             resultDuration={800}
             renderHeader={(context) => <DemoRefreshHeader {...context} />}
@@ -401,8 +401,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderCurve: 'continuous',
     borderRadius: 5,
-    flexBasis: '31%',
-    flexGrow: 1,
+    flex: 1,
     justifyContent: 'center',
     minHeight: 38,
     paddingHorizontal: 8,
@@ -429,7 +428,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   commandLabel: {
-    color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
   },
