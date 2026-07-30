@@ -7,13 +7,8 @@ import {
   RefreshPhase,
   RefreshResult,
   type RefreshControlRef,
-  type RefreshHeaderContext,
   type RefreshStateSnapshot,
 } from 'react-native-nitro-refresh';
-import Animated, {
-  interpolate,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ActivityItem = {
@@ -189,35 +184,6 @@ const ActivityRow = memo(function ActivityRow({
     </View>
   );
 });
-
-function DemoRefreshHeader({
-  phase,
-  offset,
-  progress,
-}: RefreshHeaderContext): React.JSX.Element {
-  const dialStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.2, 1], [0, 0.45, 1]),
-    transform: [
-      { rotate: `${progress.value * 270}deg` },
-      { scale: interpolate(progress.value, [0, 1], [0.72, 1]) },
-    ],
-  }));
-  const lineStyle = useAnimatedStyle(() => ({
-    width: Math.max(12, offset.value * 0.48),
-  }));
-
-  return (
-    <View style={styles.refreshHeader}>
-      <Animated.View style={[styles.refreshDial, dialStyle]}>
-        <View style={styles.refreshDialCore} />
-      </Animated.View>
-      <View style={styles.refreshCopy}>
-        <Text style={styles.refreshLabel}>{PHASE_LABEL[phase]}</Text>
-        <Animated.View style={[styles.refreshLine, lineStyle]} />
-      </View>
-    </View>
-  );
-}
 
 export default function Home(): React.JSX.Element {
   const refreshControlRef = useRef<RefreshControlRef>(null);
@@ -439,7 +405,6 @@ export default function Home(): React.JSX.Element {
             threshold={46}
             limit={176}
             timeout={800}
-            renderHeader={(context) => <DemoRefreshHeader {...context} />}
           />
         }
       />

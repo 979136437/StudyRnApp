@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   StyleSheet,
   Switch,
@@ -9,7 +10,9 @@ import {
 } from 'react-native';
 import {
   LoadMoreState,
+  NativeRefreshPhase,
   RecyclerList,
+  type RefreshHeaderContext,
   type RecyclerRenderItemInfo,
 } from 'react-native-nitro-recycler-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +27,102 @@ const COLORS = {
   surface: '#ffffff',
   yellow: '#d6a133',
 } as const;
+
+const REFRESH_PHASE_LABELS = {
+  [NativeRefreshPhase.IDLE]: '下拉刷新',
+  [NativeRefreshPhase.PULLING]: '继续下拉',
+  [NativeRefreshPhase.READY]: '松开立即刷新',
+  [NativeRefreshPhase.REFRESHING]: '正在刷新...',
+  [NativeRefreshPhase.SETTLING]: '刷新完成',
+} as const;
+
+function formatRefreshTime(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function RecyclerTestRefreshHeader({
+  phase,
+  progress,
+}: RefreshHeaderContext): React.JSX.Element {
+  const previousPhaseRef = useRef(phase);
+  const [lastRefreshTime, setLastRefreshTime] = useState(() =>
+    formatRefreshTime(new Date()),
+  );
+  const arrowRotation = progress.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  useEffect(() => {
+    if (
+      phase === NativeRefreshPhase.REFRESHING &&
+      previousPhaseRef.current !== NativeRefreshPhase.REFRESHING
+    ) {
+      setLastRefreshTime(formatRefreshTime(new Date()));
+    }
+    previousPhaseRef.current = phase;
+  }, [phase]);
+
+  return (
+    <View style={styles.refreshHeader}>
+      <View style={styles.refreshIconSlot}>
+        {phase === NativeRefreshPhase.REFRESHING ? (
+          <ActivityIndicator color={COLORS.dark} size="small" />
+        ) : (
+          <Animated.Text
+            style={[
+              styles.refreshArrow,
+              { transform: [{ rotate: arrowRotation }] },
+            ]}
+          >
+            ↓
+          </Animated.Text>
+        )}
+      </View>
+      <View style={styles.refreshCopy}>
+        <Text style={styles.refreshTitle}>{REFRESH_PHASE_LABELS[phase]}</Text>
+        <Text style={styles.refreshTime}>最后更新：{lastRefreshTime}</Text>
+      </View>
+    </View>
+  );
+}
+
+function useTestRefresh(): {
+  onRefresh: () => void;
+  refreshing: boolean;
+  renderRefreshHeader: (context: RefreshHeaderContext) => React.JSX.Element;
+} {
+  const [refreshing, setRefreshing] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const onRefresh = useCallback(() => {
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    setRefreshing(true);
+    timerRef.current = setTimeout(() => {
+      setRefreshing(false);
+      timerRef.current = null;
+    }, 900);
+  }, []);
+
+  const renderRefreshHeader = useCallback(
+    (context: RefreshHeaderContext) => (
+      <RecyclerTestRefreshHeader {...context} />
+    ),
+    [],
+  );
+
+  return { onRefresh, refreshing, renderRefreshHeader };
+}
 
 type TestShellProps = {
   badge: string;
@@ -110,6 +209,8 @@ const FEATURED_ITEMS: FeaturedItem[] = [
 ];
 
 export function FeaturedContentTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
+
   return (
     <TestShell
       badge="MASONRY · STICKY"
@@ -117,6 +218,7 @@ export function FeaturedContentTestScreen(): React.JSX.Element {
       title="精选内容"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.listContent}
         data={FEATURED_ITEMS}
         estimatedItemSize={132}
@@ -171,6 +273,8 @@ const DYNAMIC_CARDS: DynamicCard[] = Array.from({ length: 60 }, (_, index) => ({
 }));
 
 export function DynamicHeightCardsTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
+
   return (
     <TestShell
       badge="MASONRY · MEASURE"
@@ -178,6 +282,7 @@ export function DynamicHeightCardsTestScreen(): React.JSX.Element {
       title="动态高度卡片"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.listContent}
         data={DYNAMIC_CARDS}
         estimatedItemSize={138}
@@ -215,6 +320,8 @@ const COMPACT_ITEMS: CompactItem[] = Array.from(
 );
 
 export function ShortContentTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
+
   return (
     <TestShell
       badge="LIST · COMPACT"
@@ -222,6 +329,7 @@ export function ShortContentTestScreen(): React.JSX.Element {
       title="较短内容"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.compactListContent}
         data={COMPACT_ITEMS}
         estimatedItemSize={52}
@@ -304,6 +412,8 @@ const HorizontalShelf = memo(function HorizontalShelf({
 });
 
 export function NestedHorizontalListsTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
+
   return (
     <TestShell
       badge="NESTED · POSITION"
@@ -311,6 +421,7 @@ export function NestedHorizontalListsTestScreen(): React.JSX.Element {
       title="横向嵌套列表"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.listContent}
         data={SHELVES}
         estimatedItemSize={188}
@@ -340,6 +451,7 @@ function createLoadMoreItems(start: number, count: number): LoadMoreItem[] {
 }
 
 export function MoreContentTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
   const [items, setItems] = useState(() => createLoadMoreItems(0, 24));
   const [loadMoreState, setLoadMoreState] = useState<LoadMoreState>(
     LoadMoreState.IDLE,
@@ -387,6 +499,7 @@ export function MoreContentTestScreen(): React.JSX.Element {
       title="更多内容"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.listContent}
         data={items}
         estimatedItemSize={76}
@@ -498,6 +611,8 @@ const RecycleCard = memo(function RecycleCard({
 });
 
 export function RecycledItemsTestScreen(): React.JSX.Element {
+  const refresh = useTestRefresh();
+
   return (
     <TestShell
       badge="POOL · REMOUNT"
@@ -505,6 +620,7 @@ export function RecycledItemsTestScreen(): React.JSX.Element {
       title="回收项"
     >
       <RecyclerList
+        {...refresh}
         contentContainerStyle={styles.listContent}
         data={RECYCLE_ITEMS}
         estimatedItemSize={126}
@@ -741,6 +857,42 @@ const styles = StyleSheet.create({
   recycleValue: {
     color: COLORS.muted,
     fontSize: 12,
+    fontWeight: '600',
+  },
+  refreshArrow: {
+    color: COLORS.dark,
+    fontSize: 26,
+    lineHeight: 30,
+    textAlign: 'center',
+  },
+  refreshCopy: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 154,
+  },
+  refreshHeader: {
+    alignItems: 'center',
+    backgroundColor: '#e6ece8',
+    flexDirection: 'row',
+    height: 80,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  refreshIconSlot: {
+    alignItems: 'center',
+    height: 30,
+    justifyContent: 'center',
+    marginRight: 10,
+    width: 30,
+  },
+  refreshTime: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  refreshTitle: {
+    color: COLORS.dark,
+    fontSize: 14,
     fontWeight: '600',
   },
   retryButton: {
