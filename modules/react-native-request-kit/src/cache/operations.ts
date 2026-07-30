@@ -1,12 +1,11 @@
-import type { Method } from '../client/Method';
 import { getRuntime, keyHash } from '../client/runtime';
-import type { MethodMatcher, RequestInstance } from '../types';
+import type { AnyMethod, MethodMatcher, RequestInstance } from '../types';
 
-type CacheTarget = Method<unknown> | readonly Method<unknown>[] | MethodMatcher;
+type CacheTarget = AnyMethod | readonly AnyMethod[] | MethodMatcher;
 
 export async function invalidateCache(
-  target: CacheTarget | RequestInstance,
-  request?: RequestInstance,
+  target: CacheTarget | RequestInstance<any, any, any>,
+  request?: RequestInstance<any, any, any>,
 ): Promise<void> {
   if (isRequestInstance(target)) {
     await getRuntime(target).queryClient.invalidateQueries();
@@ -23,12 +22,12 @@ export async function invalidateCache(
   );
 }
 
-export function queryCache<TData>(method: Method<TData>): TData | undefined {
+export function queryCache<TData>(method: AnyMethod<TData>): TData | undefined {
   return getRuntime(method.request).queryClient.getQueryData<TData>(method.key);
 }
 
 export function setCache<TData>(
-  method: Method<TData>,
+  method: AnyMethod<TData>,
   updater: TData | ((current: TData | undefined) => TData | undefined),
 ): TData | undefined {
   return getRuntime(method.request).queryClient.setQueryData<TData>(
@@ -38,7 +37,7 @@ export function setCache<TData>(
 }
 
 export function updateState<TData>(
-  method: Method<TData>,
+  method: AnyMethod<TData>,
   updater:
     | TData
     | ((current: TData | undefined) => TData | undefined)
@@ -81,8 +80,8 @@ export function updateState<TData>(
 
 function resolveMethods(
   target: CacheTarget,
-  request?: RequestInstance,
-): readonly Method<unknown>[] {
+  request?: RequestInstance<any, any, any>,
+): readonly AnyMethod[] {
   if (Array.isArray(target)) {
     return target;
   }
@@ -95,7 +94,7 @@ function resolveMethods(
   return request.snapshots.match(target as MethodMatcher);
 }
 
-function isMethod(value: unknown): value is Method<unknown> {
+function isMethod(value: unknown): value is AnyMethod {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -104,7 +103,9 @@ function isMethod(value: unknown): value is Method<unknown> {
   );
 }
 
-function isRequestInstance(value: unknown): value is RequestInstance {
+function isRequestInstance(
+  value: unknown,
+): value is RequestInstance<any, any, any> {
   return (
     typeof value === 'object' &&
     value !== null &&

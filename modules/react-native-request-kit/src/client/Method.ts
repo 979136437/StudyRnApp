@@ -1,7 +1,7 @@
 import type { QueryKey, UseQueryOptions } from '@tanstack/react-query';
-import type { Options as KyOptions } from 'ky';
 
 import type {
+  AnyMethod,
   CacheFor,
   CreateRequestOptions,
   HttpMethod,
@@ -16,6 +16,7 @@ import {
   normalizeRequestError,
   RequestError,
 } from './error';
+import { isFinalData } from './finalData';
 import { getRuntime, isIdempotent, keyHash, stableSerialize } from './runtime';
 
 const DEFAULT_STALE_TIME = 5 * 60 * 1000;
@@ -30,14 +31,21 @@ type CacheSettings = {
   staleTime: number;
 };
 
-export class Method<TData = unknown> implements PromiseLike<TData> {
-  readonly config: Readonly<MethodConfig<TData>>;
+export class Method<
+  TData = unknown,
+  TResponse = Response,
+  TResponseHeaders = Headers,
+  TTransformed = unknown,
+> implements PromiseLike<TData> {
+  readonly config: Readonly<
+    MethodConfig<TData, TTransformed, TResponseHeaders>
+  >;
   readonly data: unknown;
   readonly headers: Headers;
   readonly key: QueryKey;
   readonly meta: Record<string, unknown>;
   readonly name?: string;
-  readonly request: RequestInstance;
+  readonly request: RequestInstance<TResponse, TResponseHeaders, TTransformed>;
   readonly type: HttpMethod;
   readonly url: string;
 
@@ -45,11 +53,11 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
   private readonly uploadListeners = new Set<(event: ProgressInfo) => void>();
 
   constructor(
-    request: RequestInstance,
+    request: RequestInstance<TResponse, TResponseHeaders, TTransformed>,
     type: HttpMethod,
     url: string,
     data: unknown,
-    config: MethodConfig<TData> = {},
+    config: MethodConfig<TData, TTransformed, TResponseHeaders> = {},
   ) {
     this.request = request;
     this.type = type;
@@ -57,12 +65,19 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
     this.data = data;
     this.config = Object.freeze({ ...config });
     this.meta = { ...config.meta };
-    this.headers = new Headers(config.headers);
+    this.headers = new Headers(getRuntime(request).options.headers);
+    for (const [name, value] of new Headers(config.headers)) {
+      this.headers.set(name, value);
+    }
     this.name = config.name;
     this.key = Object.freeze([
       'react-native-request-kit',
       type,
-      resolveUrl(getRuntime(request).options.baseUrl, url),
+      resolveRequestUrl(
+        getRuntime(request).options.baseUrl,
+        url,
+        config.params,
+      ),
       normalizeParams(config.params),
       normalizeHeaders(config.headers),
       stableSerialize(data),
@@ -73,8 +88,8 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
   abort(): void {
     const runtime = getRuntime(this.request);
     const hash = keyHash(this.key);
-    for (const controller of runtime.controllers.get(hash) ?? []) {
-      controller.abort();
+    for (const activeRequest of runtime.activeRequests.get(hash) ?? []) {
+      activeRequest.abort();
     }
     void runtime.queryClient.cancelQueries({ exact: true, queryKey: this.key });
   }
@@ -251,52 +266,54 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
 
   private async executeNetwork(parentSignal?: AbortSignal): Promise<TData> {
     const runtime = getRuntime(this.request);
-    const controller = new AbortController();
     const hash = keyHash(this.key);
-    const controllers = runtime.controllers.get(hash) ?? new Set();
-    controllers.add(controller);
-    runtime.controllers.set(hash, controllers);
-
-    const abortFromParent = () => controller.abort();
+    let activeRequest: { abort: () => void } | undefined;
+    const abortFromParent = () => activeRequest?.abort();
     parentSignal?.addEventListener('abort', abortFromParent, { once: true });
-    if (parentSignal?.aborted) {
-      controller.abort();
-    }
 
     let completedData: TData | undefined;
     let completedError: RequestError | undefined;
     try {
-      const response = await runtime.client(
-        requestInput(runtime.options.baseUrl, this.url),
+      await runtime.options.beforeRequest?.(this as AnyMethod);
+      const controls = runtime.requestAdapter(
         {
-          ...createBodyOptions(this.type, this.data),
-          headers: this.headers,
-          hooks:
-            runtime.options.beforeRequest === undefined
-              ? undefined
-              : {
-                  beforeRequest: [
-                    async ({ request }) =>
-                      runtime.options.beforeRequest!(
-                        request,
-                        this as Method<unknown>,
-                      ),
-                  ],
-                },
-          method: this.type,
-          onDownloadProgress: (progress) => {
-            this.emitProgress(this.downloadListeners, progress);
-          },
-          onUploadProgress: (progress) => {
-            this.emitProgress(this.uploadListeners, progress);
-          },
-          searchParams: normalizeSearchParams(this.config.params),
-          signal: controller.signal,
+          data: this.data,
+          headers: new Headers(this.headers),
           timeout: this.config.timeout ?? runtime.options.timeout ?? 15_000,
+          type: this.type,
+          url: resolveRequestUrl(
+            runtime.options.baseUrl,
+            this.url,
+            this.config.params,
+          ),
         },
+        this as unknown as Method<unknown, any, any, unknown>,
       );
+      let aborted = false;
+      activeRequest = {
+        abort: () => {
+          if (aborted) return;
+          aborted = true;
+          controls.abort();
+        },
+      };
+      const activeRequests = runtime.activeRequests.get(hash) ?? new Set();
+      activeRequests.add(activeRequest);
+      runtime.activeRequests.set(hash, activeRequests);
+      controls.onDownload?.((loaded, total) => {
+        this.emitProgress(this.downloadListeners, loaded, total);
+      });
+      controls.onUpload?.((loaded, total) => {
+        this.emitProgress(this.uploadListeners, loaded, total);
+      });
+      if (parentSignal?.aborted) activeRequest.abort();
 
-      const data = await this.transformResponse(response);
+      const response = await controls.response();
+      const responseHeaders = await controls.headers();
+      const data = await this.transformResponse(
+        response as TResponse,
+        responseHeaders as TResponseHeaders,
+      );
       completedData = data;
       await this.invalidateHitSource();
       return data;
@@ -314,7 +331,7 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
       if (runtime.options.responded?.onError !== undefined) {
         const data = (await runtime.options.responded.onError(
           normalized,
-          this as Method<unknown>,
+          this as AnyMethod,
         )) as TData;
         completedData = data;
         completedError = undefined;
@@ -323,12 +340,13 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
       throw normalized;
     } finally {
       parentSignal?.removeEventListener('abort', abortFromParent);
-      controllers.delete(controller);
-      if (controllers.size === 0) {
-        runtime.controllers.delete(hash);
+      if (activeRequest !== undefined) {
+        const activeRequests = runtime.activeRequests.get(hash);
+        activeRequests?.delete(activeRequest);
+        if (activeRequests?.size === 0) runtime.activeRequests.delete(hash);
       }
       await runtime.options.responded?.onComplete?.(
-        this as Method<unknown>,
+        this as AnyMethod,
         completedError === undefined
           ? { data: completedData, status: 'success' }
           : { error: completedError, status: 'error' },
@@ -338,12 +356,13 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
 
   private emitProgress(
     listeners: ReadonlySet<(event: ProgressInfo) => void>,
-    progress: { percent: number; totalBytes: number; transferredBytes: number },
+    loaded: number,
+    total: number,
   ): void {
     const event = {
-      loaded: progress.transferredBytes,
-      percent: progress.percent,
-      total: progress.totalBytes,
+      loaded,
+      percent: total > 0 ? Math.min(1, loaded / total) : 0,
+      total,
     };
     for (const listener of listeners) {
       listener(event);
@@ -359,20 +378,28 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
     await invalidateCache(source, this.request);
   }
 
-  private async transformResponse(response: Response): Promise<TData> {
+  private async transformResponse(
+    response: TResponse,
+    responseHeaders: TResponseHeaders,
+  ): Promise<TData> {
     const runtime = getRuntime(this.request);
-    if (this.config.transform !== undefined) {
-      return this.config.transform(response);
+    const transformed =
+      runtime.options.responded?.onSuccess !== undefined
+        ? await runtime.options.responded.onSuccess(response, this as AnyMethod)
+        : await this.defaultTransformResponse(response);
+    if (isFinalData(transformed)) return transformed.value as TData;
+    return this.config.transform === undefined
+      ? (transformed as TData)
+      : this.config.transform(transformed as TTransformed, responseHeaders);
+  }
+
+  private async defaultTransformResponse(
+    response: TResponse,
+  ): Promise<unknown> {
+    if (typeof Response === 'undefined' || !(response instanceof Response)) {
+      return response;
     }
-    if (runtime.options.responded?.onSuccess !== undefined) {
-      return (await runtime.options.responded.onSuccess(
-        response,
-        this as Method<unknown>,
-      )) as TData;
-    }
-    if (response.status === 204 || this.type === 'HEAD') {
-      return undefined as TData;
-    }
+    if (response.status === 204 || this.type === 'HEAD') return undefined;
     switch (this.config.responseType ?? 'json') {
       case 'arrayBuffer':
         return (await response.arrayBuffer()) as TData;
@@ -386,22 +413,6 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
         return (await response.json()) as TData;
     }
   }
-}
-
-function createBodyOptions(method: HttpMethod, data: unknown): KyOptions {
-  if (isIdempotent(method) || data === undefined) {
-    return {};
-  }
-  if (
-    typeof data === 'string' ||
-    data instanceof Blob ||
-    data instanceof FormData ||
-    data instanceof URLSearchParams ||
-    data instanceof ArrayBuffer
-  ) {
-    return { body: data as BodyInit };
-  }
-  return { json: data };
 }
 
 function normalizeHeaders(
@@ -422,20 +433,6 @@ function normalizeParams(
           entry[1] !== undefined,
       )
       .sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-function normalizeSearchParams(
-  params?: Record<string, string | number | boolean | null | undefined>,
-): Record<string, string | number | boolean> | undefined {
-  if (params === undefined) {
-    return undefined;
-  }
-  return Object.fromEntries(
-    Object.entries(params).filter(
-      (entry): entry is [string, string | number | boolean] =>
-        entry[1] !== undefined && entry[1] !== null,
-    ),
   );
 }
 
@@ -558,8 +555,22 @@ function resolveUrl(baseUrl: string | undefined, url: string): string {
     .href;
 }
 
-function requestInput(baseUrl: string | undefined, url: string): string {
-  return baseUrl && !/^[a-z][a-z\d+.-]*:/i.test(url)
-    ? url.replace(/^\/+/, '')
-    : url;
+function resolveRequestUrl(
+  baseUrl: string | undefined,
+  url: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+): string {
+  const resolved = resolveUrl(baseUrl, url);
+  const entries = Object.entries(params ?? {}).filter(
+    (entry): entry is [string, string | number | boolean] =>
+      entry[1] !== undefined && entry[1] !== null,
+  );
+  if (entries.length === 0) return resolved;
+  const hashIndex = resolved.indexOf('#');
+  const hash = hashIndex >= 0 ? resolved.slice(hashIndex) : '';
+  const withoutHash = hashIndex >= 0 ? resolved.slice(0, hashIndex) : resolved;
+  const search = new URLSearchParams();
+  for (const [name, value] of entries) search.append(name, String(value));
+  const separator = withoutHash.includes('?') ? '&' : '?';
+  return `${withoutHash}${separator}${search}${hash}`;
 }

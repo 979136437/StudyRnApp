@@ -1,6 +1,7 @@
 import { RequestError } from '../client/error';
-import type { Method } from '../client/Method';
+import { finalData } from '../client/finalData';
 import type {
+  AnyMethod,
   CreateRequestOptions,
   MaybePromise,
   RespondedHandlers,
@@ -9,68 +10,71 @@ import type {
 export type AuthRole = 'login' | 'logout' | 'refreshToken';
 
 export type TokenAuthenticationOptions = {
-  assignToken(method: Method<unknown>): MaybePromise<void>;
-  isVisitor?: (method: Method<unknown>) => boolean;
-  login?: (data: unknown, method: Method<unknown>) => MaybePromise<void>;
-  logout?: (data: unknown, method: Method<unknown>) => MaybePromise<void>;
-  matchRole?: (method: Method<unknown>, role: AuthRole) => boolean;
-  refreshToken(method: Method<unknown>): MaybePromise<void>;
+  assignToken(method: AnyMethod): MaybePromise<void>;
+  isVisitor?: (method: AnyMethod) => boolean;
+  login?: (data: unknown, method: AnyMethod) => MaybePromise<void>;
+  logout?: (data: unknown, method: AnyMethod) => MaybePromise<void>;
+  matchRole?: (method: AnyMethod, role: AuthRole) => boolean;
+  refreshToken(method: AnyMethod): MaybePromise<void>;
 };
 
 export type ClientTokenAuthenticationOptions = TokenAuthenticationOptions & {
-  isTokenExpired(method: Method<unknown>): MaybePromise<boolean>;
+  isTokenExpired(method: AnyMethod): MaybePromise<boolean>;
 };
 
-export type ServerTokenAuthenticationOptions = TokenAuthenticationOptions & {
-  isResponseExpired(
-    response: Response | RequestError,
-    method: Method<unknown>,
-  ): MaybePromise<boolean>;
-};
+export type ServerTokenAuthenticationOptions<TResponse = Response> =
+  TokenAuthenticationOptions & {
+    isResponseExpired(
+      response: TResponse | RequestError,
+      method: AnyMethod,
+    ): MaybePromise<boolean>;
+  };
 
-export type TokenAuthentication = {
+export type TokenAuthentication<TResponse = Response> = {
   onAuthRequired(
-    previous?: CreateRequestOptions['beforeRequest'],
-  ): NonNullable<CreateRequestOptions['beforeRequest']>;
-  onResponseRefreshToken(previous?: RespondedHandlers): RespondedHandlers;
+    previous?: CreateRequestOptions<any, any, any>['beforeRequest'],
+  ): NonNullable<CreateRequestOptions<any, any, any>['beforeRequest']>;
+  onResponseRefreshToken<TTransformed = unknown>(
+    previous?: RespondedHandlers<TResponse, TTransformed>,
+  ): RespondedHandlers<TResponse, TTransformed>;
 };
 
-export function createClientTokenAuthentication(
+export function createClientTokenAuthentication<TResponse = Response>(
   options: ClientTokenAuthenticationOptions,
-): TokenAuthentication {
-  return createAuthentication(
+): TokenAuthentication<TResponse> {
+  return createAuthentication<TResponse>(
     options,
     (method) => options.isTokenExpired(method),
     async () => false,
   );
 }
 
-export function createServerTokenAuthentication(
-  options: ServerTokenAuthenticationOptions,
-): TokenAuthentication {
-  return createAuthentication(
+export function createServerTokenAuthentication<TResponse = Response>(
+  options: ServerTokenAuthenticationOptions<TResponse>,
+): TokenAuthentication<TResponse> {
+  return createAuthentication<TResponse>(
     options,
     async () => false,
     options.isResponseExpired,
   );
 }
 
-function createAuthentication(
+function createAuthentication<TResponse = Response>(
   options: TokenAuthenticationOptions,
-  isExpiredBeforeRequest: (method: Method<unknown>) => MaybePromise<boolean>,
+  isExpiredBeforeRequest: (method: AnyMethod) => MaybePromise<boolean>,
   isExpired: (
-    value: Response | RequestError,
-    method: Method<unknown>,
+    value: TResponse | RequestError,
+    method: AnyMethod,
   ) => MaybePromise<boolean>,
-): TokenAuthentication {
+): TokenAuthentication<TResponse> {
   let refreshing: Promise<void> | undefined;
-  const replaying = new WeakSet<Method<unknown>>();
-  const roleOf = (method: Method<unknown>, role: AuthRole) =>
+  const replaying = new WeakSet<AnyMethod>();
+  const roleOf = (method: AnyMethod, role: AuthRole) =>
     options.matchRole?.(method, role) ?? method.meta.authRole === role;
-  const isVisitor = (method: Method<unknown>) =>
+  const isVisitor = (method: AnyMethod) =>
     options.isVisitor?.(method) ??
     method.meta.ignoreTokenAuthentication === true;
-  const refresh = async (method: Method<unknown>) => {
+  const refresh = async (method: AnyMethod) => {
     refreshing ??= Promise.resolve(options.refreshToken(method))
       .catch((error) => {
         throw new RequestError('Token refresh failed', {
@@ -86,7 +90,7 @@ function createAuthentication(
       });
     return refreshing;
   };
-  const replay = async (method: Method<unknown>) => {
+  const replay = async (method: AnyMethod) => {
     if (replaying.has(method)) {
       throw new RequestError('Token refresh replay limit exceeded', {
         cause: undefined,
@@ -105,27 +109,21 @@ function createAuthentication(
   };
 
   return {
-    onAuthRequired: (previous) => async (request, method) => {
-      let nextRequest =
-        previous === undefined ? request : await previous(request, method);
+    onAuthRequired: (previous) => async (method) => {
+      await previous?.(method);
       if (
         isVisitor(method) ||
         roleOf(method, 'login') ||
         roleOf(method, 'refreshToken')
       ) {
-        return nextRequest;
+        return;
       }
       if (await isExpiredBeforeRequest(method)) await refresh(method);
-      const mergedHeaders = new Headers(nextRequest.headers);
-      for (const [name, value] of method.headers)
-        mergedHeaders.set(name, value);
-      for (const [name, value] of mergedHeaders)
-        method.headers.set(name, value);
       await options.assignToken(method);
-      nextRequest = new Request(nextRequest, { headers: method.headers });
-      return nextRequest;
     },
-    onResponseRefreshToken: (previous = {}) => ({
+    onResponseRefreshToken: <TTransformed = unknown>(
+      previous: RespondedHandlers<TResponse, TTransformed> = {},
+    ) => ({
       onComplete: async (method, result) => {
         await previous.onComplete?.(method, result);
       },
@@ -153,7 +151,7 @@ function createAuthentication(
           !replaying.has(method) &&
           (await isExpired(response, method))
         ) {
-          return replay(method);
+          return finalData(await replay(method)) as unknown as TTransformed;
         }
         const data =
           previous.onSuccess === undefined
@@ -161,16 +159,19 @@ function createAuthentication(
             : await previous.onSuccess(response, method);
         if (roleOf(method, 'login')) await options.login?.(data, method);
         if (roleOf(method, 'logout')) await options.logout?.(data, method);
-        return data;
+        return data as TTransformed;
       },
     }),
   };
 }
 
 async function parseResponse(
-  response: Response,
+  response: unknown,
   isHead: boolean,
 ): Promise<unknown> {
+  if (typeof Response === 'undefined' || !(response instanceof Response)) {
+    return response;
+  }
   if (response.status === 204 || isHead) return undefined;
   const contentType = response.headers.get('content-type') ?? '';
   return contentType.includes('application/json')
@@ -178,16 +179,16 @@ async function parseResponse(
     : response.text();
 }
 
-export function onAuthRequired(
-  authentication: TokenAuthentication,
-  previous?: CreateRequestOptions['beforeRequest'],
+export function onAuthRequired<TResponse>(
+  authentication: TokenAuthentication<TResponse>,
+  previous?: CreateRequestOptions<any, any, any>['beforeRequest'],
 ) {
   return authentication.onAuthRequired(previous);
 }
 
-export function onResponseRefreshToken(
-  authentication: TokenAuthentication,
-  previous?: RespondedHandlers,
+export function onResponseRefreshToken<TResponse, TTransformed>(
+  authentication: TokenAuthentication<TResponse>,
+  previous?: RespondedHandlers<TResponse, TTransformed>,
 ) {
   return authentication.onResponseRefreshToken(previous);
 }

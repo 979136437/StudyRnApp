@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { invalidateCache, queryCache, setCache } from '../cache/operations';
 import { createRequest } from '../client/createRequest';
-import { isRequestCancelled } from '../client/error';
+import { isRequestCancelled, RequestError } from '../client/error';
 import { getRuntime } from '../client/runtime';
 
 afterEach(() => {
@@ -20,10 +20,8 @@ describe('createRequest', () => {
     vi.stubGlobal('fetch', fetchMock);
     const request = createRequest({
       baseUrl: 'https://api.example.com',
-      beforeRequest: async (original) => {
-        const headers = new Headers(original.headers);
-        headers.set('Authorization', 'Bearer token');
-        return new Request(original, { headers });
+      beforeRequest: async (method) => {
+        method.headers.set('Authorization', 'Bearer token');
       },
       responded: {
         onSuccess: async (response) =>
@@ -167,5 +165,135 @@ describe('createRequest', () => {
     const pending = method.send(true);
     method.abort();
     await expect(pending).rejects.toSatisfy(isRequestCancelled);
+  });
+
+  it('supports generic adapters and runs responded before transform', async () => {
+    const order: string[] = [];
+    const request = createRequest({
+      baseUrl: 'https://api.example.com/v1',
+      beforeRequest: (method) => {
+        order.push('beforeRequest');
+        method.headers.set('Authorization', 'Bearer token');
+      },
+      headers: { Accept: 'application/json' },
+      requestAdapter: (elements) => {
+        order.push('adapter');
+        expect(elements.url).toBe('https://api.example.com/v1/items?page=2');
+        expect(elements.headers.get('accept')).toBe('application/json');
+        expect(elements.headers.get('authorization')).toBe('Bearer token');
+        return {
+          abort: vi.fn(),
+          headers: async () => {
+            order.push('headers');
+            return { requestId: 'request-1' };
+          },
+          response: async () => {
+            order.push('response');
+            return { payload: { value: 2 } };
+          },
+        };
+      },
+      responded: {
+        onSuccess: (response) => {
+          order.push('responded');
+          return response.payload;
+        },
+      },
+    });
+
+    await expect(
+      request.Get<{ value: number }>('items', {
+        params: { page: 2 },
+        transform: (data, headers) => {
+          order.push('transform');
+          expect(headers.requestId).toBe('request-1');
+          return { value: data.value + 1 };
+        },
+      }),
+    ).resolves.toEqual({ value: 3 });
+    expect(order).toEqual([
+      'beforeRequest',
+      'adapter',
+      'response',
+      'headers',
+      'responded',
+      'transform',
+    ]);
+  });
+
+  it('returns a custom adapter response directly without handlers', async () => {
+    const rawResponse = { records: [1, 2, 3] };
+    const request = createRequest({
+      requestAdapter: () => ({
+        abort: vi.fn(),
+        headers: async () => ({ source: 'native' }),
+        response: async () => rawResponse,
+      }),
+    });
+
+    await expect(
+      request.Get<typeof rawResponse>('native://records'),
+    ).resolves.toBe(rawResponse);
+  });
+
+  it('forwards progress and aborts custom adapter requests', async () => {
+    let updateDownload: ((loaded: number, total: number) => void) | undefined;
+    let rejectResponse: ((error: unknown) => void) | undefined;
+    const abort = vi.fn(() => {
+      rejectResponse?.(new DOMException('Aborted', 'AbortError'));
+    });
+    const request = createRequest({
+      requestAdapter: () => ({
+        abort,
+        headers: async () => ({ source: 'native' }),
+        onDownload: (handler) => {
+          updateDownload = handler;
+        },
+        response: () =>
+          new Promise((_resolve, reject) => {
+            rejectResponse = reject;
+          }),
+      }),
+    });
+    const method = request.Get('native://slow', { cacheFor: null });
+    const progress = vi.fn();
+    method.onDownload(progress);
+    const pending = method.send(true);
+    await vi.waitFor(() => expect(updateDownload).toBeTypeOf('function'));
+    updateDownload?.(5, 0);
+    expect(progress).toHaveBeenCalledWith({ loaded: 5, percent: 0, total: 0 });
+    method.abort();
+    await expect(pending).rejects.toSatisfy(isRequestCancelled);
+    expect(abort).toHaveBeenCalledOnce();
+    await vi.waitFor(() =>
+      expect(getRuntime(request).activeRequests.size).toBe(0),
+    );
+  });
+
+  it('retries status-aware errors thrown by a custom adapter', async () => {
+    let attempts = 0;
+    const request = createRequest({
+      requestAdapter: () => ({
+        abort: vi.fn(),
+        headers: async () => ({ source: 'native' }),
+        response: async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new RequestError('Unavailable', {
+              cause: undefined,
+              code: 'UNAVAILABLE',
+              status: 503,
+            });
+          }
+          return { ok: true };
+        },
+      }),
+      retry: { delay: 0, limit: 1 },
+    });
+
+    await expect(
+      request.Get<{ ok: boolean }>('native://retry').send(true),
+    ).resolves.toEqual({ ok: true });
+    expect(attempts).toBe(2);
   });
 });

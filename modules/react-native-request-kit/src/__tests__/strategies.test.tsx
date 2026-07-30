@@ -100,6 +100,47 @@ describe('request strategies', () => {
     expect(refreshToken).toHaveBeenCalledOnce();
   });
 
+  it('transforms a successful token replay only once', async () => {
+    let token = 'old';
+    const transform = vi.fn((data: { value: number }) => ({
+      value: data.value + 1,
+    }));
+    const authentication = createServerTokenAuthentication({
+      assignToken: (method) => {
+        method.headers.set('Authorization', `Bearer ${token}`);
+      },
+      isResponseExpired: async (response) =>
+        response instanceof Response &&
+        ((await response.clone().json()) as { code?: string }).code ===
+          'expired',
+      refreshToken: () => {
+        token = 'new';
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (request: Request) =>
+        request.headers.get('authorization') === 'Bearer new'
+          ? Response.json({ value: 1 })
+          : Response.json({ code: 'expired' }),
+      ),
+    );
+    const request = createRequest({
+      beforeRequest: authentication.onAuthRequired(),
+      responded: authentication.onResponseRefreshToken({
+        onSuccess: async (response) =>
+          (await response.json()) as { value: number },
+      }),
+    });
+
+    await expect(
+      request.Get<{ value: number }>('https://api.test/protected', {
+        transform,
+      }),
+    ).resolves.toEqual({ value: 2 });
+    expect(transform).toHaveBeenCalledOnce();
+  });
+
   it('counts down only after a successful captcha request', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(

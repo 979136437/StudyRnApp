@@ -1,4 +1,5 @@
 export { createRequest } from './client/createRequest';
+export { createKyRequestAdapter } from './adapter/ky';
 export { Method } from './client/Method';
 export { RequestProvider } from './react/RequestProvider';
 export { useFetcher, useRequest, useWatcher } from './react/hooks';
@@ -21,12 +22,21 @@ export {
 } from './cache/operations';
 export { createAsyncStoragePersister } from './cache/persister';
 export { RequestError } from './client/error';
+export type { RequestErrorOptions } from './client/error';
 export {
   isRequestCancelled,
   isRetryableRequestError,
   normalizeRequestError,
 } from './client/error';
+export type { KyRequestAdapterOptions } from './adapter/ky';
 export type {
+  ProgressUpdater,
+  RequestAdapter,
+  RequestAdapterControls,
+  RequestElements,
+} from './adapter/types';
+export type {
+  AnyMethod,
   CacheFor,
   CacheForConfig,
   CacheMode,

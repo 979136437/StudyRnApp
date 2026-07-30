@@ -19,11 +19,9 @@ export const request = createRequest({
   headers: {
     Accept: 'application/json',
   },
-  beforeRequest: async (original) => {
-    const headers = new Headers(original.headers);
+  beforeRequest: async (method) => {
     const token = await readTokenFromSecureStorage();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return new Request(original, { headers });
+    if (token) method.headers.set('Authorization', `Bearer ${token}`);
   },
   responded: {
     onSuccess: async (response) => response.json(),
@@ -41,6 +39,69 @@ export function AppProviders({ children }: React.PropsWithChildren) {
 
 Omit `StoragePersister` to keep all cached data in memory. AsyncStorage is
 unencrypted; never persist tokens, credentials, or other secrets.
+
+Ky is the default transport. It can also be configured explicitly:
+
+```ts
+import {
+  createKyRequestAdapter,
+  createRequest,
+} from 'react-native-request-kit';
+
+const request = createRequest({
+  requestAdapter: createKyRequestAdapter({ credentials: 'include' }),
+});
+```
+
+## Custom request adapters
+
+Adapters follow the alova transport contract and may return non-Fetch response
+and response-header types:
+
+```ts
+type NativeResponse = { body: { value: number }; status: number };
+type NativeHeaders = { requestId: string };
+
+const request = createRequest({
+  requestAdapter: (elements, method) => {
+    const task = nativeTransport.start(elements);
+    return {
+      response: () => task.response as Promise<NativeResponse>,
+      headers: () => task.headers as Promise<NativeHeaders>,
+      abort: () => task.abort(),
+      onDownload: (update) => task.onDownload(update),
+      onUpload: (update) => task.onUpload(update),
+    };
+  },
+  responded: {
+    onSuccess: (response) => response.body,
+  },
+});
+
+const method = request.Get<{ value: number }>('native://value', {
+  transform: (data, headers) => ({
+    value: data.value,
+    requestId: headers.requestId,
+  }),
+});
+```
+
+The request pipeline is `beforeRequest(method)` → adapter → `responded` →
+Method `transform`. An adapter must return lazy `response` and `headers`
+functions plus an idempotent `abort`. Progress callbacks receive
+`(loaded, total)`. Throw `RequestError` from custom transports when retry logic
+needs an HTTP-like status; other errors become `UNKNOWN_ERROR`.
+
+When no custom adapter is supplied, ky responses still honor `responseType`
+and default to JSON. A custom adapter without `responded.onSuccess` returns its
+raw response as the transform input.
+
+### Migrating from 0.4
+
+- Replace `beforeRequest(request, method)` with `beforeRequest(method)` and
+  update `method.headers` directly.
+- Method `transform` now receives the result of `responded.onSuccess` and the
+  adapter response headers, rather than bypassing the global response handler.
 
 ## Create and send methods
 

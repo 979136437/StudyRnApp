@@ -1,7 +1,10 @@
 import type { Persister } from '@tanstack/react-query-persist-client';
 
+import type { RequestAdapter } from './adapter/types';
 import type { RequestError } from './client/error';
 import type { Method } from './client/Method';
+
+export type AnyMethod<TData = unknown> = Method<TData, any, any, any>;
 
 export type MaybePromise<T> = Promise<T> | T;
 export type HttpMethod =
@@ -45,54 +48,60 @@ export type MethodMatcher =
   | RegExp
   | {
       filter?: (
-        method: Method<unknown>,
+        method: AnyMethod,
         index: number,
-        methods: readonly Method<unknown>[],
+        methods: readonly AnyMethod[],
       ) => boolean;
       name?: string | RegExp;
     };
 
-export type MethodConfig<TData = unknown> = {
+export type MethodConfig<
+  TData = unknown,
+  TTransformed = unknown,
+  TResponseHeaders = unknown,
+> = {
   cacheFor?: CacheFor;
   headers?: HeadersInit;
-  hitSource?: Method<unknown> | readonly Method<unknown>[] | MethodMatcher;
+  hitSource?: AnyMethod | readonly AnyMethod[] | MethodMatcher;
   meta?: Record<string, unknown>;
   name?: string;
   params?: Record<string, string | number | boolean | null | undefined>;
   responseType?: ResponseType;
   retry?: number | RetryConfig | false;
   timeout?: number;
-  transform?: (response: Response) => MaybePromise<TData>;
+  transform?: (
+    data: TTransformed,
+    headers: TResponseHeaders,
+  ) => MaybePromise<TData>;
 };
 
-export type RespondedHandlers = {
+export type RespondedHandlers<TResponse = Response, TTransformed = unknown> = {
   onComplete?: (
-    method: Method<unknown>,
+    method: AnyMethod,
     result: {
       data?: unknown;
       error?: RequestError;
       status: 'success' | 'error';
     },
   ) => MaybePromise<void>;
-  onError?: (
-    error: RequestError,
-    method: Method<unknown>,
-  ) => MaybePromise<unknown>;
+  onError?: (error: RequestError, method: AnyMethod) => MaybePromise<unknown>;
   onSuccess?: (
-    response: Response,
-    method: Method<unknown>,
-  ) => MaybePromise<unknown>;
+    response: TResponse,
+    method: AnyMethod,
+  ) => MaybePromise<TTransformed>;
 };
 
-export type CreateRequestOptions = {
+export type CreateRequestOptions<
+  TResponse = Response,
+  TResponseHeaders = Headers,
+  TTransformed = unknown,
+> = {
   baseUrl?: string;
-  beforeRequest?: (
-    request: Request,
-    method: Method<unknown>,
-  ) => MaybePromise<Request>;
+  beforeRequest?: (method: AnyMethod) => MaybePromise<void>;
   cacheFor?: CacheFor | Partial<Record<HttpMethod, CacheFor>>;
   headers?: Record<string, string>;
-  responded?: RespondedHandlers;
+  requestAdapter?: RequestAdapter<TResponse, TResponseHeaders>;
+  responded?: RespondedHandlers<TResponse, TTransformed>;
   retry?: number | RetryConfig | false;
   shareRequest?: boolean;
   StoragePersister?: StoragePersister;
@@ -100,49 +109,53 @@ export type CreateRequestOptions = {
 };
 
 export type SnapshotCollection = {
-  match(matcher: MethodMatcher, exact?: false): readonly Method<unknown>[];
-  match(matcher: MethodMatcher, exact: true): Method<unknown> | undefined;
+  match(matcher: MethodMatcher, exact?: false): readonly AnyMethod[];
+  match(matcher: MethodMatcher, exact: true): AnyMethod | undefined;
 };
 
-export type RequestInstance = {
+export type RequestInstance<
+  TResponse = Response,
+  TResponseHeaders = Headers,
+  TTransformed = unknown,
+> = {
   Delete<TData = unknown, TBody = unknown>(
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Get<TData = unknown>(
     url: string,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Head<TData = unknown>(
     url: string,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Options<TData = unknown>(
     url: string,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Patch<TData = unknown, TBody = unknown>(
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Post<TData = unknown, TBody = unknown>(
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Put<TData = unknown, TBody = unknown>(
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   Request<TData = unknown, TBody = unknown>(
     method: HttpMethod,
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
-  ): Method<TData>;
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+  ): Method<TData, TResponse, TResponseHeaders, TTransformed>;
   clear(): Promise<void>;
   destroy(): void;
   snapshots: SnapshotCollection;
@@ -152,20 +165,20 @@ export type StoragePersister = Persister;
 
 export type RequestProviderProps = {
   children: React.ReactNode;
-  request: RequestInstance;
+  request: RequestInstance<any, any, any>;
 };
 
 export type HookEvent<TData> = {
   args: readonly unknown[];
   data: TData;
   fromCache: boolean;
-  method: Method<TData>;
+  method: AnyMethod<TData>;
 };
 
 export type HookErrorEvent<TData> = {
   args: readonly unknown[];
   error: RequestError;
-  method: Method<TData>;
+  method: AnyMethod<TData>;
 };
 
 export type HookCompleteEvent<TData> = {
@@ -173,14 +186,14 @@ export type HookCompleteEvent<TData> = {
   data?: TData;
   error?: RequestError;
   fromCache?: boolean;
-  method: Method<TData>;
+  method: AnyMethod<TData>;
   status: 'success' | 'error';
 };
 
 export type HookMiddlewareContext<TData> = {
   abort: () => void;
   args: readonly unknown[];
-  method: Method<TData>;
+  method: AnyMethod<TData>;
   send: () => Promise<TData>;
 };
 
@@ -230,7 +243,7 @@ export type UseRequestResult<TData> = {
 };
 
 export type UseFetcherResult<TData> = Omit<UseRequestResult<TData>, 'send'> & {
-  fetch: (method: Method<TData>, force?: boolean) => Promise<TData>;
+  fetch: (method: AnyMethod<TData>, force?: boolean) => Promise<TData>;
 };
 
 export type PaginationActions<TRow> = {

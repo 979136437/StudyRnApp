@@ -1,13 +1,13 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import type { PersistQueryClientProviderProps } from '@tanstack/react-query-persist-client';
-import type { KyInstance } from 'ky';
 
+import type { RequestAdapter } from '../adapter/types';
 import type {
+  AnyMethod,
   CreateRequestOptions,
   ProgressInfo,
   RequestInstance,
 } from '../types';
-import type { Method } from './Method';
 
 export const EMPTY_PROGRESS: ProgressInfo = {
   loaded: 0,
@@ -16,26 +16,26 @@ export const EMPTY_PROGRESS: ProgressInfo = {
 };
 
 export type Runtime = {
-  client: KyInstance;
-  controllers: Map<string, Set<AbortController>>;
+  activeRequests: Map<string, Set<{ abort: () => void }>>;
   destroyed: boolean;
-  options: CreateRequestOptions;
+  options: CreateRequestOptions<any, any, any>;
   persistOptions?: PersistQueryClientProviderProps['persistOptions'];
   queryClient: QueryClient;
-  snapshots: Method<unknown>[];
+  requestAdapter: RequestAdapter<any, any>;
+  snapshots: AnyMethod[];
   stateUpdaters: Map<string, Set<(states: Record<string, unknown>) => void>>;
 };
 
-const runtimes = new WeakMap<RequestInstance, Runtime>();
+const runtimes = new WeakMap<RequestInstance<any, any, any>, Runtime>();
 
 export function attachRuntime(
-  request: RequestInstance,
+  request: RequestInstance<any, any, any>,
   runtime: Runtime,
 ): void {
   runtimes.set(request, runtime);
 }
 
-export function getRuntime(request: RequestInstance): Runtime {
+export function getRuntime(request: RequestInstance<any, any, any>): Runtime {
   const runtime = runtimes.get(request);
   if (runtime === undefined || runtime.destroyed) {
     throw new Error('The request instance has been destroyed');

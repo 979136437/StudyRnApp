@@ -2,9 +2,11 @@ import {
   defaultShouldDehydrateQuery,
   QueryClient,
 } from '@tanstack/react-query';
-import ky, { type Options as KyOptions } from 'ky';
 
+import { createKyRequestAdapter } from '../adapter/ky';
+import type { RequestAdapter } from '../adapter/types';
 import type {
+  AnyMethod,
   CreateRequestOptions,
   HttpMethod,
   MethodConfig,
@@ -18,28 +20,32 @@ import { attachRuntime, getRuntime, type Runtime } from './runtime';
 const MAX_SNAPSHOTS = 1000;
 const DEFAULT_MAX_AGE = 24 * 60 * 60 * 1000;
 
-export function createRequest(
-  options: CreateRequestOptions = {},
-): RequestInstance {
-  let request: RequestInstance;
+export function createRequest<TTransformed = unknown>(
+  options?: CreateRequestOptions<Response, Headers, TTransformed> & {
+    requestAdapter?: undefined;
+  },
+): RequestInstance<Response, Headers, TTransformed>;
+export function createRequest<
+  TResponse,
+  TResponseHeaders,
+  TTransformed = TResponse,
+>(
+  options: CreateRequestOptions<TResponse, TResponseHeaders, TTransformed> & {
+    requestAdapter: RequestAdapter<TResponse, TResponseHeaders>;
+  },
+): RequestInstance<TResponse, TResponseHeaders, TTransformed>;
+export function createRequest<TResponse, TResponseHeaders, TTransformed>(
+  options: CreateRequestOptions<TResponse, TResponseHeaders, TTransformed> = {},
+): RequestInstance<TResponse, TResponseHeaders, TTransformed> {
+  let request: RequestInstance<TResponse, TResponseHeaders, TTransformed>;
   const queryClient = new QueryClient({
     defaultOptions: {
       mutations: { retry: false },
       queries: { gcTime: DEFAULT_MAX_AGE, retry: false },
     },
   });
-  const clientOptions: KyOptions = {
-    headers: options.headers,
-    retry: 0,
-    timeout: options.timeout ?? 15_000,
-  };
-
-  if (options.baseUrl) {
-    clientOptions.baseUrl = `${options.baseUrl.replace(/\/+$/, '')}/`;
-  }
   const runtime: Runtime = {
-    client: ky.create(clientOptions),
-    controllers: new Map(),
+    activeRequests: new Map(),
     destroyed: false,
     options,
     persistOptions:
@@ -58,6 +64,8 @@ export function createRequest(
             persister: options.StoragePersister,
           },
     queryClient,
+    requestAdapter: (options.requestAdapter ??
+      createKyRequestAdapter()) as RequestAdapter<any, any>,
     snapshots: [],
     stateUpdaters: new Map(),
   };
@@ -66,10 +74,16 @@ export function createRequest(
     type: HttpMethod,
     url: string,
     data?: TBody,
-    config?: MethodConfig<TData>,
+    config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
   ) => {
-    const method = new Method<TData>(request, type, url, data, config);
-    runtime.snapshots.push(method as Method<unknown>);
+    const method = new Method<TData, TResponse, TResponseHeaders, TTransformed>(
+      request,
+      type,
+      url,
+      data,
+      config,
+    );
+    runtime.snapshots.push(method as AnyMethod);
     if (runtime.snapshots.length > MAX_SNAPSHOTS) {
       runtime.snapshots.shift();
     }
@@ -87,34 +101,40 @@ export function createRequest(
     Delete: <TData, TBody>(
       url: string,
       data?: TBody,
-      config?: MethodConfig<TData>,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
     ) => createMethod('DELETE', url, data, config),
-    Get: <TData>(url: string, config?: MethodConfig<TData>) =>
-      createMethod('GET', url, undefined, config),
-    Head: <TData>(url: string, config?: MethodConfig<TData>) =>
-      createMethod('HEAD', url, undefined, config),
-    Options: <TData>(url: string, config?: MethodConfig<TData>) =>
-      createMethod('OPTIONS', url, undefined, config),
+    Get: <TData>(
+      url: string,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+    ) => createMethod('GET', url, undefined, config),
+    Head: <TData>(
+      url: string,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+    ) => createMethod('HEAD', url, undefined, config),
+    Options: <TData>(
+      url: string,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
+    ) => createMethod('OPTIONS', url, undefined, config),
     Patch: <TData, TBody>(
       url: string,
       data?: TBody,
-      config?: MethodConfig<TData>,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
     ) => createMethod('PATCH', url, data, config),
     Post: <TData, TBody>(
       url: string,
       data?: TBody,
-      config?: MethodConfig<TData>,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
     ) => createMethod('POST', url, data, config),
     Put: <TData, TBody>(
       url: string,
       data?: TBody,
-      config?: MethodConfig<TData>,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
     ) => createMethod('PUT', url, data, config),
     Request: <TData, TBody>(
       type: HttpMethod,
       url: string,
       data?: TBody,
-      config?: MethodConfig<TData>,
+      config?: MethodConfig<TData, TTransformed, TResponseHeaders>,
     ) => createMethod(type, url, data, config),
     clear: async () => {
       queryClient.clear();
@@ -122,12 +142,12 @@ export function createRequest(
     },
     destroy: () => {
       const attached = getRuntime(request);
-      for (const controllers of attached.controllers.values()) {
-        for (const controller of controllers) {
-          controller.abort();
+      for (const activeRequests of attached.activeRequests.values()) {
+        for (const activeRequest of activeRequests) {
+          activeRequest.abort();
         }
       }
-      attached.controllers.clear();
+      attached.activeRequests.clear();
       attached.queryClient.clear();
       attached.snapshots.length = 0;
       attached.stateUpdaters.clear();
@@ -141,10 +161,10 @@ export function createRequest(
 }
 
 function matchSnapshots(
-  snapshots: readonly Method<unknown>[],
+  snapshots: readonly AnyMethod[],
   matcher: MethodMatcher,
-): Method<unknown>[] {
-  const matchName = (method: Method<unknown>, name: string | RegExp) =>
+): AnyMethod[] {
+  const matchName = (method: AnyMethod, name: string | RegExp) =>
     typeof name === 'string'
       ? method.name === name
       : method.name !== undefined && name.test(method.name);
