@@ -4,6 +4,7 @@ type RequestErrorOptions = {
   cause: unknown;
   code: string;
   responseBody?: unknown;
+  response?: Response;
   status: number;
 };
 
@@ -11,6 +12,7 @@ export class RequestError extends Error {
   readonly code: string;
   readonly originalError: unknown;
   readonly responseBody?: unknown;
+  readonly response?: Response;
   readonly status: number;
 
   constructor(message: string, options: RequestErrorOptions) {
@@ -19,6 +21,7 @@ export class RequestError extends Error {
     this.code = options.code;
     this.originalError = options.cause;
     this.responseBody = options.responseBody;
+    this.response = options.response;
     this.status = options.status;
   }
 
@@ -38,6 +41,10 @@ export function isRequestCancelled(error: unknown): boolean {
 
 export function isRetryableRequestError(error: unknown): boolean {
   if (!(error instanceof RequestError)) {
+    return false;
+  }
+
+  if (error.code === 'AUTH_REFRESH_FAILED') {
     return false;
   }
 
@@ -65,6 +72,7 @@ export async function normalizeRequestError(
         cause: error,
         code: readErrorCode(responseBody) ?? 'HTTP_ERROR',
         responseBody,
+        response: error.response,
         status: error.response.status,
       },
     );

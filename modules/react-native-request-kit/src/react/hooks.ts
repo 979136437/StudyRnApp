@@ -24,7 +24,7 @@ import type {
   WatcherHookConfig,
 } from '../types';
 
-type MethodHandler<TData> =
+export type MethodHandler<TData> =
   | Method<TData>
   | ((...args: unknown[]) => Method<TData>);
 

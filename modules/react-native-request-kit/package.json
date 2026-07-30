@@ -1,6 +1,6 @@
 {
   "name": "react-native-request-kit",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "An alova-style request and SWR layer for React Native.",
   "main": "src/index.ts",
   "module": "src/index.ts",

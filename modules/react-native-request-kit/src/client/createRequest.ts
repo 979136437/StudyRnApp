@@ -37,15 +37,6 @@ export function createRequest(
   if (options.baseUrl) {
     clientOptions.baseUrl = `${options.baseUrl.replace(/\/+$/, '')}/`;
   }
-  if (options.beforeRequest !== undefined) {
-    clientOptions.hooks = {
-      beforeRequest: [
-        async ({ request: originalRequest }) =>
-          options.beforeRequest?.(originalRequest),
-      ],
-    };
-  }
-
   const runtime: Runtime = {
     client: ky.create(clientOptions),
     controllers: new Map(),

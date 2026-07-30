@@ -66,6 +66,14 @@ export type MethodConfig<TData = unknown> = {
 };
 
 export type RespondedHandlers = {
+  onComplete?: (
+    method: Method<unknown>,
+    result: {
+      data?: unknown;
+      error?: RequestError;
+      status: 'success' | 'error';
+    },
+  ) => MaybePromise<void>;
   onError?: (
     error: RequestError,
     method: Method<unknown>,
@@ -78,7 +86,10 @@ export type RespondedHandlers = {
 
 export type CreateRequestOptions = {
   baseUrl?: string;
-  beforeRequest?: (request: Request) => MaybePromise<Request>;
+  beforeRequest?: (
+    request: Request,
+    method: Method<unknown>,
+  ) => MaybePromise<Request>;
   cacheFor?: CacheFor | Partial<Record<HttpMethod, CacheFor>>;
   headers?: Record<string, string>;
   responded?: RespondedHandlers;

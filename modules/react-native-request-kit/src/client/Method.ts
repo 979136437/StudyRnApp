@@ -33,8 +33,9 @@ type CacheSettings = {
 export class Method<TData = unknown> implements PromiseLike<TData> {
   readonly config: Readonly<MethodConfig<TData>>;
   readonly data: unknown;
+  readonly headers: Headers;
   readonly key: QueryKey;
-  readonly meta: Readonly<Record<string, unknown>>;
+  readonly meta: Record<string, unknown>;
   readonly name?: string;
   readonly request: RequestInstance;
   readonly type: HttpMethod;
@@ -55,7 +56,8 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
     this.url = url;
     this.data = data;
     this.config = Object.freeze({ ...config });
-    this.meta = Object.freeze({ ...config.meta });
+    this.meta = { ...config.meta };
+    this.headers = new Headers(config.headers);
     this.name = config.name;
     this.key = Object.freeze([
       'react-native-request-kit',
@@ -92,8 +94,18 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
     return this;
   }
 
+  offDownload(listener: (event: ProgressInfo) => void): this {
+    this.downloadListeners.delete(listener);
+    return this;
+  }
+
   onUpload(listener: (event: ProgressInfo) => void): this {
     this.uploadListeners.add(listener);
+    return this;
+  }
+
+  offUpload(listener: (event: ProgressInfo) => void): this {
+    this.uploadListeners.delete(listener);
     return this;
   }
 
@@ -174,6 +186,15 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
     return this.executeNetwork(signal);
   }
 
+  /** Execute exactly one network attempt and update this method's cache. */
+  async executeOnce(signal?: AbortSignal): Promise<TData> {
+    const data = await this.executeNetwork(signal);
+    if (this.cacheSettings().enabled) {
+      getRuntime(this.request).queryClient.setQueryData(this.key, data);
+    }
+    return data;
+  }
+
   /** @internal */
   queryOptions(): UseQueryOptions<TData, RequestError, TData, QueryKey> {
     const cache = this.cacheSettings();
@@ -242,12 +263,26 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
       controller.abort();
     }
 
+    let completedData: TData | undefined;
+    let completedError: RequestError | undefined;
     try {
       const response = await runtime.client(
         requestInput(runtime.options.baseUrl, this.url),
         {
           ...createBodyOptions(this.type, this.data),
-          headers: this.config.headers,
+          headers: this.headers,
+          hooks:
+            runtime.options.beforeRequest === undefined
+              ? undefined
+              : {
+                  beforeRequest: [
+                    async ({ request }) =>
+                      runtime.options.beforeRequest!(
+                        request,
+                        this as Method<unknown>,
+                      ),
+                  ],
+                },
           method: this.type,
           onDownloadProgress: (progress) => {
             this.emitProgress(this.downloadListeners, progress);
@@ -262,18 +297,28 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
       );
 
       const data = await this.transformResponse(response);
+      completedData = data;
       await this.invalidateHitSource();
       return data;
     } catch (error) {
       if (isRequestCancelled(error)) {
+        completedError = new RequestError('Request was cancelled', {
+          cause: error,
+          code: 'REQUEST_CANCELLED',
+          status: -1,
+        });
         throw error;
       }
       const normalized = await normalizeRequestError(error);
+      completedError = normalized;
       if (runtime.options.responded?.onError !== undefined) {
-        return (await runtime.options.responded.onError(
+        const data = (await runtime.options.responded.onError(
           normalized,
           this as Method<unknown>,
         )) as TData;
+        completedData = data;
+        completedError = undefined;
+        return data;
       }
       throw normalized;
     } finally {
@@ -282,6 +327,12 @@ export class Method<TData = unknown> implements PromiseLike<TData> {
       if (controllers.size === 0) {
         runtime.controllers.delete(hash);
       }
+      await runtime.options.responded?.onComplete?.(
+        this as Method<unknown>,
+        completedError === undefined
+          ? { data: completedData, status: 'success' }
+          : { error: completedError, status: 'error' },
+      );
     }
   }
 
