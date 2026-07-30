@@ -428,7 +428,7 @@ using namespace facebook::react;
   NSTimeInterval duration = std::isfinite(resultDuration) ? MAX(0, resultDuration) / 1000.0 : 0.8;
   NSUInteger generation = _resultDismissGeneration;
   __weak __typeof(self) weakSelf = self;
-  dispatch_block_t block = dispatch_block_create(0, ^{
+  dispatch_block_t block = dispatch_block_create(static_cast<dispatch_block_flags_t>(0), ^{
     __strong __typeof(weakSelf) self = weakSelf;
     if (self == nil || generation != self->_resultDismissGeneration) {
       return;
