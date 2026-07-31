@@ -8,6 +8,8 @@ type RouteEntry = {
 };
 
 type RouteGroup = {
+  accent: string;
+  accentBackground: string;
   startIndex: number;
   title: string;
   routes: readonly RouteEntry[];
@@ -15,6 +17,8 @@ type RouteGroup = {
 
 const ROUTE_GROUPS = [
   {
+    accent: '#147d64',
+    accentBackground: '#e4f3ed',
     startIndex: 1,
     title: '基础列表',
     routes: [
@@ -27,6 +31,8 @@ const ROUTE_GROUPS = [
     ],
   },
   {
+    accent: '#2563a9',
+    accentBackground: '#e7eff9',
     startIndex: 4,
     title: '数据与回收',
     routes: [
@@ -39,6 +45,8 @@ const ROUTE_GROUPS = [
     ],
   },
   {
+    accent: '#b4532f',
+    accentBackground: '#f8eae4',
     startIndex: 7,
     title: '复杂滚动',
     routes: [
@@ -47,16 +55,28 @@ const ROUTE_GROUPS = [
       { href: '/recycler-list-tests/second-level', label: '下拉二级' },
     ],
   },
+  {
+    accent: '#6c5d99',
+    accentBackground: '#eeeaf7',
+    startIndex: 10,
+    title: '工具',
+    routes: [{ href: '/diagnostics' as Href, label: '诊断中心' }],
+  },
 ] as const satisfies readonly RouteGroup[];
 
 export default function Home(): React.JSX.Element {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>NITRO RECYCLER LIST</Text>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>测试场景</Text>
-          <Text style={styles.count}>09</Text>
+        <View style={styles.headerInner}>
+          <Text style={styles.eyebrow}>测试场景</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Nitro Recycler List</Text>
+            <View style={styles.countBlock}>
+              <Text style={styles.count}>10</Text>
+              <Text style={styles.countLabel}>入口</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -66,7 +86,16 @@ export default function Home(): React.JSX.Element {
       >
         {ROUTE_GROUPS.map((group) => (
           <View key={group.title} style={styles.group}>
-            <Text style={styles.groupTitle}>{group.title}</Text>
+            <View style={styles.groupHeader}>
+              <View
+                style={[
+                  styles.groupIndicator,
+                  { backgroundColor: group.accent },
+                ]}
+              />
+              <Text style={styles.groupTitle}>{group.title}</Text>
+              <Text style={styles.groupCount}>{group.routes.length} 项</Text>
+            </View>
             <View style={styles.routeList}>
               {group.routes.map((route, index) => {
                 const indexLabel = String(group.startIndex + index).padStart(
@@ -79,12 +108,21 @@ export default function Home(): React.JSX.Element {
                     <Pressable
                       accessibilityLabel={`打开${route.label}`}
                       accessibilityRole="button"
-                      style={({ pressed }) => [
-                        styles.route,
-                        pressed && styles.routePressed,
-                      ]}
+                      accessibilityHint="进入对应测试页面"
+                      style={styles.route}
                     >
-                      <Text style={styles.routeIndex}>{indexLabel}</Text>
+                      <View
+                        style={[
+                          styles.routeIndexBlock,
+                          { backgroundColor: group.accentBackground },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.routeIndex, { color: group.accent }]}
+                        >
+                          {indexLabel}
+                        </Text>
+                      </View>
                       <Text style={styles.routeLabel}>{route.label}</Text>
                       <Text accessibilityElementsHidden style={styles.chevron}>
                         ›
@@ -103,58 +141,105 @@ export default function Home(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   chevron: {
-    color: '#7a8881',
-    fontSize: 25,
-    lineHeight: 28,
-    width: 20,
+    color: '#87928d',
+    fontSize: 24,
+    lineHeight: 26,
+    textAlign: 'right',
+    width: 18,
   },
   content: {
-    paddingBottom: 32,
-    paddingHorizontal: 20,
+    alignSelf: 'center',
+    gap: 28,
+    maxWidth: 720,
+    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 26,
+    width: '100%',
   },
   count: {
-    color: '#d56843',
-    fontSize: 13,
+    color: '#18221e',
+    fontSize: 18,
     fontVariant: ['tabular-nums'],
     fontWeight: '900',
   },
-  eyebrow: {
-    color: '#147d64',
+  countBlock: {
+    alignItems: 'flex-end',
+    minWidth: 42,
+  },
+  countLabel: {
+    color: '#7a8881',
     fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0,
+    fontWeight: '700',
   },
-  group: {
-    marginTop: 25,
-  },
-  groupTitle: {
-    color: '#66766e',
+  eyebrow: {
+    color: '#5f6d66',
     fontSize: 11,
     fontWeight: '800',
-    marginBottom: 8,
+    letterSpacing: 0,
+  },
+  group: { gap: 10 },
+  groupCount: {
+    color: '#7a8881',
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
+  groupHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 22,
+    paddingHorizontal: 2,
+  },
+  groupIndicator: {
+    borderRadius: 2,
+    height: 14,
+    marginRight: 8,
+    width: 3,
+  },
+  groupTitle: {
+    color: '#425049',
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '900',
   },
   header: {
-    borderBottomColor: '#d8dfda',
+    backgroundColor: '#ffffff',
+    borderBottomColor: '#dce2de',
     borderBottomWidth: 1,
-    paddingBottom: 20,
+  },
+  headerInner: {
+    alignSelf: 'center',
+    maxWidth: 720,
+    paddingBottom: 22,
     paddingHorizontal: 20,
     paddingTop: 20,
+    width: '100%',
   },
   route: {
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderBottomColor: '#e3e8e4',
-    borderBottomWidth: 1,
+    backgroundColor: '#fff',
+    borderColor: '#dce2de',
+    borderCurve: 'continuous',
+    borderRadius: 7,
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgba(25, 45, 36, 0.04)',
+    columnGap: 12,
     flexDirection: 'row',
-    minHeight: 58,
-    paddingHorizontal: 14,
+    minHeight: 62,
+    paddingHorizontal: 12,
   },
   routeIndex: {
-    color: '#147d64',
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     fontWeight: '900',
-    width: 36,
+  },
+  routeIndexBlock: {
+    alignItems: 'center',
+    borderCurve: 'continuous',
+    borderRadius: 5,
+    height: 34,
+    justifyContent: 'center',
+    width: 38,
   },
   routeLabel: {
     color: '#18221e',
@@ -163,27 +248,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   routeList: {
-    borderColor: '#d8dfda',
-    borderRadius: 6,
-    borderWidth: 1,
-    overflow: 'hidden',
+    gap: 8,
   },
   routePressed: {
-    backgroundColor: '#e8eeea',
+    backgroundColor: '#edf1ef',
+    opacity: 0.78,
   },
   safeArea: {
-    backgroundColor: '#f2f5f2',
+    backgroundColor: '#f4f6f5',
     flex: 1,
   },
   title: {
     color: '#18221e',
-    fontSize: 26,
+    flex: 1,
+    fontSize: 25,
     fontWeight: '900',
   },
   titleRow: {
     alignItems: 'baseline',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
+    columnGap: 16,
+    marginTop: 6,
   },
 });
