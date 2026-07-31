@@ -16,24 +16,36 @@ internal object RecyclerListRegistry {
   @Synchronized
   fun registerList(id: String, list: HybridRecyclerListView) {
     if (id.isEmpty()) return
+    RecyclerTrace.log(list, "registry-register-list", "listId=$id queuedHosts=${hosts[id]?.size ?: 0}")
     lists[id] = WeakReference(list)
     hosts[id]?.values?.forEach { reference -> reference.get()?.let(list::attachHost) }
   }
 
   @Synchronized
   fun unregisterList(id: String, list: HybridRecyclerListView) {
+    RecyclerTrace.log(list, "registry-unregister-list", "listId=$id registered=${lists[id]?.get() === list}")
     if (lists[id]?.get() === list) lists.remove(id)
   }
 
   @Synchronized
   fun registerHost(host: HybridRecyclerCellHostView) {
     if (host.listId.isEmpty() || host.slotId < 0) return
+    RecyclerTrace.log(
+      host,
+      "registry-register-host",
+      "listId=${host.listId} slot=${host.slotId.toInt()} itemKey=${host.itemKey} list=${lists[host.listId]?.get() != null}",
+    )
     hosts.getOrPut(host.listId) { HashMap() }[host.slotId.toInt()] = WeakReference(host)
     lists[host.listId]?.get()?.attachHost(host)
   }
 
   @Synchronized
   fun unregisterHost(host: HybridRecyclerCellHostView) {
+    RecyclerTrace.log(
+      host,
+      "registry-unregister-host",
+      "listId=${host.listId} slot=${host.slotId.toInt()} itemKey=${host.itemKey}",
+    )
     hosts[host.listId]?.remove(host.slotId.toInt())
     lists[host.listId]?.get()?.detachHost(host)
   }

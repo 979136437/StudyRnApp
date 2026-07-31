@@ -139,13 +139,53 @@ function RecyclerListInner<T>(
   const [secondLevelPhase, setSecondLevelPhase] =
     useState<SecondLevelPhase>('idle');
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
-  const handleSlotsChanged = useCallback((nextBindings: SlotBinding[]) => {
-    setBindings((currentBindings) =>
-      areSlotBindingsEqual(currentBindings, nextBindings)
-        ? currentBindings
-        : nextBindings,
-    );
-  }, []);
+  const handleSlotsChanged = useCallback(
+    (nextBindings: SlotBinding[]) => {
+      if (__DEV__) {
+        console.info(
+          'NitroRecyclerTrace JS slots-received',
+          listId,
+          nextBindings
+            .map(
+              (binding) =>
+                `${binding.slotId}:${binding.index}:${binding.itemKey}`,
+            )
+            .join(','),
+        );
+      }
+      setBindings((currentBindings) =>
+        areSlotBindingsEqual(currentBindings, nextBindings)
+          ? currentBindings
+          : nextBindings,
+      );
+    },
+    [listId],
+  );
+
+  useEffect(() => {
+    if (__DEV__) {
+      console.info(
+        'NitroRecyclerTrace JS slots-committed',
+        listId,
+        bindings
+          .map(
+            (binding) =>
+              `${binding.slotId}:${binding.index}:${binding.itemKey}`,
+          )
+          .join(','),
+      );
+    }
+  }, [bindings, listId]);
+
+  useEffect(() => {
+    if (__DEV__) {
+      console.info(
+        'NitroRecyclerTrace JS refresh-prop',
+        listId,
+        `refreshing=${refreshing}`,
+      );
+    }
+  }, [listId, refreshing]);
 
   const itemDescriptors = useMemo(
     () =>
@@ -503,12 +543,24 @@ function RecyclerListInner<T>(
         numColumns={options.numColumns}
         onEndReached={callback(handleEndReached)}
         onRefreshPhaseChanged={callback((nextPhase) => {
+          if (__DEV__) {
+            console.info(
+              'NitroRecyclerTrace JS refresh-phase',
+              listId,
+              nextPhase,
+            );
+          }
           if (phaseRef.current !== nextPhase) {
             phaseRef.current = nextPhase;
             setPhase(nextPhase);
           }
         })}
-        onRefreshRequested={callback(() => onRefresh?.())}
+        onRefreshRequested={callback(() => {
+          if (__DEV__) {
+            console.info('NitroRecyclerTrace JS refresh-requested', listId);
+          }
+          onRefresh?.();
+        })}
         onSecondLevelPhaseChanged={callback(
           (nextPhase: NativeSecondLevelPhase) => {
             if (secondLevelPhaseRef.current !== nextPhase) {

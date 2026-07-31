@@ -64,14 +64,13 @@ describe('React Native 0.86 compatibility', () => {
       'if (dropped || recycling || generation != lifecycleGeneration || hosts[slot] !== host) return@post',
     );
     expect(androidSource).toContain(
-      'if (!view.isManagedChild(host.view)) return',
+      'val managed = view.isManagedChild(host.view)',
     );
+    expect(androidSource).toContain('if (!managed) return');
     expect(androidSource).toContain(
       'if (dropped || !view.isManagedChild(hostView)) return',
     );
-    expect(androidSource).toContain(
-      'if (hostView.parent === holder.container) {',
-    );
+    expect(androidSource).toContain('scheduleHostAttachment(host)');
     expect(iosSource).toContain(
       'DispatchQueue.main.async { [weak self, weak host] in',
     );
@@ -81,19 +80,28 @@ describe('React Native 0.86 compatibility', () => {
     const source = readFileSync(androidRecyclerListSource, 'utf8');
 
     expect(source).toContain(
-      'if (!recycling && generation == lifecycleGeneration) applyMeasuredSize(key, next)',
+      'if (!recycling && generation == lifecycleGeneration) enqueueMeasuredSize(key, next)',
     );
     expect(source).toContain('if (recyclerView.isComputingLayout) {');
     expect(source).toContain(
-      'if (!recycling && generation == lifecycleGeneration) applyMeasuredItemLayout(key)',
+      'if (!recycling && generation == lifecycleGeneration) applyMeasuredItemLayouts(changed)',
     );
+    expect(source).toContain('recyclerView.postOnAnimation');
+    expect(source).toContain('"measurement-batch"');
+    expect(source).toContain('"measured-holder-applied"');
+    expect(source).toContain('recyclerView.requestLayout()');
+    expect(source).toContain('recyclerView.hasPendingAdapterUpdates()');
+    expect(source).toContain('recyclerView.scrollBy(0, 0)');
+    expect(source).toContain('"measurement-layout-flush"');
     expect(source).toContain('updateHolderLayout(holder, descriptor, size)');
     expect(source).toContain(
       'StaggeredGridLayoutManager.LayoutParams(baseParams)',
     );
     expect(source).toContain(
-      'adapter.notifyItemChanged(index, sizeChangedPayload)',
+      'adapter.notifyItemRangeChanged(rangeStart, rangeEnd - rangeStart + 1, sizeChangedPayload)',
     );
+    expect(source).toContain('"measurement-rejected"');
+    expect(source).toContain('crossAxisSize > crossAxisLimit + 2');
     expect(source).toContain(
       'override fun onBindViewHolder(holder: NativeHolder, position: Int, payloads: MutableList<Any>)',
     );
@@ -102,16 +110,17 @@ describe('React Native 0.86 compatibility', () => {
   it('starts Android pull only from a top-positioned gesture and moves the complete host', () => {
     const source = readFileSync(androidRecyclerListSource, 'utf8');
 
-    expect(source).toContain(
-      'pullGestureEligible = !recyclerView.canScrollVertically(-1)',
-    );
+    expect(source).toContain('pullGestureEligible = isAtRefreshTop()');
     expect(source).toContain(
       'pullStartY = if (pullGestureEligible) event.rawY else null',
     );
     expect(source).toContain(
-      'if (!pullGestureEligible) return@setOnTouchListener false',
+      'if (!isAtRefreshTop() || event.rawY <= downY) return@setOnTouchListener false',
     );
     expect(source).toContain('distance <= touchSlop');
+    expect(source).toContain('"refresh-armed-at-top"');
+    expect(source).toContain('cancelRecyclerTouch(event)');
+    expect(source).toContain('consume = true');
     expect(source).toContain('view.translationY = value');
     expect(source).not.toContain('recyclerView.translationY = value');
   });
@@ -227,17 +236,43 @@ describe('React Native 0.86 compatibility', () => {
     expect(iosLayout).toContain('$0.frame.intersects(expandedRect)');
   });
 
-  it('attaches Android hosts as soon as Fabric adds the managed child', () => {
+  it('keeps recycled Android hosts inside their holder bounds', () => {
     const source = readFileSync(androidRecyclerListSource, 'utf8');
+    const cellSource = readFileSync(androidCellSource, 'utf8');
     const managedChildCallback = source.slice(
       source.indexOf('view.onManagedChildAdded = { child ->'),
       source.indexOf('recyclerView.adapter = adapter'),
     );
 
     expect(managedChildCallback).toContain(
-      'hosts.values.firstOrNull { it.view === child }?.let(::attachHostIfMounted)',
+      'val host = hosts.values.firstOrNull { it.view === child }',
     );
-    expect(managedChildCallback).not.toContain('view.post {');
+    expect(managedChildCallback).toContain('host?.let(::attachHostIfMounted)');
+    expect(source).toContain(
+      'RecyclerCellContainer(parent.context, fillChildren = true)',
+    );
+    expect(source).toContain(
+      'FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)',
+    );
+    expect(source).not.toContain('captureHostMeasurement(host)');
+    expect(cellSource).toContain(
+      'child?.addOnLayoutChangeListener(fillChildLayoutListener)',
+    );
+    expect(cellSource).toContain(
+      'if (!fillChildren) {\n      super.onLayout(changed, left, top, right, bottom)',
+    );
+    expect(cellSource).toContain('layoutChildWithinHolder(getChildAt(index))');
+    expect(cellSource).toContain(
+      'preferredHorizontalInsets = leftInset to rightInset',
+    );
+    expect(cellSource).toContain(
+      'val (leftInset, rightInset) = preferredHorizontalInsets ?: (0 to 0)',
+    );
+    expect(cellSource).toContain(
+      'child.layout(nextLeft, 0, nextLeft + nextWidth, nextHeight)',
+    );
+    expect(cellSource).toContain('"holder-child-corrected"');
+    expect(cellSource).not.toContain('override fun layout(');
   });
 
   it('keeps masonry columns stable and activates sticky hosts only after crossing the top', () => {
@@ -249,6 +284,13 @@ describe('React Native 0.86 compatibility', () => {
     );
     expect(androidSource).toContain('private fun replaceActiveStickyBindings');
     expect(androidSource).toContain('hasCrossedTop(it, stackOffset)');
+    expect(androidSource).toContain('if (hostView.parent === view)');
+    expect(androidSource).toContain('val remainingParent = hostView.parent');
+    expect(androidSource).toContain('"sticky-host-attach-deferred"');
+    expect(androidSource).toContain('scheduleStickyLayoutRetry()');
+    expect(androidSource).toContain(
+      'if (generation != lifecycleGeneration) return@postOnAnimation',
+    );
     expect(iosLayout).toContain('private var masonryStarts: [String: Int]');
     expect(iosLayout).toContain('masonryStarts[descriptor.key] = start');
   });
@@ -276,10 +318,47 @@ describe('React Native 0.86 compatibility', () => {
       'else refreshThresholdPx()\n          setPullOffset',
     );
     expect(androidSource).toContain('refreshAnimationTarget?.let');
+    expect(androidSource).toContain('refreshRequestPending = true');
+    expect(androidSource).toContain('else if (refreshRequestPending) {');
+    expect(androidSource).toContain('"refresh-request-timeout"');
     expect(androidSource).toContain('duration = 140');
+    expect(androidSource).toContain('"refresh-release"');
+    expect(androidSource).toContain('"refresh-offset"');
+    expect(androidSource).toContain('"refresh-animation-end"');
+    expect(androidSource).toContain('refreshEnabled=$refreshEnabled');
+    expect(readFileSync(recyclerListSource, 'utf8')).toContain(
+      'NitroRecyclerTrace JS refresh-requested',
+    );
+    expect(readFileSync(recyclerListSource, 'utf8')).toContain(
+      'NitroRecyclerTrace JS refresh-prop',
+    );
     expect(iosSource).toContain(
       'secondLevelEnabled ? secondLevelThreshold * 1.15 : refreshThreshold',
     );
     expect(iosSource).toContain('withDuration: 0.15');
+  });
+
+  it('traces Android fast-scroll state, velocity, and cell window changes', () => {
+    const androidSource = readFileSync(androidRecyclerListSource, 'utf8');
+
+    expect(androidSource).toContain('override fun onScrollStateChanged');
+    expect(androidSource).toContain('traceScrollSample(force = true)');
+    expect(androidSource).toContain('"scroll-sample"');
+    expect(androidSource).toContain('velocityY=');
+    expect(androidSource).toContain('"cell-window-attach"');
+    expect(androidSource).toContain('"cell-window-detach"');
+    expect(androidSource).toContain(
+      'if (signature == previousBindingsSignature) return',
+    );
+    expect(androidSource).toContain(
+      '.mapNotNull { candidates -> candidates.maxByOrNull { it.bindingGeneration } }',
+    );
+    expect(androidSource).toContain('recyclerView.visibility = View.INVISIBLE');
+    expect(androidSource).toContain('"initial-hosts-revealed"');
+    expect(androidSource).toContain('"initial-hosts-waiting"');
+    expect(androidSource).toContain('reason=hard-timeout');
+    expect(androidSource).toContain(
+      'if (layoutSize != expectedSize || holderSize != expectedSize) return',
+    );
   });
 });

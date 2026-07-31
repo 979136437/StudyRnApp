@@ -4,6 +4,7 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -29,6 +30,7 @@ class HybridRecyclerListView(
   private val recyclerView get() = view.recyclerView
   private val adapter = NativeAdapter()
   private val measuredSizes = HashMap<String, Pair<Int, Int>>()
+  private val pendingMeasuredSizes = LinkedHashMap<String, Pair<Int, Int>>()
   private val holders = HashMap<Int, NativeHolder>()
   private val hosts = HashMap<Int, HybridRecyclerCellHostView>()
   private val stickySlots = HashMap<String, Int>()
@@ -42,6 +44,8 @@ class HybridRecyclerListView(
   private var previousTabCoordinatorId = ""
   private var previousTabKey = ""
   private var previousTabActive = false
+  private var previousBindingsSignature: String? = null
+  private var nextBindingGeneration = 1L
   private var downX = 0f
   private var downY = 0f
   private var pullGestureEligible = false
@@ -55,9 +59,21 @@ class HybridRecyclerListView(
   private var recycling = false
   private var lifecycleGeneration = 0
   private var bindingPublishPending = false
+  private var measurementFlushPending = false
+  private var measuredLayoutFlushPending = false
+  private var stickyLayoutRetryPending = false
+  private var awaitingInitialHosts = true
   private val sizeChangedPayload = Any()
+  private var scrollTraceAt = 0L
+  private var scrollTraceDx = 0
+  private var scrollTraceDy = 0
+  private var refreshTraceBucket = -1
+  private var refreshTracePhase: NativeRefreshPhase? = null
+  private var secondLevelTracePhase: NativeSecondLevelPhase? = null
   private var refreshAnimationTarget: Float? = null
   private var refreshAnimator: ValueAnimator? = null
+  private var refreshRequestPending = false
+  private var refreshRequestGeneration = 0
   private val refreshEvents = RecyclerListRefreshEventState()
   private val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop.toFloat()
 
@@ -88,9 +104,15 @@ class HybridRecyclerListView(
   override var onVisibleRangeChanged: (VisibleRange) -> Unit = {}
 
   init {
+    recyclerView.visibility = View.INVISIBLE
     view.onManagedChildAdded = { child ->
+      val host = hosts.values.firstOrNull { it.view === child }
+      trace(
+        "managed-child-added",
+        "child=${RecyclerTrace.objectId(child)} slot=${host?.slotId?.toInt() ?: -1} managed=${view.isManagedChild(child)}",
+      )
       if (!dropped && !recycling) {
-        hosts.values.firstOrNull { it.view === child }?.let(::attachHostIfMounted)
+        host?.let(::attachHostIfMounted)
       }
     }
     recyclerView.adapter = adapter
@@ -98,20 +120,46 @@ class HybridRecyclerListView(
     recyclerView.setHasFixedSize(false)
     recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
       override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+        scrollTraceDx += dx
+        scrollTraceDy += dy
+        traceScrollSample()
         publishVisibleState()
         checkEndReached()
         publishTabScroll()
+      }
+
+      override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+        traceScrollSample(force = true)
+        trace(
+          "scroll-state",
+          "state=${scrollStateName(newState)} offset=${currentOffset()} range=${visibleRange()} ${stateSnapshot()}",
+        )
+      }
+    })
+    recyclerView.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
+      override fun onChildViewAttachedToWindow(child: View) {
+        traceWindowCell("cell-window-attach", child)
+      }
+
+      override fun onChildViewDetachedFromWindow(child: View) {
+        traceWindowCell("cell-window-detach", child)
       }
     })
     installRefreshGesture()
   }
 
   override fun afterUpdate() {
+    trace(
+      "after-update-start",
+      "adapterAttached=${recyclerView.adapter === adapter} descriptors=${descriptors.size} " +
+        "refreshEnabled=$refreshEnabled refreshing=$refreshing secondLevelOpen=$secondLevelOpen",
+    )
     recycling = false
     if (recyclerView.adapter !== adapter) {
       recyclerView.swapAdapter(adapter, false)
     }
     if (previousListId != listId) {
+      previousBindingsSignature = null
       if (previousListId.isNotEmpty()) {
         publishRefresh(
           NativeRefreshPhase.IDLE,
@@ -133,6 +181,9 @@ class HybridRecyclerListView(
       configureLayoutManager()
     }
     if (descriptorVersion != previousDescriptorVersion) {
+      if (previousDescriptorVersion.isEmpty() && descriptors.isNotEmpty()) {
+        awaitInitialHosts()
+      }
       previousDescriptorVersion = descriptorVersion
       endReachedArmed = true
       adapter.notifyDataSetChanged()
@@ -158,6 +209,9 @@ class HybridRecyclerListView(
     ) {
       settleSecondLevel(0f, false)
     } else if (refreshing) {
+      refreshRequestPending = false
+      settleRefresh(refreshThresholdPx())
+    } else if (refreshRequestPending) {
       settleRefresh(refreshThresholdPx())
     } else if (!draggingRefresh) {
       settleRefresh(0f)
@@ -165,6 +219,8 @@ class HybridRecyclerListView(
     val generation = lifecycleGeneration
     recyclerView.post {
       if (recycling || generation != lifecycleGeneration) return@post
+      trace("after-update-post", stateSnapshot())
+      maybeRevealRecyclerView()
       publishVisibleState()
       checkEndReached()
       if (secondLevelEnabled && secondLevelOpen && pullOffset < view.height) {
@@ -176,8 +232,15 @@ class HybridRecyclerListView(
   fun attachHost(host: HybridRecyclerCellHostView) {
     val slot = host.slotId.toInt()
     hosts[slot] = host
-    // `afterUpdate()` runs before Fabric's addViewAt instruction in the same mount batch.
-    // Reparenting here would give the host a native parent before Fabric inserts it.
+    trace(
+      "attach-host",
+      "slot=$slot itemKey=${host.itemKey} managed=${view.isManagedChild(host.view)} holder=${holders.containsKey(slot)}",
+    )
+    scheduleHostAttachment(host)
+  }
+
+  private fun scheduleHostAttachment(host: HybridRecyclerCellHostView) {
+    val slot = host.slotId.toInt()
     val generation = lifecycleGeneration
     view.post {
       if (dropped || recycling || generation != lifecycleGeneration || hosts[slot] !== host) return@post
@@ -186,11 +249,16 @@ class HybridRecyclerListView(
   }
 
   private fun attachHostIfMounted(host: HybridRecyclerCellHostView) {
-    if (!view.isManagedChild(host.view)) return
-    holders[host.slotId.toInt()]?.let { attachHostToHolder(host, it) } ?: layoutStickyHosts()
+    val slot = host.slotId.toInt()
+    val managed = view.isManagedChild(host.view)
+    val holder = holders[slot]
+    trace("attach-host-if-mounted", "slot=$slot managed=$managed holder=${holder != null}")
+    if (!managed) return
+    holder?.let { attachHostToHolder(host, it) } ?: layoutStickyHosts()
   }
 
   fun detachHost(host: HybridRecyclerCellHostView) {
+    trace("detach-host", "slot=${host.slotId.toInt()} itemKey=${host.itemKey}")
     hosts.remove(host.slotId.toInt())
     (host.view.parent as? ViewGroup)?.removeView(host.view)
   }
@@ -247,35 +315,135 @@ class HybridRecyclerListView(
     val next = PixelUtil.toPixelFromDIP(width).toInt() to PixelUtil.toPixelFromDIP(height).toInt()
     val generation = lifecycleGeneration
     UiThreadUtil.runOnUiThread {
-      if (!recycling && generation == lifecycleGeneration) applyMeasuredSize(key, next)
+      if (!recycling && generation == lifecycleGeneration) enqueueMeasuredSize(key, next)
     }
   }
 
-  private fun applyMeasuredSize(key: String, next: Pair<Int, Int>) {
-    if (dropped) return
-    if (measuredSizes[key] == next) return
-    measuredSizes[key] = next
-    applyMeasuredItemLayout(key)
+  private fun enqueueMeasuredSize(key: String, next: Pair<Int, Int>) {
+    if (dropped || (measuredSizes[key] == next && pendingMeasuredSizes[key] == null)) return
+    pendingMeasuredSizes[key] = next
+    if (measurementFlushPending) return
+    measurementFlushPending = true
+    val generation = lifecycleGeneration
+    recyclerView.postOnAnimation {
+      if (recycling || generation != lifecycleGeneration) return@postOnAnimation
+      flushMeasuredSizes()
+    }
   }
 
-  private fun applyMeasuredItemLayout(key: String) {
+  private fun flushMeasuredSizes() {
+    measurementFlushPending = false
+    if (dropped || pendingMeasuredSizes.isEmpty()) return
+    val batch = pendingMeasuredSizes.toMap()
+    pendingMeasuredSizes.clear()
+    val changedIndices = ArrayList<Int>()
+    batch.forEach { (key, next) ->
+      val index = descriptors.indexOfFirst { it.key == key }
+      if (index < 0 || !isMeasurementAccepted(key, descriptors[index], next)) return@forEach
+      if (measuredSizes[key] == next) return@forEach
+      measuredSizes[key] = next
+      changedIndices += index
+    }
+    trace("measurement-batch", "received=${batch.size} changed=${changedIndices.size}")
+    applyMeasuredItemLayouts(changedIndices)
+  }
+
+  private fun isMeasurementAccepted(
+    key: String,
+    descriptor: ItemDescriptor,
+    next: Pair<Int, Int>,
+  ): Boolean {
+    val columns = max(1, numColumns.toInt())
+    val span = descriptor.span.toInt().coerceIn(1, columns)
+    val crossAxisLimit = if (horizontal) recyclerView.height
+      else (recyclerView.width * span / columns)
+    val crossAxisSize = if (horizontal) next.second else next.first
+    val primaryViewport = if (horizontal) recyclerView.width else recyclerView.height
+    val primarySize = if (horizontal) next.first else next.second
+    val estimated = estimatedSizePx(descriptor)
+    val exceedsCrossAxis = crossAxisLimit > 0 && crossAxisSize > crossAxisLimit + 2
+    val matchesViewportParkingSize = primaryViewport > 0 &&
+      primarySize >= primaryViewport - 1 && estimated * 2 < primaryViewport
+    if (exceedsCrossAxis || matchesViewportParkingSize) {
+      trace(
+        "measurement-rejected",
+        "itemKey=$key measured=${next.first}x${next.second} crossLimit=$crossAxisLimit " +
+          "primaryViewport=$primaryViewport estimated=$estimated",
+      )
+      return false
+    }
+    return true
+  }
+
+  private fun applyMeasuredItemLayouts(indices: List<Int>) {
     if (dropped) return
+    val changed = indices.distinct().sorted()
+    if (changed.isEmpty()) {
+      maybeRevealRecyclerView()
+      return
+    }
     if (recyclerView.isComputingLayout) {
       val generation = lifecycleGeneration
       recyclerView.post {
-        if (!recycling && generation == lifecycleGeneration) applyMeasuredItemLayout(key)
+        if (!recycling && generation == lifecycleGeneration) applyMeasuredItemLayouts(changed)
       }
       return
     }
-    val index = descriptors.indexOfFirst { it.key == key }
-    if (index < 0) return
-    adapter.notifyItemChanged(index, sizeChangedPayload)
+    val changedSet = changed.toHashSet()
+    holders.values.forEach { holder ->
+      val index = holder.bindingIndex
+      if (index !in changedSet) return@forEach
+      val descriptor = descriptors.getOrNull(index) ?: return@forEach
+      val measured = measuredSizes[descriptor.key] ?: return@forEach
+      val size = if (horizontal) measured.first else measured.second
+      updateHolderLayout(holder, descriptor, size)
+      trace(
+        "measured-holder-applied",
+        "slot=${holder.slotId} index=$index itemKey=${descriptor.key} size=$size attached=${holder.container.parent != null}",
+      )
+    }
+    recyclerView.requestLayout()
+    var rangeStart = changed.first()
+    var rangeEnd = rangeStart
+    changed.drop(1).forEach { index ->
+      if (index == rangeEnd + 1) {
+        rangeEnd = index
+      } else {
+        adapter.notifyItemRangeChanged(rangeStart, rangeEnd - rangeStart + 1, sizeChangedPayload)
+        rangeStart = index
+        rangeEnd = index
+      }
+    }
+    adapter.notifyItemRangeChanged(rangeStart, rangeEnd - rangeStart + 1, sizeChangedPayload)
+    scheduleMeasuredLayoutFlush()
+  }
+
+  private fun scheduleMeasuredLayoutFlush() {
+    if (measuredLayoutFlushPending || dropped || recycling) return
+    measuredLayoutFlushPending = true
+    val generation = lifecycleGeneration
+    recyclerView.postOnAnimation {
+      if (generation != lifecycleGeneration) return@postOnAnimation
+      measuredLayoutFlushPending = false
+      if (dropped || recycling) return@postOnAnimation
+      val pendingBefore = recyclerView.hasPendingAdapterUpdates()
+      recyclerView.scrollBy(0, 0)
+      trace(
+        "measurement-layout-flush",
+        "pendingBefore=$pendingBefore pendingAfter=${recyclerView.hasPendingAdapterUpdates()}",
+      )
+      recyclerView.post(::maybeRevealRecyclerView)
+    }
   }
 
   override fun prepareForRecycle() {
+    trace("prepare-for-recycle-start", stateSnapshot())
     lifecycleGeneration += 1
     recycling = true
     bindingPublishPending = false
+    measurementFlushPending = false
+    measuredLayoutFlushPending = false
+    stickyLayoutRetryPending = false
     RecyclerListRegistry.unregisterList(previousListId.ifEmpty { listId }, this)
     RecyclerTabCoordinatorRegistry.unregister(this)
     recyclerView.stopScroll()
@@ -284,6 +452,7 @@ class HybridRecyclerListView(
     hosts.clear()
     holders.values.forEach { holder -> holder.bindingIndex = -1 }
     measuredSizes.clear()
+    pendingMeasuredSizes.clear()
     stickySlots.clear()
     activeStickyBindings = emptyList()
     lastVisibleRange = VisibleRange(-1.0, -1.0)
@@ -294,7 +463,15 @@ class HybridRecyclerListView(
     previousTabCoordinatorId = ""
     previousTabKey = ""
     previousTabActive = false
+    previousBindingsSignature = null
+    nextBindingGeneration = 1L
+    awaitingInitialHosts = true
+    recyclerView.visibility = View.INVISIBLE
+    scrollTraceAt = 0L
+    scrollTraceDx = 0
+    scrollTraceDy = 0
     resetRefresh()
+    trace("prepare-for-recycle-end", stateSnapshot())
   }
 
   override fun onDropView() {
@@ -371,13 +548,24 @@ class HybridRecyclerListView(
   private fun publishBindings() {
     val bindings = holders.values
       .filter { it.bindingIndex in descriptors.indices }
+      .groupBy { it.bindingIndex }
+      .values
+      .mapNotNull { candidates -> candidates.maxByOrNull { it.bindingGeneration } }
       .map { holder ->
         val descriptor = descriptors[holder.bindingIndex]
         SlotBinding(holder.slotId.toDouble(), holder.bindingIndex.toDouble(), descriptor.key, descriptor.type)
       }
       .toMutableList()
     bindings.addAll(activeStickyBindings)
-    onSlotsChanged(bindings.distinctBy { it.slotId }.sortedBy { it.slotId }.toTypedArray())
+    val published = bindings.distinctBy { it.slotId }.sortedBy { it.slotId }.toTypedArray()
+    val signature = published.joinToString(",") { "${it.slotId.toInt()}:${it.index.toInt()}:${it.itemKey}" }
+    if (signature == previousBindingsSignature) return
+    previousBindingsSignature = signature
+    trace(
+      "publish-bindings",
+      "bindings=$signature ${stateSnapshot()}",
+    )
+    onSlotsChanged(published)
   }
 
   private fun updateStickyBindings() {
@@ -453,7 +641,6 @@ class HybridRecyclerListView(
       val host = hosts[binding.slotId.toInt()] ?: return@forEach
       val hostView = host.view
       if (!view.isManagedChild(hostView)) return@forEach
-      (hostView.parent as? ViewGroup)?.removeView(hostView)
       val height = measuredSizes[descriptor.key]?.second ?: estimatedSizePx(descriptor)
       var nextIndex = -1
       for (candidate in (index + 1) until descriptors.size) {
@@ -467,14 +654,44 @@ class HybridRecyclerListView(
       val nextTop = if (nextIndex >= 0) recyclerView.layoutManager?.findViewByPosition(nextIndex)?.top?.toFloat()
         else null
       val y = (if (nextTop == null) top else min(top, nextTop - height)) + groupShift
-      view.addView(
-        hostView,
-        FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, max(1, height)),
-      )
+      val stickyHeight = max(1, height)
+      if (hostView.parent === view) {
+        val params = hostView.layoutParams
+        if (params.width != ViewGroup.LayoutParams.MATCH_PARENT || params.height != stickyHeight) {
+          hostView.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stickyHeight)
+        }
+      } else {
+        (hostView.parent as? ViewGroup)?.removeView(hostView)
+        val remainingParent = hostView.parent
+        if (remainingParent != null) {
+          trace(
+            "sticky-host-attach-deferred",
+            "slot=${binding.slotId.toInt()} parent=${RecyclerTrace.objectId(remainingParent)}",
+          )
+          scheduleStickyLayoutRetry()
+          top += height
+          return@forEach
+        }
+        view.addView(
+          hostView,
+          FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stickyHeight),
+        )
+      }
       hostView.visibility = View.VISIBLE
       hostView.translationY = y
       hostView.elevation = 20f + descriptor.stickyLevel.toFloat()
       top += height
+    }
+  }
+
+  private fun scheduleStickyLayoutRetry() {
+    if (stickyLayoutRetryPending || dropped || recycling) return
+    stickyLayoutRetryPending = true
+    val generation = lifecycleGeneration
+    view.postOnAnimation {
+      if (generation != lifecycleGeneration) return@postOnAnimation
+      stickyLayoutRetryPending = false
+      if (!dropped && !recycling) layoutStickyHosts()
     }
   }
 
@@ -492,28 +709,95 @@ class HybridRecyclerListView(
   private fun currentOffset(): Int =
     if (horizontal) recyclerView.computeHorizontalScrollOffset() else recyclerView.computeVerticalScrollOffset()
 
+  private fun scrollStateName(state: Int): String = when (state) {
+    RecyclerView.SCROLL_STATE_DRAGGING -> "dragging"
+    RecyclerView.SCROLL_STATE_SETTLING -> "settling"
+    else -> "idle"
+  }
+
+  private fun traceScrollSample(force: Boolean = false) {
+    val now = SystemClock.uptimeMillis()
+    val elapsed = max(1L, now - scrollTraceAt)
+    if (!force && scrollTraceAt != 0L && elapsed < 80L) return
+    val range = visibleRange()
+    trace(
+      "scroll-sample",
+      "state=${scrollStateName(recyclerView.scrollState)} dt=$elapsed dx=$scrollTraceDx dy=$scrollTraceDy " +
+        "velocityX=${scrollTraceDx * 1000L / elapsed} velocityY=${scrollTraceDy * 1000L / elapsed} " +
+        "offset=${currentOffset()} range=${range.first.toInt()}..${range.last.toInt()} children=${recyclerView.childCount}",
+    )
+    scrollTraceAt = now
+    scrollTraceDx = 0
+    scrollTraceDy = 0
+  }
+
+  private fun traceWindowCell(event: String, child: View) {
+    val holder = recyclerView.getChildViewHolder(child) as? NativeHolder
+    val host = holder?.container?.getChildAt(0)
+    trace(
+      event,
+      "slot=${holder?.slotId ?: -1} index=${holder?.bindingIndex ?: -1} " +
+        "cell=${child.left},${child.top},${child.width}x${child.height} " +
+        "host=${host?.left ?: -1},${host?.top ?: -1},${host?.width ?: -1}x${host?.height ?: -1} " +
+        "visible=${host?.visibility ?: -1}",
+    )
+  }
+
+  private fun trace(event: String, details: String = "") {
+    val suffix = if (details.isEmpty()) "" else " $details"
+    RecyclerTrace.log(this, event, "generation=$lifecycleGeneration listId=$listId$suffix")
+  }
+
+  private fun stateSnapshot(): String {
+    val holderState = holders.values.sortedBy { it.slotId }
+      .joinToString(",") { "${it.slotId}:${it.bindingIndex}" }
+    val hostState = hosts.keys.sorted().joinToString(",")
+    return " recyclerChildren=${recyclerView.childCount} holders=[$holderState] hosts=[$hostState]"
+  }
+
   private fun estimatedSizePx(descriptor: ItemDescriptor): Int =
     max(1, PixelUtil.toPixelFromDIP(max(1.0, descriptor.estimatedSize)).toInt())
 
   private fun attachHostToHolder(host: HybridRecyclerCellHostView, holder: NativeHolder) {
     val hostView = host.view
     if (dropped || !view.isManagedChild(hostView)) return
-    if (hostView.parent === holder.container) {
-      hostView.visibility = View.VISIBLE
-      return
+    if (hostView.parent !== holder.container) {
+      (hostView.parent as? ViewGroup)?.removeView(hostView)
+      holder.container.removeAllViews()
+      holder.container.addView(
+        hostView,
+        FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+      )
+    } else {
+      hostView.layoutParams = FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT,
+      )
     }
-    (hostView.parent as? ViewGroup)?.removeView(hostView)
-    holder.container.removeAllViews()
-    holder.container.addView(
-      hostView,
-      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-    )
+    hostView.translationX = 0f
+    hostView.translationY = 0f
     hostView.visibility = View.VISIBLE
+    holder.container.requestLayout()
+    maybeRevealRecyclerView()
+    trace(
+      "attach-host-to-holder",
+      "slot=${holder.slotId} host=${hostView.left},${hostView.top},${hostView.width}x${hostView.height} holder=${holder.container.width}x${holder.container.height}",
+    )
   }
 
   private fun installRefreshGesture() {
     recyclerView.setOnTouchListener { _, event ->
-      if (!refreshEnabled || horizontal || !tabActive || refreshing || secondLevelOpen) return@setOnTouchListener false
+      if (!refreshEnabled || horizontal || !tabActive || refreshing || refreshRequestPending || secondLevelOpen) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+          trace(
+            "refresh-touch-disabled",
+            "enabled=$refreshEnabled horizontal=$horizontal tabActive=$tabActive refreshing=$refreshing " +
+              "requestPending=$refreshRequestPending secondLevelOpen=$secondLevelOpen",
+          )
+        }
+        return@setOnTouchListener false
+      }
+      var consume = false
       when (event.actionMasked) {
         MotionEvent.ACTION_DOWN -> {
           refreshAnimator?.cancel()
@@ -523,15 +807,32 @@ class HybridRecyclerListView(
           closingSecondLevel = false
           downX = event.rawX
           downY = event.rawY
-          pullGestureEligible = !recyclerView.canScrollVertically(-1)
+          pullGestureEligible = isAtRefreshTop()
           pullStartY = if (pullGestureEligible) event.rawY else null
           draggingRefresh = false
+          trace(
+            "refresh-touch-down",
+            "eligible=$pullGestureEligible canScrollUp=${recyclerView.canScrollVertically(-1)} " +
+              "range=${visibleRange()} y=${event.rawY.toInt()} offset=${currentOffset()} threshold=${refreshThresholdPx().toInt()}",
+          )
         }
         MotionEvent.ACTION_MOVE -> {
-          if (!pullGestureEligible) return@setOnTouchListener false
+          if (!pullGestureEligible) {
+            if (!isAtRefreshTop() || event.rawY <= downY) return@setOnTouchListener false
+            pullGestureEligible = true
+            pullStartY = event.rawY
+            downX = event.rawX
+            downY = event.rawY
+            trace(
+              "refresh-armed-at-top",
+              "y=${event.rawY.toInt()} offset=${currentOffset()} range=${visibleRange()}",
+            )
+            return@setOnTouchListener false
+          }
           if (!draggingRefresh && recyclerView.canScrollVertically(-1)) {
             pullGestureEligible = false
             pullStartY = null
+            trace("refresh-drag-abort", "reason=can-scroll-up y=${event.rawY.toInt()}")
             return@setOnTouchListener false
           }
           val distance = event.rawY - (pullStartY ?: return@setOnTouchListener false)
@@ -541,38 +842,75 @@ class HybridRecyclerListView(
             (distance <= touchSlop || verticalDistance <= 0 || abs(verticalDistance) <= horizontalDistance)
           ) return@setOnTouchListener false
 
-          draggingRefresh = true
+          if (!draggingRefresh) {
+            draggingRefresh = true
+            cancelRecyclerTouch(event)
+            recyclerView.parent?.requestDisallowInterceptTouchEvent(true)
+            trace(
+              "refresh-drag-start",
+              "distance=${distance.toInt()} vertical=${verticalDistance.toInt()} horizontal=${horizontalDistance.toInt()} slop=${touchSlop.toInt()}",
+            )
+          }
           val limit = if (secondLevelEnabled) secondLevelThresholdPx() * 1.15f else refreshThresholdPx()
           setPullOffset(min(limit, max(0f, distance - touchSlop) * 0.5f))
+          consume = true
         }
         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
           if (draggingRefresh) {
+            consume = true
             draggingRefresh = false
+            val decision = when {
+              event.actionMasked == MotionEvent.ACTION_CANCEL -> "cancel"
+              secondLevelEnabled && pullOffset >= secondLevelThresholdPx() -> "second-level"
+              pullOffset >= refreshThresholdPx() -> "refresh"
+              else -> "settle"
+            }
+            trace(
+              "refresh-release",
+              "decision=$decision offset=${pullOffset.toInt()} refreshThreshold=${refreshThresholdPx().toInt()} secondThreshold=${secondLevelThresholdPx().toInt()}",
+            )
             if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
               settleRefresh(0f)
             } else if (secondLevelEnabled && pullOffset >= secondLevelThresholdPx()) {
               setPullOffset(secondLevelThresholdPx())
               onSecondLevelRequested()
             } else if (pullOffset >= refreshThresholdPx()) {
+              refreshRequestPending = true
               setPullOffset(refreshThresholdPx())
               onRefreshRequested()
+              scheduleRefreshRequestTimeout()
             } else {
               settleRefresh(0f)
             }
           }
+          recyclerView.parent?.requestDisallowInterceptTouchEvent(false)
           pullGestureEligible = false
           pullStartY = null
         }
       }
-      false
+      consume
     }
+  }
+
+  private fun isAtRefreshTop(): Boolean {
+    if (!recyclerView.canScrollVertically(-1)) return true
+    val range = visibleRange()
+    return range.first <= 0.0 && currentOffset() <= 1
+  }
+
+  private fun cancelRecyclerTouch(event: MotionEvent) {
+    val cancel = MotionEvent.obtain(event)
+    cancel.action = MotionEvent.ACTION_CANCEL
+    recyclerView.onTouchEvent(cancel)
+    cancel.recycle()
+    recyclerView.stopScroll()
   }
 
   private fun setPullOffset(value: Float) {
     pullOffset = value
     view.translationY = value
     val threshold = refreshThresholdPx()
-    val phase = if (refreshing) NativeRefreshPhase.REFRESHING
+    val phase = if (refreshing || refreshRequestPending) NativeRefreshPhase.REFRESHING
       else if (settlingRefresh) NativeRefreshPhase.SETTLING
       else if (value >= threshold) NativeRefreshPhase.READY
       else if (value > 0) NativeRefreshPhase.PULLING
@@ -586,6 +924,18 @@ class HybridRecyclerListView(
       secondLevelEnabled && value > threshold -> NativeSecondLevelPhase.PULLING
       else -> NativeSecondLevelPhase.IDLE
     }
+    val traceLimit = if (secondLevelEnabled) secondThreshold else threshold
+    val traceBucket = ((value / max(1f, traceLimit)) * 10f).toInt().coerceIn(0, 12)
+    if (traceBucket != refreshTraceBucket || phase != refreshTracePhase || secondPhase != secondLevelTracePhase) {
+      trace(
+        "refresh-offset",
+        "px=${value.toInt()} threshold=${threshold.toInt()} secondThreshold=${secondThreshold.toInt()} " +
+          "phase=$phase secondPhase=$secondPhase bucket=$traceBucket dragging=$draggingRefresh settling=$settlingRefresh",
+      )
+      refreshTraceBucket = traceBucket
+      refreshTracePhase = phase
+      secondLevelTracePhase = secondPhase
+    }
     publishRefresh(
       phase,
       PixelUtil.toDIPFromPixel(value).toDouble(),
@@ -598,7 +948,10 @@ class HybridRecyclerListView(
   private fun settleRefresh(target: Float) {
     if (refreshAnimator?.isRunning == true &&
       refreshAnimationTarget?.let { abs(it - target) < 0.5f } == true
-    ) return
+    ) {
+      trace("refresh-animation-skip", "reason=same-target target=${target.toInt()} offset=${pullOffset.toInt()}")
+      return
+    }
     refreshAnimator?.cancel()
     refreshAnimator = null
     refreshAnimationTarget = target
@@ -608,6 +961,7 @@ class HybridRecyclerListView(
       setPullOffset(target)
       return
     }
+    trace("refresh-animation-start", "from=${pullOffset.toInt()} target=${target.toInt()} duration=140")
     settlingRefresh = target == 0f
     refreshAnimator = ValueAnimator.ofFloat(pullOffset, target).apply {
       duration = 140
@@ -617,6 +971,7 @@ class HybridRecyclerListView(
 
         override fun onAnimationCancel(animation: Animator) {
           cancelled = true
+          trace("refresh-animation-cancel", "target=${target.toInt()} offset=${pullOffset.toInt()}")
         }
 
         override fun onAnimationEnd(animation: Animator) {
@@ -628,13 +983,32 @@ class HybridRecyclerListView(
             refreshAnimator = null
             refreshAnimationTarget = null
           }
+          trace("refresh-animation-end", "target=${target.toInt()} cancelled=$cancelled offset=${pullOffset.toInt()}")
         }
       })
       start()
     }
   }
 
+  private fun scheduleRefreshRequestTimeout() {
+    val requestGeneration = ++refreshRequestGeneration
+    val generation = lifecycleGeneration
+    view.postDelayed({
+      if (recycling || generation != lifecycleGeneration || requestGeneration != refreshRequestGeneration) {
+        return@postDelayed
+      }
+      if (!refreshRequestPending || refreshing) return@postDelayed
+      refreshRequestPending = false
+      trace("refresh-request-timeout", "offset=${pullOffset.toInt()}")
+      settleRefresh(0f)
+    }, 500L)
+  }
+
   private fun settleSecondLevel(target: Float, opening: Boolean) {
+    trace(
+      "second-level-animation-start",
+      "from=${pullOffset.toInt()} target=${target.toInt()} opening=$opening duration=260",
+    )
     refreshAnimator?.cancel()
     refreshAnimator = null
     refreshAnimationTarget = null
@@ -655,6 +1029,7 @@ class HybridRecyclerListView(
 
         override fun onAnimationCancel(animation: Animator) {
           cancelled = true
+          trace("second-level-animation-cancel", "target=${target.toInt()} offset=${pullOffset.toInt()}")
         }
 
         override fun onAnimationEnd(animation: Animator) {
@@ -664,6 +1039,7 @@ class HybridRecyclerListView(
             setPullOffset(target)
           }
           if (refreshAnimator === animation) refreshAnimator = null
+          trace("second-level-animation-end", "target=${target.toInt()} cancelled=$cancelled offset=${pullOffset.toInt()}")
         }
       })
       start()
@@ -691,6 +1067,13 @@ class HybridRecyclerListView(
     secondProgress: Double = 0.0,
     targetListId: String = listId,
   ) {
+    if (refreshEvents.phase != phase || refreshEvents.secondLevelPhase != secondPhase) {
+      trace(
+        "refresh-phase",
+        "targetListId=$targetListId phase=${refreshEvents.phase}->$phase " +
+          "secondPhase=${refreshEvents.secondLevelPhase}->$secondPhase offset=$offset progress=$progress secondProgress=$secondProgress",
+      )
+    }
     refreshEvents.publish(
       phase,
       offset,
@@ -704,9 +1087,17 @@ class HybridRecyclerListView(
   }
 
   private fun resetRefresh() {
+    if (pullOffset != 0f || refreshAnimator != null ||
+      refreshEvents.phase != NativeRefreshPhase.IDLE ||
+      refreshEvents.secondLevelPhase != NativeSecondLevelPhase.IDLE
+    ) {
+      trace("refresh-reset", "offset=${pullOffset.toInt()} animator=${refreshAnimator?.isRunning == true}")
+    }
     refreshAnimator?.cancel()
     refreshAnimator = null
     refreshAnimationTarget = null
+    refreshRequestPending = false
+    refreshRequestGeneration += 1
     draggingRefresh = false
     settlingRefresh = false
     openingSecondLevel = false
@@ -714,8 +1105,55 @@ class HybridRecyclerListView(
     pullGestureEligible = false
     pullStartY = null
     pullOffset = 0f
+    refreshTraceBucket = -1
+    refreshTracePhase = null
+    secondLevelTracePhase = null
     view.translationY = 0f
     publishRefresh(NativeRefreshPhase.IDLE, 0.0, 0.0)
+  }
+
+  private fun awaitInitialHosts() {
+    awaitingInitialHosts = true
+    recyclerView.visibility = View.INVISIBLE
+    val generation = lifecycleGeneration
+    view.postDelayed({
+      if (recycling || generation != lifecycleGeneration || !awaitingInitialHosts) return@postDelayed
+      trace("initial-hosts-waiting", stateSnapshot())
+      scheduleMeasuredLayoutFlush()
+    }, 300L)
+    view.postDelayed({
+      if (recycling || generation != lifecycleGeneration || !awaitingInitialHosts) return@postDelayed
+      awaitingInitialHosts = false
+      recyclerView.visibility = View.VISIBLE
+      trace("initial-hosts-revealed", "reason=hard-timeout ${stateSnapshot()}")
+    }, 1200L)
+  }
+
+  private fun maybeRevealRecyclerView() {
+    if (!awaitingInitialHosts) return
+    if (descriptors.isEmpty()) {
+      awaitingInitialHosts = false
+      recyclerView.visibility = View.VISIBLE
+      return
+    }
+    var visibleHolders = 0
+    for (index in 0 until recyclerView.childCount) {
+      val holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(index)) as? NativeHolder ?: continue
+      val bindingIndex = holder.bindingIndex
+      val descriptor = descriptors.getOrNull(bindingIndex) ?: continue
+      visibleHolders += 1
+      val host = hosts[holder.slotId] ?: return
+      if (host.view.parent !== holder.container || host.view.childCount == 0) return
+      val measured = measuredSizes[descriptor.key] ?: return
+      val expectedSize = if (horizontal) measured.first else measured.second
+      val holderSize = if (horizontal) holder.container.width else holder.container.height
+      val layoutSize = if (horizontal) holder.container.layoutParams?.width else holder.container.layoutParams?.height
+      if (layoutSize != expectedSize || holderSize != expectedSize) return
+    }
+    if (visibleHolders == 0) return
+    awaitingInitialHosts = false
+    recyclerView.visibility = View.VISIBLE
+    trace("initial-hosts-revealed", "reason=ready visibleHolders=$visibleHolders")
   }
 
   private fun updateHolderLayout(holder: NativeHolder, descriptor: ItemDescriptor, size: Int) {
@@ -791,19 +1229,25 @@ class HybridRecyclerListView(
       }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NativeHolder {
-      val holder = NativeHolder(RecyclerCellContainer(parent.context), nextSlotId++)
+      val holder = NativeHolder(RecyclerCellContainer(parent.context, fillChildren = true), nextSlotId++)
       holders[holder.slotId] = holder
+      trace("create-holder", "slot=${holder.slotId} viewType=$viewType")
       return holder
     }
 
     override fun onBindViewHolder(holder: NativeHolder, position: Int) {
       holders[holder.slotId] = holder
       holder.bindingIndex = position
+      holder.bindingGeneration = nextBindingGeneration++
       val descriptor = descriptors[position]
       val measured = measuredSizes[descriptor.key]
       val size = measured?.let { if (horizontal) it.first else it.second } ?: estimatedSizePx(descriptor)
       updateHolderLayout(holder, descriptor, size)
       hosts[holder.slotId]?.let { attachHostToHolder(it, holder) }
+      trace(
+        "bind-holder",
+        "slot=${holder.slotId} index=$position itemKey=${descriptor.key} host=${hosts.containsKey(holder.slotId)} attached=${holder.container.parent != null}",
+      )
       scheduleBindingsPublish()
     }
 
@@ -815,12 +1259,17 @@ class HybridRecyclerListView(
         val measured = measuredSizes[descriptor.key]
         val size = measured?.let { if (horizontal) it.first else it.second } ?: estimatedSizePx(descriptor)
         updateHolderLayout(holder, descriptor, size)
+        trace("bind-holder-size", "slot=${holder.slotId} index=$position itemKey=${descriptor.key} size=$size")
         return
       }
       super.onBindViewHolder(holder, position, payloads)
     }
 
     override fun onViewRecycled(holder: NativeHolder) {
+      trace(
+        "recycle-holder",
+        "slot=${holder.slotId} index=${holder.bindingIndex} host=${hosts.containsKey(holder.slotId)}",
+      )
       // Keep the stable slot and its React host parked in the recycled holder. The next bind
       // replaces only the item subtree, avoiding an empty frame while JavaScript recreates it.
       holder.container.clearFocus()
@@ -833,5 +1282,6 @@ class HybridRecyclerListView(
     val slotId: Int,
   ) : RecyclerView.ViewHolder(container) {
     var bindingIndex: Int = -1
+    var bindingGeneration: Long = 0L
   }
 }
