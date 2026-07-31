@@ -284,9 +284,33 @@ describe('React Native 0.86 compatibility', () => {
     );
     expect(androidSource).toContain('private fun replaceActiveStickyBindings');
     expect(androidSource).toContain('hasCrossedTop(it, stackOffset)');
+    expect(androidSource).toContain(
+      'val activeMarker = descriptors.indices.lastOrNull',
+    );
+    expect(androidSource).not.toContain(
+      '(0..min(firstVisible, descriptors.lastIndex)).lastOrNull',
+    );
     expect(androidSource).toContain('if (hostView.parent === view)');
     expect(androidSource).toContain('val remainingParent = hostView.parent');
     expect(androidSource).toContain('"sticky-host-attach-deferred"');
+    expect(androidSource).toContain('"sticky-bindings-changed"');
+    expect(androidSource).toContain('"sticky-host-hidden"');
+    expect(androidSource).toContain('"sticky-host-reparent"');
+    expect(androidSource).toContain('"sticky-host-attached"');
+    expect(androidSource).toContain('"sticky-host-parked"');
+    expect(androidSource).toContain('"sticky-layout"');
+    expect(androidSource).toContain('"sticky-layout-retry-scheduled"');
+    expect(androidSource).toContain('"sticky-layout-retry-run"');
+    expect(androidSource).toContain('now - stickyTraceAt < 80L');
+    expect(androidSource).toContain(
+      'bindings.addAll(stickyBindingsForDescriptors())',
+    );
+    expect(androidSource).toContain(
+      'stickySlots.getOrPut(stickySlotKey(descriptor.key))',
+    );
+    expect(androidSource).toContain(
+      'activeStickyBindings.none { it.slotId.toInt() == slot }',
+    );
     expect(androidSource).toContain('scheduleStickyLayoutRetry()');
     expect(androidSource).toContain(
       'if (generation != lifecycleGeneration) return@postOnAnimation',

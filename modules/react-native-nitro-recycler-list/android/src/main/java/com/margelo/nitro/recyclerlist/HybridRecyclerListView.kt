@@ -67,6 +67,8 @@ class HybridRecyclerListView(
   private var scrollTraceAt = 0L
   private var scrollTraceDx = 0
   private var scrollTraceDy = 0
+  private var stickyTraceAt = 0L
+  private var previousStickyTraceSignature = ""
   private var refreshTraceBucket = -1
   private var refreshTracePhase: NativeRefreshPhase? = null
   private var secondLevelTracePhase: NativeSecondLevelPhase? = null
@@ -254,7 +256,15 @@ class HybridRecyclerListView(
     val holder = holders[slot]
     trace("attach-host-if-mounted", "slot=$slot managed=$managed holder=${holder != null}")
     if (!managed) return
-    holder?.let { attachHostToHolder(host, it) } ?: layoutStickyHosts()
+    if (holder != null) {
+      attachHostToHolder(host, holder)
+      return
+    }
+    if (slot in stickySlots.values && activeStickyBindings.none { it.slotId.toInt() == slot }) {
+      host.view.visibility = View.INVISIBLE
+      trace("sticky-host-parked", "slot=$slot itemKey=${host.itemKey}")
+    }
+    layoutStickyHosts()
   }
 
   fun detachHost(host: HybridRecyclerCellHostView) {
@@ -470,6 +480,8 @@ class HybridRecyclerListView(
     scrollTraceAt = 0L
     scrollTraceDx = 0
     scrollTraceDy = 0
+    stickyTraceAt = 0L
+    previousStickyTraceSignature = ""
     resetRefresh()
     trace("prepare-for-recycle-end", stateSnapshot())
   }
@@ -556,7 +568,7 @@ class HybridRecyclerListView(
         SlotBinding(holder.slotId.toDouble(), holder.bindingIndex.toDouble(), descriptor.key, descriptor.type)
       }
       .toMutableList()
-    bindings.addAll(activeStickyBindings)
+    bindings.addAll(stickyBindingsForDescriptors())
     val published = bindings.distinctBy { it.slotId }.sortedBy { it.slotId }.toTypedArray()
     val signature = published.joinToString(",") { "${it.slotId.toInt()}:${it.index.toInt()}:${it.itemKey}" }
     if (signature == previousBindingsSignature) return
@@ -567,6 +579,15 @@ class HybridRecyclerListView(
     )
     onSlotsChanged(published)
   }
+
+  private fun stickyBindingsForDescriptors(): List<SlotBinding> =
+    descriptors.mapIndexedNotNull { index, descriptor ->
+      if (descriptor.stickyLevel < 0) return@mapIndexedNotNull null
+      val slot = stickySlots.getOrPut(stickySlotKey(descriptor.key)) { nextSlotId++ }
+      SlotBinding(slot.toDouble(), index.toDouble(), descriptor.key, descriptor.type)
+    }
+
+  private fun stickySlotKey(itemKey: String): String = "item:$itemKey"
 
   private fun updateStickyBindings() {
     val firstVisible = visibleRange().first.toInt()
@@ -582,7 +603,7 @@ class HybridRecyclerListView(
       return itemStart < stackOffset
     }
 
-    val activeMarker = (0..min(firstVisible, descriptors.lastIndex)).lastOrNull {
+    val activeMarker = descriptors.indices.lastOrNull {
       descriptors[it].stickyLevel >= 0 && hasCrossedTop(it)
     }
     val activeGroup = activeMarker?.let { descriptors[it].stickyGroup } ?: run {
@@ -594,14 +615,14 @@ class HybridRecyclerListView(
     }.map { descriptors[it].stickyLevel.toInt() }.distinct().sorted()
     var stackOffset = 0
     val nextBindings = levels.mapNotNull { level ->
-      val index = (0..min(firstVisible, descriptors.lastIndex)).lastOrNull {
+      val index = descriptors.indices.lastOrNull {
         descriptors[it].stickyGroup == activeGroup &&
           descriptors[it].stickyLevel.toInt() == level &&
           hasCrossedTop(it, stackOffset)
       } ?: return@mapNotNull null
       val descriptor = descriptors[index]
       stackOffset += measuredSizes[descriptor.key]?.second ?: estimatedSizePx(descriptor)
-      val slot = stickySlots.getOrPut("$activeGroup:$level") { nextSlotId++ }
+      val slot = stickySlots.getOrPut(stickySlotKey(descriptor.key)) { nextSlotId++ }
       SlotBinding(slot.toDouble(), index.toDouble(), descriptor.key, descriptor.type)
     }
     replaceActiveStickyBindings(nextBindings)
@@ -609,14 +630,36 @@ class HybridRecyclerListView(
   }
 
   private fun replaceActiveStickyBindings(next: List<SlotBinding>) {
+    val previous = activeStickyBindings
+    val previousSignature = stickyBindingsSignature(previous)
+    val nextSignature = stickyBindingsSignature(next)
     val nextSlots = next.mapTo(HashSet()) { it.slotId.toInt() }
-    activeStickyBindings.forEach { binding ->
+    previous.forEach { binding ->
       if (binding.slotId.toInt() !in nextSlots) {
-        hosts[binding.slotId.toInt()]?.view?.visibility = View.INVISIBLE
+        val hostView = hosts[binding.slotId.toInt()]?.view
+        hostView?.visibility = View.INVISIBLE
+        trace(
+          "sticky-host-hidden",
+          "slot=${binding.slotId.toInt()} index=${binding.index.toInt()} itemKey=${binding.itemKey} " +
+            "parent=${hostView?.parent?.let(RecyclerTrace::objectId) ?: "none"}",
+        )
       }
     }
     activeStickyBindings = next
+    if (previousSignature != nextSignature) {
+      trace(
+        "sticky-bindings-changed",
+        "from=[$previousSignature] to=[$nextSignature] offset=${currentOffset()} range=${visibleRange()}",
+      )
+    }
   }
+
+  private fun stickyBindingsSignature(bindings: List<SlotBinding>): String =
+    bindings.joinToString(",") { binding ->
+      val descriptor = descriptors.getOrNull(binding.index.toInt())
+      "${binding.slotId.toInt()}:${binding.index.toInt()}:${binding.itemKey}:" +
+        "${descriptor?.stickyGroup.orEmpty()}:${descriptor?.stickyLevel?.toInt() ?: -1}"
+    }
 
   private fun layoutStickyHosts() {
     val activeGroup = activeStickyBindings.firstOrNull()?.let {
@@ -635,6 +678,7 @@ class HybridRecyclerListView(
     }
     val groupShift = if (nextGroupTop == null) 0f else min(0f, nextGroupTop - totalHeight)
     var top = 0f
+    val layoutTrace = ArrayList<String>()
     activeStickyBindings.sortedBy { descriptors[it.index.toInt()].stickyLevel }.forEach { binding ->
       val index = binding.index.toInt()
       val descriptor = descriptors.getOrNull(index) ?: return@forEach
@@ -661,13 +705,22 @@ class HybridRecyclerListView(
           hostView.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stickyHeight)
         }
       } else {
-        (hostView.parent as? ViewGroup)?.removeView(hostView)
+        val previousParent = hostView.parent
+        if (previousParent != null) {
+          trace(
+            "sticky-host-reparent",
+            "slot=${binding.slotId.toInt()} itemKey=${descriptor.key} " +
+              "from=${RecyclerTrace.objectId(previousParent)} to=${RecyclerTrace.objectId(view)}",
+          )
+        }
+        (previousParent as? ViewGroup)?.removeView(hostView)
         val remainingParent = hostView.parent
         if (remainingParent != null) {
           trace(
             "sticky-host-attach-deferred",
             "slot=${binding.slotId.toInt()} parent=${RecyclerTrace.objectId(remainingParent)}",
           )
+          layoutTrace += "${binding.slotId.toInt()}:${descriptor.key}:deferred"
           scheduleStickyLayoutRetry()
           top += height
           return@forEach
@@ -676,22 +729,54 @@ class HybridRecyclerListView(
           hostView,
           FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stickyHeight),
         )
+        trace(
+          "sticky-host-attached",
+          "slot=${binding.slotId.toInt()} index=$index itemKey=${descriptor.key} height=$stickyHeight",
+        )
       }
       hostView.visibility = View.VISIBLE
       hostView.translationY = y
       hostView.elevation = 20f + descriptor.stickyLevel.toFloat()
+      layoutTrace +=
+        "${binding.slotId.toInt()}:${descriptor.key}:level=${descriptor.stickyLevel.toInt()}:" +
+        "y=${y.toInt()}:height=$stickyHeight:nextTop=${nextTop?.toInt() ?: -1}"
       top += height
     }
+    traceStickyLayout(activeGroup, totalHeight, nextGroupIndex, nextGroupTop, groupShift, layoutTrace)
+  }
+
+  private fun traceStickyLayout(
+    activeGroup: String,
+    totalHeight: Int,
+    nextGroupIndex: Int?,
+    nextGroupTop: Float?,
+    groupShift: Float,
+    items: List<String>,
+  ) {
+    val now = SystemClock.uptimeMillis()
+    val structuralSignature = "$activeGroup|${stickyBindingsSignature(activeStickyBindings)}|$totalHeight"
+    if (structuralSignature == previousStickyTraceSignature && now - stickyTraceAt < 80L) return
+    previousStickyTraceSignature = structuralSignature
+    stickyTraceAt = now
+    trace(
+      "sticky-layout",
+      "group=$activeGroup totalHeight=$totalHeight nextGroupIndex=${nextGroupIndex ?: -1} " +
+        "nextGroupTop=${nextGroupTop?.toInt() ?: -1} shift=${groupShift.toInt()} items=[${items.joinToString(",")}]",
+    )
   }
 
   private fun scheduleStickyLayoutRetry() {
     if (stickyLayoutRetryPending || dropped || recycling) return
     stickyLayoutRetryPending = true
     val generation = lifecycleGeneration
+    trace("sticky-layout-retry-scheduled", "generation=$generation")
     view.postOnAnimation {
       if (generation != lifecycleGeneration) return@postOnAnimation
       stickyLayoutRetryPending = false
-      if (!dropped && !recycling) layoutStickyHosts()
+      if (!dropped && !recycling) {
+        trace("sticky-layout-retry-run")
+        layoutStickyHosts()
+      }
     }
   }
 
