@@ -146,13 +146,40 @@ describe('React Native 0.86 compatibility', () => {
     expect(onViewRecycled).not.toContain('publishBindings()');
   });
 
-  it('invalidates the iOS layout from the main queue', () => {
+  it('batches and validates iOS content measurements on the main queue', () => {
     const source = readFileSync(iosRecyclerListSource, 'utf8');
 
     expect(source).toContain('DispatchQueue.main.async { [weak self] in');
+    expect(source).toContain('pendingMeasuredSizes[key] = size');
+    expect(source).toContain('if measurementFlushPending { return }');
+    expect(source).toContain('private func flushMeasuredSizes()');
+    expect(source).toContain('private func isMeasurementAccepted(');
+    expect(source).toContain('crossAxisSize > crossAxisLimit + 2');
+    expect(source).toContain('primarySize >= primaryViewport - 1');
     expect(source).toContain(
       'self.view.collectionView.collectionViewLayout.invalidateLayout()',
     );
+    expect(source).not.toContain('host.view.onSizeChanged =');
+  });
+
+  it('publishes stable iOS cell slots and keeps hosts parked during reuse', () => {
+    const source = readFileSync(iosRecyclerListSource, 'utf8');
+    const cellSource = readFileSync(iosCellSource, 'utf8');
+    const prepareForReuse = cellSource.slice(
+      cellSource.indexOf('override func prepareForReuse()'),
+    );
+
+    expect(source).toContain('private var bindingPublishPending = false');
+    expect(source).toContain('private var previousBindingsSignature: String?');
+    expect(source).toContain('private func scheduleBindingsPublish()');
+    expect(source).toContain(String.raw`cells.values.compactMap(\.value)`);
+    expect(source).toContain('cell.bindingGeneration = nextBindingGeneration');
+    expect(source).toContain(
+      'if signature == previousBindingsSignature { return }',
+    );
+    expect(source).not.toContain('view.collectionView.visibleCells.compactMap');
+    expect(prepareForReuse).not.toContain('bindingIndex = -1');
+    expect(prepareForReuse).not.toContain('removeFromSuperview()');
   });
 
   it('converts React layout DIP values to Android pixels', () => {

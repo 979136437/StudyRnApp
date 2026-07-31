@@ -1,21 +1,11 @@
 import UIKit
 
-final class RecyclerCellContainer: UIView {
-  var onSizeChanged: ((CGSize) -> Void)?
-  private var previousSize: CGSize = .zero
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    if bounds.size != previousSize {
-      previousSize = bounds.size
-      onSizeChanged?(bounds.size)
-    }
-  }
-}
+final class RecyclerCellContainer: UIView {}
 
 final class RecyclerCollectionCell: UICollectionViewCell {
   var slotId = -1
   var bindingIndex = -1
+  var bindingGeneration = 0
 
   override func layoutSubviews() {
     super.layoutSubviews()
@@ -26,7 +16,6 @@ final class RecyclerCollectionCell: UICollectionViewCell {
 
   override func prepareForReuse() {
     super.prepareForReuse()
-    bindingIndex = -1
-    contentView.subviews.forEach { $0.removeFromSuperview() }
+    contentView.endEditing(true)
   }
 }

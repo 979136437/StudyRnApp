@@ -66,6 +66,13 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   private var previousTabKey = ""
   private var previousTabActive = false
   private var lifecycleGeneration = 0
+  private var pendingMeasuredSizes: [String: CGSize] = [:]
+  private var previousBindingsSignature: String?
+  private var nextBindingGeneration = 1
+  private var bindingPublishPending = false
+  private var measurementFlushPending = false
+  private var isRecycling = false
+  private var isDropped = false
   private let refreshEvents = RecyclerListRefreshEventState()
   private let refreshTransition = RecyclerListRefreshTransitionDriver()
 
@@ -104,7 +111,9 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   }
 
   func afterUpdate() {
+    isRecycling = false
     if previousListId != listId {
+      previousBindingsSignature = nil
       if !previousListId.isEmpty {
         publishRefresh(.idle, offset: 0, progress: 0, targetListId: previousListId)
         RecyclerListRegistry.unregister(list: self, id: previousListId)
@@ -161,10 +170,6 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   func attachHost(_ host: HybridRecyclerCellHostView) {
     let slot = Int(host.slotId)
     hosts[slot] = host
-    host.view.onSizeChanged = { [weak self, weak host] size in
-      guard let self, let host else { return }
-      try? self.updateMeasuredSize(key: host.itemKey, width: size.width, height: size.height)
-    }
     // `afterUpdate()` may run before Fabric has inserted this host into its React parent.
     // Defer native reparenting until the current component mounting transaction completes.
     let generation = lifecycleGeneration
@@ -192,13 +197,11 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     }
     cell.slotId = slot
     cell.bindingIndex = index
+    cell.bindingGeneration = nextBindingGeneration
+    nextBindingGeneration += 1
     cells[slot] = WeakBox(cell)
     if let host = hosts[slot] { attach(host: host, to: cell) }
-    let generation = lifecycleGeneration
-    DispatchQueue.main.async { [weak self] in
-      guard let self, generation == self.lifecycleGeneration else { return }
-      self.publishBindings()
-    }
+    scheduleBindingsPublish()
   }
 
   func didScroll() {
@@ -207,7 +210,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       lastRange = range
       onVisibleRangeChanged(range)
     }
-    publishBindings()
+    scheduleBindingsPublish()
     checkEndReached()
     publishTabScroll()
 
@@ -295,15 +298,17 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     let size = CGSize(width: width, height: height)
     let generation = lifecycleGeneration
     DispatchQueue.main.async { [weak self] in
-      guard let self, generation == self.lifecycleGeneration,
-            self.view.layout.measuredSizes[key] != size else { return }
-      self.view.layout.measuredSizes[key] = size
-      self.view.collectionView.collectionViewLayout.invalidateLayout()
+      guard let self, !self.isDropped, !self.isRecycling,
+            generation == self.lifecycleGeneration else { return }
+      self.enqueueMeasuredSize(key: key, size: size)
     }
   }
 
   func prepareForRecycle() {
     lifecycleGeneration += 1
+    isRecycling = true
+    bindingPublishPending = false
+    measurementFlushPending = false
     RecyclerListRegistry.unregister(list: self, id: previousListId.isEmpty ? listId : previousListId)
     resetRefresh()
     RecyclerTabCoordinatorRegistry.unregister(self)
@@ -312,6 +317,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cells.removeAll()
     lastRange = VisibleRange(first: -1, last: -1)
     view.layout.measuredSizes.removeAll()
+    pendingMeasuredSizes.removeAll()
     endReachedArmed = true
     previousListId = ""
     previousDescriptorVersion = ""
@@ -319,9 +325,17 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     previousTabCoordinatorId = ""
     previousTabKey = ""
     previousTabActive = false
+    previousBindingsSignature = nil
+    nextBindingGeneration = 1
   }
 
   func onDropView() {
+    guard !isDropped else { return }
+    isDropped = true
+    lifecycleGeneration += 1
+    bindingPublishPending = false
+    measurementFlushPending = false
+    pendingMeasuredSizes.removeAll()
     resetRefresh()
     RecyclerListRegistry.unregister(list: self, id: listId)
     RecyclerTabCoordinatorRegistry.unregister(self)
@@ -339,10 +353,28 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cell.setNeedsLayout()
   }
 
+  private func scheduleBindingsPublish() {
+    guard !isDropped, !isRecycling, !bindingPublishPending else { return }
+    bindingPublishPending = true
+    let generation = lifecycleGeneration
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.bindingPublishPending = false
+      guard !self.isDropped, !self.isRecycling,
+            generation == self.lifecycleGeneration else { return }
+      self.publishBindings()
+    }
+  }
+
   private func publishBindings() {
-    let bindings = view.collectionView.visibleCells.compactMap { cell -> SlotBinding? in
-      guard let cell = cell as? RecyclerCollectionCell,
-            descriptors.indices.contains(cell.bindingIndex) else { return nil }
+    var latestCells: [Int: RecyclerCollectionCell] = [:]
+    for cell in cells.values.compactMap(\.value) where descriptors.indices.contains(cell.bindingIndex) {
+      if let current = latestCells[cell.bindingIndex],
+         current.bindingGeneration >= cell.bindingGeneration { continue }
+      latestCells[cell.bindingIndex] = cell
+    }
+    let bindings = latestCells.values.compactMap { cell -> SlotBinding? in
+      guard descriptors.indices.contains(cell.bindingIndex) else { return nil }
       let descriptor = descriptors[cell.bindingIndex]
       return SlotBinding(
         slotId: Double(cell.slotId),
@@ -351,7 +383,105 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
         itemType: descriptor.type
       )
     }.sorted { $0.slotId < $1.slotId }
+    let signature = bindings.map {
+      "\(Int($0.slotId)):\(Int($0.index)):\($0.itemKey):\($0.itemType)"
+    }.joined(separator: ",")
+    if signature == previousBindingsSignature { return }
+    previousBindingsSignature = signature
     onSlotsChanged(bindings)
+  }
+
+  private func enqueueMeasuredSize(key: String, size: CGSize) {
+    if view.layout.measuredSizes[key] == size && pendingMeasuredSizes[key] == nil { return }
+    pendingMeasuredSizes[key] = size
+    if measurementFlushPending { return }
+    measurementFlushPending = true
+    let generation = lifecycleGeneration
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.measurementFlushPending = false
+      guard !self.isDropped, !self.isRecycling,
+            generation == self.lifecycleGeneration else { return }
+      self.flushMeasuredSizes()
+    }
+  }
+
+  private func flushMeasuredSizes() {
+    guard !pendingMeasuredSizes.isEmpty else { return }
+    let batch = pendingMeasuredSizes
+    pendingMeasuredSizes.removeAll(keepingCapacity: true)
+    var measuredSizes = view.layout.measuredSizes
+    var changed = false
+
+    for (key, size) in batch {
+      guard let descriptor = descriptors.first(where: { $0.key == key }),
+            isMeasurementAccepted(descriptor: descriptor, size: size),
+            measuredSizes[key] != size else { continue }
+      measuredSizes[key] = size
+      changed = true
+    }
+    guard changed else { return }
+
+    let anchor = captureScrollAnchor()
+    view.layout.measuredSizes = measuredSizes
+    self.view.collectionView.collectionViewLayout.invalidateLayout()
+    view.collectionView.layoutIfNeeded()
+    restoreScrollAnchor(anchor)
+    scheduleBindingsPublish()
+  }
+
+  private func isMeasurementAccepted(descriptor: ItemDescriptor, size: CGSize) -> Bool {
+    let collectionView = view.collectionView
+    let columnCount = max(1, Int(numColumns))
+    let span = min(columnCount, max(1, Int(descriptor.span)))
+    let crossAxisLimit = horizontal
+      ? collectionView.bounds.height
+      : collectionView.bounds.width * CGFloat(span) / CGFloat(columnCount)
+    let crossAxisSize = horizontal ? size.height : size.width
+    let primaryViewport = horizontal ? collectionView.bounds.width : collectionView.bounds.height
+    let primarySize = horizontal ? size.width : size.height
+    let estimated = CGFloat(max(1, descriptor.estimatedSize))
+    let exceedsCrossAxis = crossAxisLimit > 0 && crossAxisSize > crossAxisLimit + 2
+    let matchesViewportParkingSize = primaryViewport > 0 &&
+      primarySize >= primaryViewport - 1 && estimated * 2 < primaryViewport
+    return !exceedsCrossAxis && !matchesViewportParkingSize
+  }
+
+  private func captureScrollAnchor() -> (indexPath: IndexPath, distance: CGFloat)? {
+    let collectionView = view.collectionView
+    let viewportStart = horizontal
+      ? collectionView.contentOffset.x + collectionView.adjustedContentInset.left
+      : collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+    guard viewportStart > 0 else { return nil }
+    let candidates = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> (IndexPath, CGRect)? in
+      guard let frame = view.layout.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
+      let frameEnd = horizontal ? frame.maxX : frame.maxY
+      return frameEnd > viewportStart ? (indexPath, frame) : nil
+    }
+    guard let anchor = candidates.min(by: {
+      let lhs = horizontal ? $0.1.minX : $0.1.minY
+      let rhs = horizontal ? $1.1.minX : $1.1.minY
+      return lhs < rhs
+    }) else { return nil }
+    let frameStart = horizontal ? anchor.1.minX : anchor.1.minY
+    return (anchor.0, frameStart - viewportStart)
+  }
+
+  private func restoreScrollAnchor(_ anchor: (indexPath: IndexPath, distance: CGFloat)?) {
+    guard let anchor,
+          let frame = view.layout.layoutAttributesForItem(at: anchor.indexPath)?.frame else { return }
+    let collectionView = view.collectionView
+    if horizontal {
+      let target = frame.minX - anchor.distance - collectionView.adjustedContentInset.left
+      let maximum = max(-collectionView.adjustedContentInset.left,
+                        collectionView.contentSize.width - collectionView.bounds.width + collectionView.adjustedContentInset.right)
+      collectionView.contentOffset.x = min(max(-collectionView.adjustedContentInset.left, target), maximum)
+    } else {
+      let target = frame.minY - anchor.distance - collectionView.adjustedContentInset.top
+      let maximum = max(-collectionView.adjustedContentInset.top,
+                        collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom)
+      collectionView.contentOffset.y = min(max(-collectionView.adjustedContentInset.top, target), maximum)
+    }
   }
 
   private func visibleRange() -> VisibleRange {

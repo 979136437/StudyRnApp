@@ -9,7 +9,7 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
       invalidateLayout()
     }
   }
-  var measuredSizes: [String: CGSize] = [:] { didSet { invalidateLayout() } }
+  var measuredSizes: [String: CGSize] = [:]
   var mode: RecyclerLayout = .list {
     didSet {
       if oldValue != mode { masonryStarts.removeAll(keepingCapacity: true) }
