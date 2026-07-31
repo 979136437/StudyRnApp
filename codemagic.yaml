@@ -8,7 +8,11 @@ workflows:
     environment:
       # 锁死构建宿主引擎，保证 ABI 与底层依赖编译期绝对契约一致
       node: 20.19.4
-      groups: []
+      # SENTRY_AUTH_TOKEN 必须使用 Codemagic 生成的 Encrypted(...) 密文补充到 vars，禁止提交明文。
+      vars:
+        SENTRY_ORG: test-910
+        SENTRY_PROJECT: react-native
+        EXPO_PUBLIC_SENTRY_DSN: https://01c1c1928d318c42b107a1b82746970d@o4511827492208640.ingest.us.sentry.io/4511827497910272
 
     # 🔥 多级物理缓存池 (Caching Strategy)
     cache:
@@ -114,8 +118,30 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
+            DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
+
+      - name: 🔎 上传并保留 iOS 调试符号
+        script: |
+          set -e
+          : "${SENTRY_AUTH_TOKEN:?Codemagic 缺少 SENTRY_AUTH_TOKEN}"
+          : "${SENTRY_ORG:?Codemagic 缺少 SENTRY_ORG}"
+          : "${SENTRY_PROJECT:?Codemagic 缺少 SENTRY_PROJECT}"
+
+          DSYM_PATH=$(find build -name "*.app.dSYM" -type d | head -n 1)
+          if [ -z "$DSYM_PATH" ]; then
+            echo "❌ 未找到应用 dSYM，无法保证 Sentry 原生堆栈符号化"
+            exit 1
+          fi
+
+          pnpm exec sentry-cli debug-files upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --include-sources \
+            "$DSYM_PATH"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$DSYM_PATH" my-app-dev-client.dSYM.zip
 
       - name: 📦 把二进制物理编译文件打入标准 Payload/IPA 容器
         script: |
@@ -139,6 +165,7 @@ workflows:
 
     artifacts:
       - my-app-dev-client-unsigned.ipa
+      - my-app-dev-client.dSYM.zip
 
   android-dev-client:
     name: 打包 Android apk
@@ -149,7 +176,11 @@ workflows:
     environment:
       node: 20.19.4
       java: 17
-      groups: []
+      # SENTRY_AUTH_TOKEN 必须使用 Codemagic 生成的 Encrypted(...) 密文补充到 vars，禁止提交明文。
+      vars:
+        SENTRY_ORG: test-910
+        SENTRY_PROJECT: react-native
+        EXPO_PUBLIC_SENTRY_DSN: https://01c1c1928d318c42b107a1b82746970d@o4511827492208640.ingest.us.sentry.io/4511827497910272
 
     # 🔥 多级物理缓存池 (Caching Strategy)
     cache:
@@ -199,6 +230,25 @@ workflows:
           ./gradlew :app:assembleDebug \
             --build-cache \
             --no-daemon
+
+      - name: 🔎 上传 Android NDK 调试符号
+        script: |
+          set -e
+          : "${SENTRY_AUTH_TOKEN:?Codemagic 缺少 SENTRY_AUTH_TOKEN}"
+          : "${SENTRY_ORG:?Codemagic 缺少 SENTRY_ORG}"
+          : "${SENTRY_PROJECT:?Codemagic 缺少 SENTRY_PROJECT}"
+
+          SYMBOLS_PATH="android/app/build/intermediates/cxx"
+          if [ ! -d "$SYMBOLS_PATH" ]; then
+            echo "❌ 未找到 Android NDK 调试符号目录"
+            exit 1
+          fi
+
+          pnpm exec sentry-cli debug-files upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --include-sources \
+            "$SYMBOLS_PATH"
 
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk

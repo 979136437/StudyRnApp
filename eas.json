@@ -19,7 +19,10 @@
       "pnpm": "10.33.0",
       "env": {
         // 关闭非必要的 git 钩子，加速 CI 安装进度
-        "HUSKY": "0"
+        "HUSKY": "0",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://01c1c1928d318c42b107a1b82746970d@o4511827492208640.ingest.us.sentry.io/4511827497910272",
+        "SENTRY_ORG": "test-910",
+        "SENTRY_PROJECT": "react-native"
       },
       "ios": {
         // 显式声明为真机架构 (ARM64 Physical Device)
@@ -38,7 +41,12 @@
       "distribution": "store",
       "autoIncrement": true,
       "node": "20.19.4",
-      "pnpm": "10.33.0"
+      "pnpm": "10.33.0",
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "https://01c1c1928d318c42b107a1b82746970d@o4511827492208640.ingest.us.sentry.io/4511827497910272",
+        "SENTRY_ORG": "test-910",
+        "SENTRY_PROJECT": "react-native"
+      }
     }
   },
   "submit": {
