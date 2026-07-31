@@ -8,7 +8,9 @@ workflows:
     environment:
       # 锁死构建宿主引擎，保证 ABI 与底层依赖编译期绝对契约一致
       node: 20.19.4
-      # SENTRY_AUTH_TOKEN 必须使用 Codemagic 生成的 Encrypted(...) 密文补充到 vars，禁止提交明文。
+      groups:
+        - sentry_credentials
+      # sentry_credentials 变量组必须包含受保护的 SENTRY_AUTH_TOKEN，禁止提交明文。
       vars:
         SENTRY_ORG: test-910
         SENTRY_PROJECT: react-native
@@ -176,7 +178,9 @@ workflows:
     environment:
       node: 20.19.4
       java: 17
-      # SENTRY_AUTH_TOKEN 必须使用 Codemagic 生成的 Encrypted(...) 密文补充到 vars，禁止提交明文。
+      groups:
+        - sentry_credentials
+      # sentry_credentials 变量组必须包含受保护的 SENTRY_AUTH_TOKEN，禁止提交明文。
       vars:
         SENTRY_ORG: test-910
         SENTRY_PROJECT: react-native
