@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "specs": "nitrogen",
+    "specs": "nitrogen && node scripts/patch-nitrogen-react-native-086.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

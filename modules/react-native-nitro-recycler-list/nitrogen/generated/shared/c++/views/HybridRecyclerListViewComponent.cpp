@@ -337,8 +337,10 @@ namespace margelo::nitro::recyclerlist::views {
     // This is called immediately after `ShadowNode` is created, cloned or in progress.
     // On Android, we need to wrap props in our state, which gets routed through Java and later unwrapped in JNI/C++.
     auto& concreteShadowNode = static_cast<HybridRecyclerListViewShadowNode&>(shadowNode);
-    const std::shared_ptr<const HybridRecyclerListViewProps>& constProps = concreteShadowNode.getConcreteSharedProps();
-    const std::shared_ptr<HybridRecyclerListViewProps>& props = std::const_pointer_cast<HybridRecyclerListViewProps>(constProps);
+    // RN 0.86's getConcreteSharedProps() returns a reference to a temporary shared_ptr.
+    // Cast the stable base props by value to avoid copying that dangling reference.
+    const std::shared_ptr<HybridRecyclerListViewProps> props = std::const_pointer_cast<HybridRecyclerListViewProps>(
+      std::static_pointer_cast<const HybridRecyclerListViewProps>(concreteShadowNode.getProps()));
     HybridRecyclerListViewState state{props};
     concreteShadowNode.setStateData(std::move(state));
   }
