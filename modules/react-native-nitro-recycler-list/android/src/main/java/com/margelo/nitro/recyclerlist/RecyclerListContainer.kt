@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 class RecyclerListContainer(context: Context) : FrameLayout(context) {
   val recyclerView = RecyclerView(context)
   private val managedChildren = ArrayList<View>()
+  var onManagedChildAdded: ((View) -> Unit)? = null
 
   init {
     clipChildren = true
@@ -18,13 +19,16 @@ class RecyclerListContainer(context: Context) : FrameLayout(context) {
   }
 
   fun addManagedChild(child: View, index: Int = managedChildren.size) {
+    var added = false
     if (!managedChildren.contains(child)) {
       managedChildren.add(index.coerceIn(0, managedChildren.size), child)
+      added = true
     }
     if (child.parent == null) {
       addView(child, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
       child.visibility = View.INVISIBLE
     }
+    if (added) onManagedChildAdded?.invoke(child)
   }
 
   fun removeManagedChild(index: Int): View? {
@@ -37,4 +41,6 @@ class RecyclerListContainer(context: Context) : FrameLayout(context) {
   fun managedChildCount(): Int = managedChildren.size
 
   fun managedChildAt(index: Int): View? = managedChildren.getOrNull(index)
+
+  fun isManagedChild(child: View): Boolean = managedChildren.contains(child)
 }

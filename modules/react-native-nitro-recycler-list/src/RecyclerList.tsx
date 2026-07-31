@@ -14,6 +14,7 @@ import { callback, type HybridRef } from 'react-native-nitro-modules';
 import Animated, {
   type SharedValue,
   useAnimatedStyle,
+  useAnimatedRef,
   useEvent,
   useSharedValue,
 } from 'react-native-reanimated';
@@ -24,7 +25,6 @@ import { readSavedOffset, saveOffset } from './core/scrollState';
 import { normalizeSecondLevelOptions } from './core/secondLevel';
 import { areSlotBindingsEqual } from './core/slotBindings';
 import NativeRecyclerListRefreshEventSource, {
-  type NativeProps as RefreshEventSourceProps,
   type RecyclerListRefreshPullEvent,
   type RecyclerListTabScrollEvent,
 } from './fabric/NativeRecyclerListRefreshEventSource';
@@ -66,6 +66,13 @@ type InternalEntry<T> =
       key: string;
       node: ReactNode;
     };
+
+type DirectEventRegistration = {
+  workletEventHandler: {
+    registerForEvents(viewTag: number, fallbackEventName?: string): void;
+    unregisterFromEvents(viewTag: number): void;
+  };
+};
 
 const EMPTY_RANGE: VisibleRange = { first: -1, last: -1 };
 const EMPTY_STATE = {
@@ -416,6 +423,38 @@ function RecyclerListInner<T>(
     },
     ['onTabScroll'],
   );
+  const refreshEventSourceRef = useAnimatedRef();
+  const setRefreshEventSourceRef = useCallback(
+    (instance: Parameters<typeof refreshEventSourceRef>[0]) => {
+      refreshEventSourceRef(instance);
+    },
+    [refreshEventSourceRef],
+  );
+
+  useEffect(() => {
+    const eventSourceTag = refreshEventSourceRef.getTag?.();
+    if (eventSourceTag == null) return;
+
+    const pullRegistration =
+      pullEventHandler as unknown as DirectEventRegistration;
+    const tabScrollRegistration =
+      tabScrollEventHandler as unknown as DirectEventRegistration;
+    pullRegistration.workletEventHandler.registerForEvents(
+      eventSourceTag,
+      'onPull',
+    );
+    tabScrollRegistration.workletEventHandler.registerForEvents(
+      eventSourceTag,
+      'onTabScroll',
+    );
+
+    return () => {
+      pullRegistration.workletEventHandler.unregisterFromEvents(eventSourceTag);
+      tabScrollRegistration.workletEventHandler.unregisterFromEvents(
+        eventSourceTag,
+      );
+    };
+  }, [pullEventHandler, refreshEventSourceRef, tabScrollEventHandler]);
   const secondLevelContext = useMemo(
     () => ({
       close: () => secondLevel?.onOpenChange(false),
@@ -506,6 +545,14 @@ function RecyclerListInner<T>(
         {bindings.map((binding) => {
           const entry = entries[binding.index];
           if (!entry) return null;
+          const descriptor = descriptors[binding.index];
+          const columnCount = Math.max(1, options.numColumns);
+          const columnSpan = Math.min(
+            columnCount,
+            Math.max(1, descriptor?.span ?? 1),
+          );
+          const cellWidth =
+            `${(columnSpan / columnCount) * 100}%` as `${number}%`;
           return (
             <NativeRecyclerCellHost
               itemKey={entry.key}
@@ -516,8 +563,11 @@ function RecyclerListInner<T>(
               style={[
                 styles.cell,
                 options.horizontal
-                  ? { minWidth: descriptors[binding.index]?.estimatedSize }
-                  : { minHeight: descriptors[binding.index]?.estimatedSize },
+                  ? { minWidth: descriptor?.estimatedSize }
+                  : {
+                      minHeight: descriptor?.estimatedSize,
+                      width: cellWidth,
+                    },
               ]}
             >
               <View
@@ -548,13 +598,8 @@ function RecyclerListInner<T>(
       <NativeRecyclerListRefreshEventSource
         collapsable={false}
         listId={listId}
-        onPull={
-          pullEventHandler as unknown as RefreshEventSourceProps['onPull']
-        }
-        onTabScroll={
-          tabScrollEventHandler as unknown as RefreshEventSourceProps['onTabScroll']
-        }
         pointerEvents="none"
+        ref={setRefreshEventSourceRef}
         style={styles.refreshEventSource}
       />
       {refreshHeader == null ? null : (

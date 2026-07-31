@@ -1,14 +1,33 @@
 import UIKit
 
 final class RecyclerCollectionLayout: UICollectionViewLayout {
-  var descriptors: [ItemDescriptor] = [] { didSet { invalidateLayout() } }
+  var descriptors: [ItemDescriptor] = [] {
+    didSet {
+      let previous = oldValue.map { "\($0.key):\($0.span)" }
+      let current = descriptors.map { "\($0.key):\($0.span)" }
+      if previous != current { masonryStarts.removeAll(keepingCapacity: true) }
+      invalidateLayout()
+    }
+  }
   var measuredSizes: [String: CGSize] = [:] { didSet { invalidateLayout() } }
-  var mode: RecyclerLayout = .list { didSet { invalidateLayout() } }
-  var columns = 1 { didSet { invalidateLayout() } }
+  var mode: RecyclerLayout = .list {
+    didSet {
+      if oldValue != mode { masonryStarts.removeAll(keepingCapacity: true) }
+      invalidateLayout()
+    }
+  }
+  var columns = 1 {
+    didSet {
+      if oldValue != columns { masonryStarts.removeAll(keepingCapacity: true) }
+      invalidateLayout()
+    }
+  }
   var horizontal = false { didSet { invalidateLayout() } }
+  var overscan: CGFloat = 1 { didSet { invalidateLayout() } }
 
   private var attributes: [UICollectionViewLayoutAttributes] = []
   private var contentSize: CGSize = .zero
+  private var masonryStarts: [String: Int] = [:]
 
   override var collectionViewContentSize: CGSize { contentSize }
 
@@ -50,7 +69,10 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
           frame = CGRect(x: 0, y: y, width: width, height: itemHeight)
           columnBottoms = Array(repeating: y + itemHeight, count: columnCount)
         } else {
-          let start = shortestRange(columnBottoms, span: span)
+          let cachedStart = masonryStarts[descriptor.key]
+          let start = cachedStart.map { min(max(0, $0), columnCount - span) }
+            ?? shortestRange(columnBottoms, span: span)
+          masonryStarts[descriptor.key] = start
           let y = columnBottoms[start..<(start + span)].max() ?? 0
           frame = CGRect(x: CGFloat(start) * columnWidth, y: y, width: CGFloat(span) * columnWidth, height: itemHeight)
           for column in start..<(start + span) { columnBottoms[column] = y + itemHeight }
@@ -88,7 +110,11 @@ final class RecyclerCollectionLayout: UICollectionViewLayout {
 
   override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
     guard let collectionView else { return attributes.filter { $0.frame.intersects(rect) } }
-    var visible = attributes.filter { $0.frame.intersects(rect) }.map { $0.copy() as! UICollectionViewLayoutAttributes }
+    let extra = max(0, overscan) * (horizontal ? collectionView.bounds.width : collectionView.bounds.height)
+    let expandedRect = horizontal
+      ? rect.insetBy(dx: -extra, dy: 0)
+      : rect.insetBy(dx: 0, dy: -extra)
+    var visible = attributes.filter { $0.frame.intersects(expandedRect) }.map { $0.copy() as! UICollectionViewLayoutAttributes }
     let offsetY = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
     var levelOffsets: [Int: CGFloat] = [:]
     guard let activeMarker = attributes.last(where: {

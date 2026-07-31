@@ -65,6 +65,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   private var previousTabCoordinatorId = ""
   private var previousTabKey = ""
   private var previousTabActive = false
+  private var lifecycleGeneration = 0
   private let refreshEvents = RecyclerListRefreshEventState()
   private let refreshTransition = RecyclerListRefreshTransitionDriver()
 
@@ -114,12 +115,13 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     let descriptorVersion = descriptors.map {
       "\($0.key):\($0.type):\($0.span):\($0.stickyGroup):\($0.stickyLevel):\($0.estimatedSize)"
     }.joined(separator: "\u{001F}")
-    let layoutVersion = "\(layout):\(horizontal):\(max(1, Int(numColumns)))"
+    let layoutVersion = "\(layout):\(horizontal):\(max(1, Int(numColumns))):\(max(0, overscan))"
     if layoutVersion != previousLayoutVersion {
       previousLayoutVersion = layoutVersion
       view.layout.mode = layout
       view.layout.columns = max(1, Int(numColumns))
       view.layout.horizontal = horizontal
+      view.layout.overscan = CGFloat(max(0, overscan))
       view.layout.invalidateLayout()
     }
     if descriptorVersion != previousDescriptorVersion {
@@ -163,7 +165,15 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       guard let self, let host else { return }
       try? self.updateMeasuredSize(key: host.itemKey, width: size.width, height: size.height)
     }
-    if let cell = cells[slot]?.value { attach(host: host, to: cell) }
+    // `afterUpdate()` may run before Fabric has inserted this host into its React parent.
+    // Defer native reparenting until the current component mounting transaction completes.
+    let generation = lifecycleGeneration
+    DispatchQueue.main.async { [weak self, weak host] in
+      guard let self, let host, generation == self.lifecycleGeneration,
+            self.hosts[slot] === host,
+            let cell = self.cells[slot]?.value else { return }
+      self.attach(host: host, to: cell)
+    }
   }
 
   func detachHost(_ host: HybridRecyclerCellHostView) {
@@ -184,7 +194,11 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cell.bindingIndex = index
     cells[slot] = WeakBox(cell)
     if let host = hosts[slot] { attach(host: host, to: cell) }
-    DispatchQueue.main.async { [weak self] in self?.publishBindings() }
+    let generation = lifecycleGeneration
+    DispatchQueue.main.async { [weak self] in
+      guard let self, generation == self.lifecycleGeneration else { return }
+      self.publishBindings()
+    }
   }
 
   func didScroll() {
@@ -201,7 +215,12 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       refreshTransition.cancel()
     }
     guard refreshEnabled, !horizontal, !refreshing, !secondLevelOpen, tabActive, !refreshTransition.isRunning else { return }
-    let pull = max(0, -(view.collectionView.contentOffset.y + view.collectionView.adjustedContentInset.top))
+    let rawPull = max(0, -(view.collectionView.contentOffset.y + view.collectionView.adjustedContentInset.top))
+    let pullLimit = secondLevelEnabled ? secondLevelThreshold * 1.15 : refreshThreshold
+    let pull = min(rawPull, pullLimit)
+    if rawPull > pullLimit {
+      view.collectionView.contentOffset.y = -view.collectionView.adjustedContentInset.top - pullLimit
+    }
     let progress = min(1, pull / max(1, refreshThreshold))
     let phase: NativeRefreshPhase = pull >= refreshThreshold ? .ready : pull > 0 ? .pulling : .idle
     let secondPhase: NativeSecondLevelPhase = secondLevelEnabled
@@ -272,22 +291,34 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   }
 
   func updateMeasuredSize(key: String, width: Double, height: Double) throws {
+    guard width.isFinite, height.isFinite, width > 0, height > 0 else { return }
     let size = CGSize(width: width, height: height)
-    guard view.layout.measuredSizes[key] != size else { return }
-    view.layout.measuredSizes[key] = size
-    view.collectionView.collectionViewLayout.invalidateLayout()
+    let generation = lifecycleGeneration
+    DispatchQueue.main.async { [weak self] in
+      guard let self, generation == self.lifecycleGeneration,
+            self.view.layout.measuredSizes[key] != size else { return }
+      self.view.layout.measuredSizes[key] = size
+      self.view.collectionView.collectionViewLayout.invalidateLayout()
+    }
   }
 
   func prepareForRecycle() {
+    lifecycleGeneration += 1
+    RecyclerListRegistry.unregister(list: self, id: previousListId.isEmpty ? listId : previousListId)
     resetRefresh()
     RecyclerTabCoordinatorRegistry.unregister(self)
     view.collectionView.setContentOffset(.zero, animated: false)
     hosts.removeAll()
     cells.removeAll()
+    lastRange = VisibleRange(first: -1, last: -1)
     view.layout.measuredSizes.removeAll()
     endReachedArmed = true
+    previousListId = ""
     previousDescriptorVersion = ""
     previousLayoutVersion = ""
+    previousTabCoordinatorId = ""
+    previousTabKey = ""
+    previousTabActive = false
   }
 
   func onDropView() {
@@ -318,7 +349,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
         itemKey: descriptor.key,
         itemType: descriptor.type
       )
-    }.sorted { $0.index < $1.index }
+    }.sorted { $0.slotId < $1.slotId }
     onSlotsChanged(bindings)
   }
 
@@ -364,7 +395,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       let startOffset = refreshEvents.offset
       let transitionPhase: NativeRefreshPhase = active ? .refreshing : .settling
       UIView.animate(
-        withDuration: 0.2,
+        withDuration: 0.15,
         delay: 0,
         options: [.curveEaseInOut, .beginFromCurrentState],
         animations: changes
@@ -372,7 +403,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       refreshTransition.start(
         from: startOffset,
         to: Double(inset),
-        duration: 0.2,
+        duration: 0.15,
         onUpdate: { [weak self] value in
           guard let self else { return }
           self.publishRefresh(

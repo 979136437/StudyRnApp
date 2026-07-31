@@ -21,10 +21,15 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
   }
 
   func prepareForRecycle() {
+    RecyclerListRegistry.unregister(host: self)
+    previousListId = ""
+    previousSlotId = -1
     view.layer.removeAllAnimations()
     view.transform = .identity
     view.alpha = 1
     view.resignFirstResponder()
+    listId = ""
+    slotId = -1
     itemKey = ""
     itemType = "default"
   }

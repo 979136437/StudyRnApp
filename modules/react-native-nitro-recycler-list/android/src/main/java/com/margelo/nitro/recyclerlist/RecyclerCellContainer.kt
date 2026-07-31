@@ -5,7 +5,7 @@ import android.widget.FrameLayout
 
 class RecyclerCellContainer(context: Context) : FrameLayout(context) {
   init {
-    clipChildren = false
-    clipToPadding = false
+    clipChildren = true
+    clipToPadding = true
   }
 }

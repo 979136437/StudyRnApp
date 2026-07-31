@@ -47,11 +47,16 @@ class HybridRecyclerCellHostView(
   }
 
   override fun prepareForRecycle() {
+    RecyclerListRegistry.unregisterHost(this)
+    previousListId = ""
+    previousSlotId = -1
     view.clearAnimation()
     view.translationX = 0f
     view.translationY = 0f
     view.alpha = 1f
     view.clearFocus()
+    listId = ""
+    slotId = -1.0
     itemKey = ""
     itemType = "default"
   }
