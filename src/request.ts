@@ -1,10 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
+import { addBreadcrumb, sanitizeUrl } from 'react-native-diagnostics';
 import { createRequest } from 'react-native-request-kit';
 import { createAsyncStoragePersister } from 'react-native-request-kit/cache';
 import { useAutoRequest } from 'react-native-request-kit/strategy';
-
-import { addBreadcrumb, sanitizeUrl } from '@/diagnostics';
 
 const requestStartedAt = new WeakMap<object, number>();
 

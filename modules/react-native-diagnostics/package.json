@@ -1,0 +1,52 @@
+{
+  "name": "react-native-diagnostics",
+  "version": "0.1.0",
+  "description": "Private crash collection and local diagnostics for the application.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@sentry/react-native": "catalog:",
+    "expo-application": "catalog:",
+    "expo-constants": "catalog:",
+    "expo-file-system": "catalog:",
+    "expo-router": "catalog:",
+    "expo-sharing": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-safe-area-context": "catalog:"
+  },
+  "devDependencies": {
+    "@sentry/react-native": "catalog:",
+    "@types/react": "catalog:",
+    "expo-application": "catalog:",
+    "expo-constants": "catalog:",
+    "expo-file-system": "catalog:",
+    "expo-router": "catalog:",
+    "expo-sharing": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-safe-area-context": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "license": "MIT",
+  "private": true
+}

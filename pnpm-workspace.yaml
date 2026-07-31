@@ -7,14 +7,21 @@ allowBuilds:
 
 catalog:
   '@react-native-async-storage/async-storage': 2.2.0
+  '@sentry/react-native': ~7.11.0
   '@types/react': ~19.2.2
   '@types/react-test-renderer': 19.1.0
+  expo-application: ~57.0.2
+  expo-constants: ~57.0.8
+  expo-file-system: ~57.0.1
+  expo-router: ~57.0.9
+  expo-sharing: ~57.0.8
   nitrogen: 0.36.3
   react: 19.2.3
   react-native: 0.86.2
   react-native-nitro-modules: 0.36.3
   react-native-pager-view: 8.0.2
   react-native-reanimated: 4.5.1
+  react-native-safe-area-context: ~5.7.0
   react-test-renderer: 19.2.3
   typescript: ~6.0.3
   vitest: 4.0.18

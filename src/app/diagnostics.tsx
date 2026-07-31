@@ -1,3 +1,3 @@
-import { DiagnosticsScreen } from '@/diagnostics';
+import { DiagnosticsScreen } from 'react-native-diagnostics';
 
 export default DiagnosticsScreen;
