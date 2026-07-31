@@ -61,6 +61,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   private var lastRange = VisibleRange(first: -1, last: -1)
   private var endReachedArmed = true
   private var previousDescriptorVersion = ""
+  private var previousLayoutVersion = ""
   private var previousTabCoordinatorId = ""
   private var previousTabKey = ""
   private var previousTabActive = false
@@ -111,18 +112,23 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
       RecyclerListRegistry.register(list: self, id: listId)
     }
     let descriptorVersion = descriptors.map {
-      "\($0.key):\($0.stickyGroup):\($0.stickyLevel)"
+      "\($0.key):\($0.type):\($0.span):\($0.stickyGroup):\($0.stickyLevel):\($0.estimatedSize)"
     }.joined(separator: "\u{001F}")
+    let layoutVersion = "\(layout):\(horizontal):\(max(1, Int(numColumns)))"
+    if layoutVersion != previousLayoutVersion {
+      previousLayoutVersion = layoutVersion
+      view.layout.mode = layout
+      view.layout.columns = max(1, Int(numColumns))
+      view.layout.horizontal = horizontal
+      view.layout.invalidateLayout()
+    }
     if descriptorVersion != previousDescriptorVersion {
       previousDescriptorVersion = descriptorVersion
       endReachedArmed = true
+      view.layout.descriptors = descriptors
+      view.collectionView.reloadData()
     }
-    view.layout.descriptors = descriptors
-    view.layout.mode = layout
-    view.layout.columns = max(1, Int(numColumns))
-    view.layout.horizontal = horizontal
     view.collectionView.alwaysBounceVertical = refreshEnabled && !horizontal
-    view.collectionView.reloadData()
     if tabCoordinatorId != previousTabCoordinatorId || tabKey != previousTabKey {
       if !previousTabCoordinatorId.isEmpty {
         RecyclerTabCoordinatorRegistry.unregister(
@@ -280,6 +286,8 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cells.removeAll()
     view.layout.measuredSizes.removeAll()
     endReachedArmed = true
+    previousDescriptorVersion = ""
+    previousLayoutVersion = ""
   }
 
   func onDropView() {

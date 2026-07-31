@@ -35,6 +35,7 @@ class HybridRecyclerListView(
   private var lastVisibleRange = VisibleRange(-1.0, -1.0)
   private var endReachedArmed = true
   private var previousDescriptorVersion = ""
+  private var previousLayoutVersion = ""
   private var previousTabCoordinatorId = ""
   private var previousTabKey = ""
   private var previousTabActive = false
@@ -103,14 +104,18 @@ class HybridRecyclerListView(
       RecyclerListRegistry.registerList(listId, this)
     }
     val descriptorVersion = descriptors.joinToString("\u001f") {
-      "${it.key}:${it.stickyGroup}:${it.stickyLevel}"
+      "${it.key}:${it.type}:${it.span}:${it.stickyGroup}:${it.stickyLevel}:${it.estimatedSize}"
+    }
+    val layoutVersion = "$layout:$horizontal:${max(1, numColumns.toInt())}"
+    if (layoutVersion != previousLayoutVersion) {
+      previousLayoutVersion = layoutVersion
+      configureLayoutManager()
     }
     if (descriptorVersion != previousDescriptorVersion) {
       previousDescriptorVersion = descriptorVersion
       endReachedArmed = true
+      adapter.notifyDataSetChanged()
     }
-    configureLayoutManager()
-    adapter.notifyDataSetChanged()
     if (tabCoordinatorId != previousTabCoordinatorId || tabKey != previousTabKey) {
       if (previousTabCoordinatorId.isNotEmpty()) {
         RecyclerTabCoordinatorRegistry.unregister(previousTabCoordinatorId, previousTabKey, this)
@@ -223,6 +228,8 @@ class HybridRecyclerListView(
     hosts.clear()
     measuredSizes.clear()
     endReachedArmed = true
+    previousDescriptorVersion = ""
+    previousLayoutVersion = ""
     resetRefresh()
     RecyclerTabCoordinatorRegistry.unregister(this)
   }
@@ -247,9 +254,7 @@ class HybridRecyclerListView(
       }
       RecyclerLayout.MASONRY -> StaggeredGridLayoutManager(columns, orientation)
     }
-    if (recyclerView.layoutManager?.javaClass != manager.javaClass) {
-      recyclerView.layoutManager = manager
-    }
+    recyclerView.layoutManager = manager
   }
 
   private fun visibleRange(): VisibleRange {

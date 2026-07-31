@@ -22,6 +22,7 @@ import { createDescriptors, normalizeListOptions } from './core/descriptors';
 import { EndReachedGate } from './core/endReachedGate';
 import { readSavedOffset, saveOffset } from './core/scrollState';
 import { normalizeSecondLevelOptions } from './core/secondLevel';
+import { areSlotBindingsEqual } from './core/slotBindings';
 import NativeRecyclerListRefreshEventSource, {
   type NativeProps as RefreshEventSourceProps,
   type RecyclerListRefreshPullEvent,
@@ -131,6 +132,13 @@ function RecyclerListInner<T>(
   const [secondLevelPhase, setSecondLevelPhase] =
     useState<SecondLevelPhase>('idle');
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
+  const handleSlotsChanged = useCallback((nextBindings: SlotBinding[]) => {
+    setBindings((currentBindings) =>
+      areSlotBindingsEqual(currentBindings, nextBindings)
+        ? currentBindings
+        : nextBindings,
+    );
+  }, []);
 
   const itemDescriptors = useMemo(
     () =>
@@ -474,7 +482,7 @@ function RecyclerListInner<T>(
           secondLevel?.onRequested?.();
           secondLevel?.onOpenChange(true);
         })}
-        onSlotsChanged={callback(setBindings)}
+        onSlotsChanged={callback(handleSlotsChanged)}
         onVisibleRangeChanged={callback((range) => {
           onVisibleRangeChanged?.(translateRange(range));
         })}
