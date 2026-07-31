@@ -1,6 +1,7 @@
 package com.margelo.nitro.recyclerlist
 
 import android.content.Context
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -10,6 +11,7 @@ class RecyclerCellContainer(
   context: Context,
   private val fillChildren: Boolean = false,
 ) : FrameLayout(context) {
+  var passThroughTouches = false
   private var preferredHorizontalInsets: Pair<Int, Int>? = null
   private val fillChildLayoutListener = View.OnLayoutChangeListener { child, _, _, _, _, _, _, _, _ ->
     if (fillChildren && child.parent === this) layoutChildWithinHolder(child)
@@ -40,6 +42,11 @@ class RecyclerCellContainer(
     for (index in 0 until childCount) {
       layoutChildWithinHolder(getChildAt(index))
     }
+  }
+
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    if (passThroughTouches) return false
+    return super.dispatchTouchEvent(event)
   }
 
   private fun layoutChildWithinHolder(child: View) {

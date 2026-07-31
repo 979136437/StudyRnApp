@@ -336,6 +336,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     cell.contentView.addSubview(host.view)
     host.view.isHidden = false
+    cell.setNeedsLayout()
   }
 
   private func publishBindings() {
@@ -374,6 +375,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   private func updateRefreshing(active: Bool, animated: Bool) {
     let inset = active ? CGFloat(refreshThreshold) : 0
+    if refreshTransition.target == Double(inset) { return }
     var contentInset = view.collectionView.contentInset
     let targetPhase: NativeRefreshPhase = active ? .refreshing : .idle
     guard contentInset.top != inset else {

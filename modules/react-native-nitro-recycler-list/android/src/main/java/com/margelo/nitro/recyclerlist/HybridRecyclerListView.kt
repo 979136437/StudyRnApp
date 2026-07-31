@@ -261,6 +261,7 @@ class HybridRecyclerListView(
       return
     }
     if (slot in stickySlots.values && activeStickyBindings.none { it.slotId.toInt() == slot }) {
+      host.view.passThroughTouches = true
       host.view.visibility = View.INVISIBLE
       trace("sticky-host-parked", "slot=$slot itemKey=${host.itemKey}")
     }
@@ -685,6 +686,7 @@ class HybridRecyclerListView(
       val host = hosts[binding.slotId.toInt()] ?: return@forEach
       val hostView = host.view
       if (!view.isManagedChild(hostView)) return@forEach
+      hostView.passThroughTouches = true
       val height = measuredSizes[descriptor.key]?.second ?: estimatedSizePx(descriptor)
       var nextIndex = -1
       for (candidate in (index + 1) until descriptors.size) {
@@ -846,6 +848,7 @@ class HybridRecyclerListView(
   private fun attachHostToHolder(host: HybridRecyclerCellHostView, holder: NativeHolder) {
     val hostView = host.view
     if (dropped || !view.isManagedChild(hostView)) return
+    hostView.passThroughTouches = false
     if (hostView.parent !== holder.container) {
       (hostView.parent as? ViewGroup)?.removeView(hostView)
       holder.container.removeAllViews()

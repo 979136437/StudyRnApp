@@ -11,6 +11,7 @@ final class RecyclerListRefreshTransitionDriver: NSObject {
   private var onCompletion: (() -> Void)?
 
   var isRunning: Bool { displayLink != nil }
+  var target: Double? { isRunning ? targetValue : nil }
 
   func start(
     from: Double,

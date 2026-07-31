@@ -24,6 +24,7 @@ import { EndReachedGate } from './core/endReachedGate';
 import { readSavedOffset, saveOffset } from './core/scrollState';
 import { normalizeSecondLevelOptions } from './core/secondLevel';
 import { areSlotBindingsEqual } from './core/slotBindings';
+import { logNitroRecyclerTrace } from './core/trace';
 import NativeRecyclerListRefreshEventSource, {
   type RecyclerListRefreshPullEvent,
   type RecyclerListTabScrollEvent,
@@ -142,8 +143,8 @@ function RecyclerListInner<T>(
   const handleSlotsChanged = useCallback(
     (nextBindings: SlotBinding[]) => {
       if (__DEV__) {
-        console.info(
-          'NitroRecyclerTrace JS slots-received',
+        logNitroRecyclerTrace(
+          'JS slots-received',
           listId,
           nextBindings
             .map(
@@ -164,8 +165,8 @@ function RecyclerListInner<T>(
 
   useEffect(() => {
     if (__DEV__) {
-      console.info(
-        'NitroRecyclerTrace JS slots-committed',
+      logNitroRecyclerTrace(
+        'JS slots-committed',
         listId,
         bindings
           .map(
@@ -179,8 +180,8 @@ function RecyclerListInner<T>(
 
   useEffect(() => {
     if (__DEV__) {
-      console.info(
-        'NitroRecyclerTrace JS refresh-prop',
+      logNitroRecyclerTrace(
+        'JS refresh-prop',
         listId,
         `refreshing=${refreshing}`,
       );
@@ -544,11 +545,7 @@ function RecyclerListInner<T>(
         onEndReached={callback(handleEndReached)}
         onRefreshPhaseChanged={callback((nextPhase) => {
           if (__DEV__) {
-            console.info(
-              'NitroRecyclerTrace JS refresh-phase',
-              listId,
-              nextPhase,
-            );
+            logNitroRecyclerTrace('JS refresh-phase', listId, nextPhase);
           }
           if (phaseRef.current !== nextPhase) {
             phaseRef.current = nextPhase;
@@ -557,7 +554,7 @@ function RecyclerListInner<T>(
         })}
         onRefreshRequested={callback(() => {
           if (__DEV__) {
-            console.info('NitroRecyclerTrace JS refresh-requested', listId);
+            logNitroRecyclerTrace('JS refresh-requested', listId);
           }
           onRefresh?.();
         })}

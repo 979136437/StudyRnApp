@@ -9,6 +9,10 @@ export {
 } from './RecyclerList.presets';
 export { RecyclerTabView } from './RecyclerTabView';
 export { clearSavedOffset } from './core/scrollState';
+export {
+  clearNitroRecyclerTraceLog,
+  getNitroRecyclerTraceLog,
+} from './core/trace';
 export { LoadMoreState, NativeRefreshPhase, SecondLevelPhase } from './types';
 export type {
   RecyclerTabBarContext,

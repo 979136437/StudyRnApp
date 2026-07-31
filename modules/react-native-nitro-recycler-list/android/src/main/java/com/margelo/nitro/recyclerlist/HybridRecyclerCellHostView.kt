@@ -54,6 +54,7 @@ class HybridRecyclerCellHostView(
     view.translationX = 0f
     view.translationY = 0f
     view.alpha = 1f
+    view.passThroughTouches = false
     view.clearFocus()
     listId = ""
     slotId = -1.0

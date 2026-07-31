@@ -25,6 +25,14 @@ const iosLayoutSource = new URL(
   '../../../ios/RecyclerCollectionLayout.swift',
   import.meta.url,
 );
+const iosCellSource = new URL(
+  '../../../ios/RecyclerCellContainer.swift',
+  import.meta.url,
+);
+const iosRefreshTransitionSource = new URL(
+  '../../../ios/RecyclerListRefreshTransitionDriver.swift',
+  import.meta.url,
+);
 const androidCellSource = new URL(
   '../../../android/src/main/java/com/margelo/nitro/recyclerlist/RecyclerCellContainer.kt',
   import.meta.url,
@@ -207,11 +215,16 @@ describe('React Native 0.86 compatibility', () => {
   it('sizes React cell hosts to their native column span', () => {
     const source = readFileSync(recyclerListSource, 'utf8');
     const androidCell = readFileSync(androidCellSource, 'utf8');
+    const iosCell = readFileSync(iosCellSource, 'utf8');
+    const iosList = readFileSync(iosRecyclerListSource, 'utf8');
 
     expect(source).toContain('const columnSpan = Math.min(');
     expect(source).toContain('width: cellWidth');
     expect(androidCell).toContain('clipChildren = true');
     expect(androidCell).toContain('clipToPadding = true');
+    expect(iosCell).toContain('override func layoutSubviews()');
+    expect(iosCell).toContain('hostView.frame = contentView.bounds');
+    expect(iosList).toContain('cell.setNeedsLayout()');
   });
 
   it('uses overscan and publishes Android binding snapshots without waiting another frame', () => {
@@ -272,6 +285,11 @@ describe('React Native 0.86 compatibility', () => {
       'child.layout(nextLeft, 0, nextLeft + nextWidth, nextHeight)',
     );
     expect(cellSource).toContain('"holder-child-corrected"');
+    expect(cellSource).toContain('var passThroughTouches = false');
+    expect(cellSource).toContain('if (passThroughTouches) return false');
+    expect(source).toContain('host.view.passThroughTouches = true');
+    expect(source).toContain('hostView.passThroughTouches = true');
+    expect(source).toContain('hostView.passThroughTouches = false');
     expect(cellSource).not.toContain('override fun layout(');
   });
 
@@ -319,6 +337,18 @@ describe('React Native 0.86 compatibility', () => {
     expect(iosLayout).toContain('masonryStarts[descriptor.key] = start');
   });
 
+  it('does not restart an active iOS refresh transition for the same target', () => {
+    const iosList = readFileSync(iosRecyclerListSource, 'utf8');
+    const transition = readFileSync(iosRefreshTransitionSource, 'utf8');
+
+    expect(transition).toContain(
+      'var target: Double? { isRunning ? targetValue : nil }',
+    );
+    expect(iosList).toContain(
+      'if refreshTransition.target == Double(inset) { return }',
+    );
+  });
+
   it('keeps React host order stable and prefetches masonry slots beyond the viewport', () => {
     const androidSource = readFileSync(androidRecyclerListSource, 'utf8');
     const iosSource = readFileSync(iosRecyclerListSource, 'utf8');
@@ -351,10 +381,10 @@ describe('React Native 0.86 compatibility', () => {
     expect(androidSource).toContain('"refresh-animation-end"');
     expect(androidSource).toContain('refreshEnabled=$refreshEnabled');
     expect(readFileSync(recyclerListSource, 'utf8')).toContain(
-      'NitroRecyclerTrace JS refresh-requested',
+      "logNitroRecyclerTrace('JS refresh-requested'",
     );
     expect(readFileSync(recyclerListSource, 'utf8')).toContain(
-      'NitroRecyclerTrace JS refresh-prop',
+      "'JS refresh-prop'",
     );
     expect(iosSource).toContain(
       'secondLevelEnabled ? secondLevelThreshold * 1.15 : refreshThreshold',
