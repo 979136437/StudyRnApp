@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@react-native-async-storage/async-storage": "catalog:",
     "@expo/metro-runtime": "~57.0.8",
     "@quidone/react-native-wheel-picker": "^1.7.1",
+    "@react-native-async-storage/async-storage": "catalog:",
+    "@sentry/react-native": "~7.11.0",
     "@shopify/flash-list": "2.0.2",
     "clsx": "^2.1.1",
     "expo": "~57.0.9",
@@ -25,6 +26,7 @@
     "expo-media-library": "~57.0.3",
     "expo-network": "~57.0.1",
     "expo-router": "~57.0.9",
+    "expo-sharing": "~57.0.8",
     "expo-splash-screen": "~57.0.5",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
@@ -40,10 +42,10 @@
     "react-native-nitro-modules": "catalog:",
     "react-native-nitro-recycler-list": "workspace:*",
     "react-native-nitro-refresh": "workspace:*",
-    "react-native-request-kit": "workspace:*",
     "react-native-pager-view": "8.0.2",
     "react-native-popover-view": "^6.1.0",
     "react-native-reanimated": "catalog:",
+    "react-native-request-kit": "workspace:*",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-view-shot": "5.1.0",
@@ -54,11 +56,13 @@
     "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
+    "@sentry/cli": "2.58.4",
     "@types/react": "catalog:",
     "babel-preset-expo": "~57.0.5",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "scripts": {
     "start": "expo start",
@@ -70,6 +74,7 @@
     "doctor": "pnpm dlx expo-doctor",
     "lint": "oxlint . && oxfmt --check \"src/**/*.{js,jsx,ts,tsx}\" \"plugins/**/*.{js,jsx,ts,tsx}\" \"*.{js,jsx}\"",
     "lint:fix": "oxlint --fix . && oxfmt \"src/**/*.{js,jsx,ts,tsx}\" \"plugins/**/*.{js,jsx,ts,tsx}\" \"*.{js,jsx}\"",
+    "test:diagnostics": "vitest run src/diagnostics/__tests__",
     "typecheck": "tsc --noEmit",
     "build:android:development": "eas build --profile development --platform android --non-interactive",
     "build:android:production": "eas build --profile production --platform android --non-interactive",
@@ -78,8 +83,15 @@
     "build:development": "eas build --profile development --platform all --non-interactive",
     "build:production": "eas build --profile production --platform all --non-interactive",
     "run:android": "expo run:android --device",
-    "run:ios": "expo run:ios --device"
+    "run:ios": "expo run:ios --device",
+    "postinstall": "pnpm doctor"
   },
   "private": true,
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver"
+    ]
+  }
 }

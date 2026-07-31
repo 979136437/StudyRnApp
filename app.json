@@ -81,7 +81,16 @@
           "isAndroidBackgroundLocationEnabled": false
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "test-910",
+          "project": "react-native"
+        }
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
