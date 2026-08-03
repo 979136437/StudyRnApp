@@ -13,6 +13,7 @@ final class RecyclerCollectionCell: UICollectionViewCell {
   var slotId = -1
   var bindingIndex = -1
   var bindingGeneration = 0
+  var isDisplaying = false
 
   override func layoutSubviews() {
     super.layoutSubviews()
@@ -23,6 +24,7 @@ final class RecyclerCollectionCell: UICollectionViewCell {
 
   override func prepareForReuse() {
     super.prepareForReuse()
+    isDisplaying = false
     contentView.endEditing(true)
   }
 }

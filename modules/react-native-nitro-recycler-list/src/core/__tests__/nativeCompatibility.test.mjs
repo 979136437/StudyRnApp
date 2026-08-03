@@ -293,11 +293,21 @@ describe('React Native 0.86 compatibility', () => {
     expect(source).toContain('private var previousBindingsSignature: String?');
     expect(source).toContain('private func scheduleBindingsPublish()');
     expect(source).toContain(String.raw`cells.values.compactMap(\.value)`);
+    expect(source).toContain(
+      'where cell.isDisplaying && descriptors.indices.contains(cell.bindingIndex)',
+    );
     expect(source).toContain('cell.bindingGeneration = nextBindingGeneration');
+    expect(source).toContain('willDisplay cell: UICollectionViewCell');
+    expect(source).toContain('didEndDisplaying cell: UICollectionViewCell');
+    expect(source).toContain(
+      'guard cell.bindingIndex == index else { return }',
+    );
     expect(source).toContain(
       'if signature == previousBindingsSignature { return }',
     );
     expect(source).not.toContain('view.collectionView.visibleCells.compactMap');
+    expect(cellSource).toContain('var isDisplaying = false');
+    expect(prepareForReuse).toContain('isDisplaying = false');
     expect(prepareForReuse).not.toContain('bindingIndex = -1');
     expect(prepareForReuse).not.toContain('removeFromSuperview()');
   });

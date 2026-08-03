@@ -41,6 +41,24 @@ private final class RecyclerCoordinator: NSObject, UICollectionViewDataSource, U
     return cell
   }
 
+  func collectionView(
+    _ collectionView: UICollectionView,
+    willDisplay cell: UICollectionViewCell,
+    forItemAt indexPath: IndexPath
+  ) {
+    guard let cell = cell as? RecyclerCollectionCell else { return }
+    owner?.updateDisplayState(cell: cell, index: indexPath.item, isDisplaying: true)
+  }
+
+  func collectionView(
+    _ collectionView: UICollectionView,
+    didEndDisplaying cell: UICollectionViewCell,
+    forItemAt indexPath: IndexPath
+  ) {
+    guard let cell = cell as? RecyclerCollectionCell else { return }
+    owner?.updateDisplayState(cell: cell, index: indexPath.item, isDisplaying: false)
+  }
+
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
     owner?.didScroll()
   }
@@ -190,7 +208,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     guard let componentView = componentView(for: host),
           let parent = componentView.superview,
           hosts[slot] === host else { return }
-    guard let cell = cells[slot]?.value else {
+    guard let cell = cells[slot]?.value, cell.isDisplaying else {
       componentView.isHidden = true
       return
     }
@@ -210,7 +228,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     guard hosts[slot] === host else { return }
     guard let componentView = componentView(for: host),
           componentView.superview != nil else { return }
-    guard let cell = cells[slot]?.value else {
+    guard let cell = cells[slot]?.value, cell.isDisplaying else {
       componentView.isHidden = true
       return
     }
@@ -248,9 +266,28 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cell.slotId = slot
     cell.bindingIndex = index
     cell.bindingGeneration = nextBindingGeneration
+    cell.isDisplaying = false
     nextBindingGeneration += 1
     cells[slot] = WeakBox(cell)
-    if let host = hosts[slot] { attach(host: host, to: cell) }
+    if let host = hosts[slot] { componentView(for: host)?.isHidden = true }
+    scheduleBindingsPublish()
+  }
+
+  func updateDisplayState(
+    cell: RecyclerCollectionCell,
+    index: Int,
+    isDisplaying: Bool
+  ) {
+    // UIKit may deliver an old didEndDisplaying callback after reusing the cell.
+    guard cell.bindingIndex == index else { return }
+    cell.isDisplaying = isDisplaying
+    if let host = hosts[cell.slotId] {
+      if isDisplaying {
+        attach(host: host, to: cell)
+      } else {
+        componentView(for: host)?.isHidden = true
+      }
+    }
     scheduleBindingsPublish()
   }
 
@@ -476,7 +513,8 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   private func publishBindings() {
     var latestCells: [Int: RecyclerCollectionCell] = [:]
-    for cell in cells.values.compactMap(\.value) where descriptors.indices.contains(cell.bindingIndex) {
+    for cell in cells.values.compactMap(\.value)
+      where cell.isDisplaying && descriptors.indices.contains(cell.bindingIndex) {
       if let current = latestCells[cell.bindingIndex],
          current.bindingGeneration >= cell.bindingGeneration { continue }
       latestCells[cell.bindingIndex] = cell
