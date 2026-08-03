@@ -28,3 +28,57 @@ for (const { path, propsName } of generatedFiles) {
   }
   writeFileSync(path, source.replace(legacy, replacement));
 }
+
+const iosListComponent = new URL(
+  '../nitrogen/generated/ios/c++/views/HybridRecyclerListViewComponent.mm',
+  import.meta.url,
+);
+const managedMounting = `- (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index {
+  [super mountChildComponentView:childComponentView index:index];
+  if ([childComponentView isKindOfClass:[RCTViewComponentView class]]) {
+    UIView* contentView = ((RCTViewComponentView*)childComponentView).contentView;
+    SEL selector = NSSelectorFromString(@"nitroRecyclerComponentDidMount");
+    if ([contentView respondsToSelector:selector]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+      [contentView performSelector:selector];
+#pragma clang diagnostic pop
+    }
+  }
+}
+
+- (void)unmountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index {
+  [childComponentView removeFromSuperview];
+}`;
+insertGeneratedPatch(
+  iosListComponent,
+  '- (instancetype) init {',
+  managedMounting,
+);
+
+const iosHostComponent = new URL(
+  '../nitrogen/generated/ios/c++/views/HybridRecyclerCellHostViewComponent.mm',
+  import.meta.url,
+);
+const managedLayout = `- (void)updateLayoutMetrics:(const react::LayoutMetrics&)layoutMetrics
+           oldLayoutMetrics:(const react::LayoutMetrics&)oldLayoutMetrics {
+  [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
+  UIView* parent = self.superview;
+  if (parent != nil && ![parent conformsToProtocol:@protocol(RCTComponentViewProtocol)]) {
+    self.frame = parent.bounds;
+  }
+}`;
+insertGeneratedPatch(
+  iosHostComponent,
+  '+ (BOOL)shouldBeRecycled {',
+  managedLayout,
+);
+
+function insertGeneratedPatch(path, marker, patch) {
+  const source = readFileSync(path, 'utf8');
+  if (source.includes(patch)) return;
+  if (!source.includes(marker)) {
+    throw new Error(`Nitrogen output changed unexpectedly: ${path.pathname}`);
+  }
+  writeFileSync(path, source.replace(marker, `${patch}\n\n${marker}`));
+}

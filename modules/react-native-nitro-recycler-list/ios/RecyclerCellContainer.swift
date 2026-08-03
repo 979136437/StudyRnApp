@@ -1,11 +1,11 @@
 import UIKit
 
 final class RecyclerCellContainer: UIView {
-  var onSuperviewChanged: (() -> Void)?
+  var onComponentViewMounted: (() -> Void)?
 
-  override func didMoveToSuperview() {
-    super.didMoveToSuperview()
-    onSuperviewChanged?()
+  @objc(nitroRecyclerComponentDidMount)
+  func componentViewDidMount() {
+    onComponentViewMounted?()
   }
 }
 

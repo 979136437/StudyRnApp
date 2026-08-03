@@ -13,8 +13,8 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
 
   override init() {
     super.init()
-    view.onSuperviewChanged = { [weak self] in
-      guard let self, self.view.superview != nil else { return }
+    view.onComponentViewMounted = { [weak self] in
+      guard let self else { return }
       RecyclerListRegistry.reconcile(host: self)
     }
   }
@@ -50,7 +50,7 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
 
   func onDropView() {
     RecyclerListRegistry.unregister(host: self)
-    view.onSuperviewChanged = nil
+    view.onComponentViewMounted = nil
     view.removeFromSuperview()
   }
 }

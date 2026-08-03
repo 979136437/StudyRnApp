@@ -45,6 +45,18 @@ const iosRegistrySource = new URL(
   '../../../ios/RecyclerListRegistry.swift',
   import.meta.url,
 );
+const iosGeneratedListSource = new URL(
+  '../../../nitrogen/generated/ios/c++/views/HybridRecyclerListViewComponent.mm',
+  import.meta.url,
+);
+const iosGeneratedHostSource = new URL(
+  '../../../nitrogen/generated/ios/c++/views/HybridRecyclerCellHostViewComponent.mm',
+  import.meta.url,
+);
+const nitrogenPatchSource = new URL(
+  '../../../scripts/patch-nitrogen-react-native-086.mjs',
+  import.meta.url,
+);
 const iosRefreshTransitionSource = new URL(
   '../../../ios/RecyclerListRefreshTransitionDriver.swift',
   import.meta.url,
@@ -79,12 +91,8 @@ describe('React Native 0.86 compatibility', () => {
     expect(source).not.toContain('onTabScroll={');
   });
 
-  it('defers native host reparenting until Fabric finishes mounting', () => {
+  it('defers Android host reparenting until Fabric finishes mounting', () => {
     const androidSource = readFileSync(androidRecyclerListSource, 'utf8');
-    const iosSource = readFileSync(iosRecyclerListSource, 'utf8');
-    const iosHost = readFileSync(iosHostSource, 'utf8');
-    const iosCell = readFileSync(iosCellSource, 'utf8');
-    const iosRegistry = readFileSync(iosRegistrySource, 'utf8');
 
     expect(androidSource).toContain('view.post {');
     expect(androidSource).toContain(
@@ -98,20 +106,49 @@ describe('React Native 0.86 compatibility', () => {
       'if (dropped || !view.isManagedChild(hostView)) return',
     );
     expect(androidSource).toContain('scheduleHostAttachment(host)');
+  });
+
+  it('reparents complete iOS Fabric component views into native cells', () => {
+    const iosSource = readFileSync(iosRecyclerListSource, 'utf8');
+    const iosHost = readFileSync(iosHostSource, 'utf8');
+    const iosCell = readFileSync(iosCellSource, 'utf8');
+    const iosRegistry = readFileSync(iosRegistrySource, 'utf8');
+    const generatedList = readFileSync(iosGeneratedListSource, 'utf8');
+    const generatedHost = readFileSync(iosGeneratedHostSource, 'utf8');
+    const patchScript = readFileSync(nitrogenPatchSource, 'utf8');
+
     expect(iosSource).toContain(
       'DispatchQueue.main.async { [weak self, weak host] in',
     );
-    expect(iosSource).toContain(
-      'override func didAddSubview(_ subview: UIView)',
-    );
-    expect(iosSource).toContain('view.onManagedChildAdded =');
     expect(iosSource).toContain('host.view.isHidden = true');
     expect(iosSource).toContain('scheduleHostAttachment(host)');
-    expect(iosSource).toContain('guard let parent = host.view.superview');
+    expect(iosSource).toContain(
+      'guard let componentView = componentView(for: host)',
+    );
+    expect(iosSource).toContain(
+      'NSSelectorFromString("mountChildComponentView:index:")',
+    );
+    expect(iosSource).toContain('componentView.removeFromSuperview()');
+    expect(iosSource).toContain('cell.contentView.addSubview(componentView)');
+    expect(iosSource).not.toContain('cell.contentView.addSubview(host.view)');
     expect(iosSource).toContain('func reconcileHost(');
-    expect(iosCell).toContain('override func didMoveToSuperview()');
-    expect(iosHost).toContain('view.onSuperviewChanged =');
+    expect(iosCell).toContain('@objc(nitroRecyclerComponentDidMount)');
+    expect(iosHost).toContain('view.onComponentViewMounted =');
     expect(iosRegistry).toContain('static func reconcile(');
+    expect(generatedList).toContain(
+      '- (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index',
+    );
+    expect(generatedList).toContain('[contentView performSelector:selector]');
+    expect(generatedList).toContain(
+      '- (void)unmountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index',
+    );
+    expect(generatedHost).toContain(
+      '- (void)updateLayoutMetrics:(const react::LayoutMetrics&)layoutMetrics',
+    );
+    expect(generatedHost).toContain('self.frame = parent.bounds');
+    expect(patchScript).toContain('const iosListComponent = new URL(');
+    expect(patchScript).toContain('const iosHostComponent = new URL(');
+    expect(patchScript).toContain('function insertGeneratedPatch(');
   });
 
   it('unregisters recycled hosts by their previous native identity', () => {

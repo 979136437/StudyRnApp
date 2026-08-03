@@ -116,6 +116,15 @@ using namespace margelo::nitro::recyclerlist::views;
   [super updateProps:props oldProps:oldProps];
 }
 
+- (void)updateLayoutMetrics:(const react::LayoutMetrics&)layoutMetrics
+           oldLayoutMetrics:(const react::LayoutMetrics&)oldLayoutMetrics {
+  [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
+  UIView* parent = self.superview;
+  if (parent != nil && ![parent conformsToProtocol:@protocol(RCTComponentViewProtocol)]) {
+    self.frame = parent.bounds;
+  }
+}
+
 + (BOOL)shouldBeRecycled {
   return NitroRecyclerList::NitroRecyclerListAutolinking::isRecyclerCellHostViewRecyclable();
 }

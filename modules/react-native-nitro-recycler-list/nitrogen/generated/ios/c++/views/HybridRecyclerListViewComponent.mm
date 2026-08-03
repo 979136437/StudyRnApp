@@ -48,6 +48,24 @@ using namespace margelo::nitro::recyclerlist::views;
   return react::concreteComponentDescriptorProvider<HybridRecyclerListViewComponentDescriptor>();
 }
 
+- (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index {
+  [super mountChildComponentView:childComponentView index:index];
+  if ([childComponentView isKindOfClass:[RCTViewComponentView class]]) {
+    UIView* contentView = ((RCTViewComponentView*)childComponentView).contentView;
+    SEL selector = NSSelectorFromString(@"nitroRecyclerComponentDidMount");
+    if ([contentView respondsToSelector:selector]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+      [contentView performSelector:selector];
+#pragma clang diagnostic pop
+    }
+  }
+}
+
+- (void)unmountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index {
+  [childComponentView removeFromSuperview];
+}
+
 - (instancetype) init {
   if (self = [super init]) {
     std::shared_ptr<HybridRecyclerListViewSpec> hybridView = NitroRecyclerList::NitroRecyclerListAutolinking::createRecyclerListView();

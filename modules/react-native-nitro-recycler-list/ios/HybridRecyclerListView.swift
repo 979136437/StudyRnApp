@@ -4,7 +4,6 @@ import UIKit
 final class RecyclerListContainer: UIView {
   let layout = RecyclerCollectionLayout()
   lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-  var onManagedChildAdded: ((UIView) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -15,12 +14,6 @@ final class RecyclerListContainer: UIView {
   }
 
   required init?(coder: NSCoder) { nil }
-
-  override func didAddSubview(_ subview: UIView) {
-    super.didAddSubview(subview)
-    guard subview !== collectionView else { return }
-    onManagedChildAdded?(subview)
-  }
 
   override func layoutSubviews() {
     super.layoutSubviews()
@@ -112,12 +105,6 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   override init() {
     super.init()
     coordinator.owner = self
-    view.onManagedChildAdded = { [weak self] child in
-      guard let self,
-            let host = self.hosts.values.first(where: { $0.view === child }) else { return }
-      host.view.isHidden = true
-      self.scheduleHostAttachment(host)
-    }
     view.collectionView.dataSource = coordinator
     view.collectionView.delegate = coordinator
     view.collectionView.register(RecyclerCollectionCell.self, forCellWithReuseIdentifier: "NitroRecyclerCell:default")
@@ -200,7 +187,8 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   private func attachHostIfManaged(_ host: HybridRecyclerCellHostView) {
     let slot = Int(host.slotId)
-    guard let parent = host.view.superview,
+    guard let componentView = componentView(for: host),
+          let parent = componentView.superview,
           hosts[slot] === host,
           let cell = cells[slot]?.value else { return }
     if parent === cell.contentView {
@@ -213,11 +201,13 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   func reconcileHost(_ host: HybridRecyclerCellHostView) {
     let slot = Int(host.slotId)
     guard hosts[slot] === host else { return }
+    guard let componentView = componentView(for: host),
+          componentView.superview != nil else { return }
     guard let cell = cells[slot]?.value else {
       host.view.isHidden = true
       return
     }
-    guard host.view.superview !== cell.contentView else { return }
+    guard componentView.superview !== cell.contentView else { return }
     host.view.isHidden = true
     scheduleHostAttachment(host)
   }
@@ -411,25 +401,36 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     resetRefresh()
     RecyclerListRegistry.unregister(list: self, id: listId)
     RecyclerTabCoordinatorRegistry.unregister(self)
-    view.onManagedChildAdded = nil
     view.collectionView.dataSource = nil
     view.collectionView.delegate = nil
   }
 
   private func attach(host: HybridRecyclerCellHostView, to cell: RecyclerCollectionCell) {
-    host.view.removeFromSuperview()
+    guard let componentView = componentView(for: host) else { return }
+    componentView.removeFromSuperview()
     cell.contentView.subviews.forEach { $0.removeFromSuperview() }
-    host.view.frame = cell.contentView.bounds
-    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    cell.contentView.addSubview(host.view)
+    componentView.frame = cell.contentView.bounds
+    componentView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    cell.contentView.addSubview(componentView)
     host.view.isHidden = false
     cell.setNeedsLayout()
   }
 
   private func removeHostViewIfOwned(_ host: HybridRecyclerCellHostView) {
-    let parent = host.view.superview
+    guard let componentView = componentView(for: host) else { return }
+    let parent = componentView.superview
     let isOwnedCell = cells.values.contains { $0.value?.contentView === parent }
-    if parent === view || isOwnedCell { host.view.removeFromSuperview() }
+    if isOwnedCell { componentView.removeFromSuperview() }
+  }
+
+  private func componentView(for host: HybridRecyclerCellHostView) -> UIView? {
+    let mountSelector = NSSelectorFromString("mountChildComponentView:index:")
+    var candidate = host.view.superview
+    while let current = candidate {
+      if current.responds(to: mountSelector) { return current }
+      candidate = current.superview
+    }
+    return nil
   }
 
   private func scheduleBindingsPublish() {
