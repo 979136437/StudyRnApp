@@ -11,6 +11,14 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
   private var previousListId = ""
   private var previousSlotId = -1
 
+  override init() {
+    super.init()
+    view.onSuperviewChanged = { [weak self] in
+      guard let self, self.view.superview != nil else { return }
+      RecyclerListRegistry.reconcile(host: self)
+    }
+  }
+
   func afterUpdate() {
     let nextSlotId = Int(slotId)
     guard previousListId != listId || previousSlotId != nextSlotId else { return }
@@ -42,6 +50,7 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
 
   func onDropView() {
     RecyclerListRegistry.unregister(host: self)
+    view.onSuperviewChanged = nil
     view.removeFromSuperview()
   }
 }

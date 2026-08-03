@@ -36,6 +36,15 @@ enum RecyclerListRegistry {
     list?.attachHost(host)
   }
 
+  static func reconcile(host: HybridRecyclerCellHostView) {
+    lock.lock()
+    let slot = Int(host.slotId)
+    let isRegistered = hosts[host.listId]?[slot]?.value === host
+    let list = lists[host.listId]?.value
+    lock.unlock()
+    if isRegistered { list?.reconcileHost(host) }
+  }
+
   static func unregister(host: HybridRecyclerCellHostView) {
     unregister(host: host, listId: host.listId, slotId: Int(host.slotId))
   }

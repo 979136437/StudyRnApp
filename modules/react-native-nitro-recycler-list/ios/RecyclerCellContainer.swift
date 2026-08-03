@@ -1,6 +1,13 @@
 import UIKit
 
-final class RecyclerCellContainer: UIView {}
+final class RecyclerCellContainer: UIView {
+  var onSuperviewChanged: (() -> Void)?
+
+  override func didMoveToSuperview() {
+    super.didMoveToSuperview()
+    onSuperviewChanged?()
+  }
+}
 
 final class RecyclerCollectionCell: UICollectionViewCell {
   var slotId = -1

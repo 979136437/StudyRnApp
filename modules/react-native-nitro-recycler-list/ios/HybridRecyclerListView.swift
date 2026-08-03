@@ -200,10 +200,26 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   private func attachHostIfManaged(_ host: HybridRecyclerCellHostView) {
     let slot = Int(host.slotId)
-    guard host.view.superview === view,
+    guard let parent = host.view.superview,
           hosts[slot] === host,
           let cell = cells[slot]?.value else { return }
+    if parent === cell.contentView {
+      host.view.isHidden = false
+      return
+    }
     attach(host: host, to: cell)
+  }
+
+  func reconcileHost(_ host: HybridRecyclerCellHostView) {
+    let slot = Int(host.slotId)
+    guard hosts[slot] === host else { return }
+    guard let cell = cells[slot]?.value else {
+      host.view.isHidden = true
+      return
+    }
+    guard host.view.superview !== cell.contentView else { return }
+    host.view.isHidden = true
+    scheduleHostAttachment(host)
   }
 
   func detachHost(_ host: HybridRecyclerCellHostView, slot: Int? = nil) {

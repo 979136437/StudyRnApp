@@ -82,6 +82,9 @@ describe('React Native 0.86 compatibility', () => {
   it('defers native host reparenting until Fabric finishes mounting', () => {
     const androidSource = readFileSync(androidRecyclerListSource, 'utf8');
     const iosSource = readFileSync(iosRecyclerListSource, 'utf8');
+    const iosHost = readFileSync(iosHostSource, 'utf8');
+    const iosCell = readFileSync(iosCellSource, 'utf8');
+    const iosRegistry = readFileSync(iosRegistrySource, 'utf8');
 
     expect(androidSource).toContain('view.post {');
     expect(androidSource).toContain(
@@ -104,7 +107,11 @@ describe('React Native 0.86 compatibility', () => {
     expect(iosSource).toContain('view.onManagedChildAdded =');
     expect(iosSource).toContain('host.view.isHidden = true');
     expect(iosSource).toContain('scheduleHostAttachment(host)');
-    expect(iosSource).toContain('host.view.superview === view');
+    expect(iosSource).toContain('guard let parent = host.view.superview');
+    expect(iosSource).toContain('func reconcileHost(');
+    expect(iosCell).toContain('override func didMoveToSuperview()');
+    expect(iosHost).toContain('view.onSuperviewChanged =');
+    expect(iosRegistry).toContain('static func reconcile(');
   });
 
   it('unregisters recycled hosts by their previous native identity', () => {
