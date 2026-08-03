@@ -23,7 +23,9 @@ class HybridRecyclerCellHostView(
   override fun afterUpdate() {
     val nextSlotId = slotId.toInt()
     if (previousListId != listId || previousSlotId != nextSlotId) {
-      if (previousListId.isNotEmpty()) RecyclerListRegistry.unregisterHost(this)
+      if (previousListId.isNotEmpty()) {
+        RecyclerListRegistry.unregisterHost(this, previousListId, previousSlotId)
+      }
       previousListId = listId
       previousSlotId = nextSlotId
       RecyclerListRegistry.registerHost(this)

@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.facebook.react.bridge.UiThreadUtil
@@ -268,10 +269,12 @@ class HybridRecyclerListView(
     layoutStickyHosts()
   }
 
-  fun detachHost(host: HybridRecyclerCellHostView) {
-    trace("detach-host", "slot=${host.slotId.toInt()} itemKey=${host.itemKey}")
-    hosts.remove(host.slotId.toInt())
-    (host.view.parent as? ViewGroup)?.removeView(host.view)
+  fun detachHost(host: HybridRecyclerCellHostView, slot: Int = host.slotId.toInt()) {
+    trace("detach-host", "slot=$slot itemKey=${host.itemKey}")
+    if (hosts[slot] === host) hosts.remove(slot)
+    val parent = host.view.parent
+    val isOwnedHolder = holders.values.any { it.container === parent }
+    if (parent === view || isOwnedHolder) (parent as? ViewGroup)?.removeView(host.view)
   }
 
   override fun scrollToOffset(offset: Double, animated: Boolean) {
@@ -285,11 +288,40 @@ class HybridRecyclerListView(
   override fun scrollToIndex(index: Double, viewPosition: Double, animated: Boolean) {
     val target = index.toInt()
     require(target in descriptors.indices) { "scrollToIndex index out of bounds: $target" }
+    val position = viewPosition.coerceIn(0.0, 1.0).toFloat()
     if (animated) {
-      recyclerView.smoothScrollToPosition(target)
+      val scroller = object : LinearSmoothScroller(view.context) {
+        override fun calculateDtToFit(
+          viewStart: Int,
+          viewEnd: Int,
+          boxStart: Int,
+          boxEnd: Int,
+          snapPreference: Int,
+        ): Int {
+          val itemSize = viewEnd - viewStart
+          val viewportSize = boxEnd - boxStart
+          val alignedStart = boxStart + ((viewportSize - itemSize) * position).toInt()
+          return alignedStart - viewStart
+        }
+      }
+      scroller.targetPosition = target
+      recyclerView.layoutManager?.startSmoothScroll(scroller)
     } else {
-      (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
-        ?: recyclerView.scrollToPosition(target)
+      val descriptor = descriptors[target]
+      val itemSize = measuredSizes[descriptor.key]
+        ?.let { if (horizontal) it.first else it.second }
+        ?: estimatedSizePx(descriptor)
+      val viewportSize = if (horizontal) {
+        recyclerView.width - recyclerView.paddingLeft - recyclerView.paddingRight
+      } else {
+        recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
+      }
+      val offset = ((viewportSize - itemSize) * position).toInt()
+      when (val manager = recyclerView.layoutManager) {
+        is StaggeredGridLayoutManager -> manager.scrollToPositionWithOffset(target, offset)
+        is LinearLayoutManager -> manager.scrollToPositionWithOffset(target, offset)
+        else -> recyclerView.scrollToPosition(target)
+      }
     }
   }
 

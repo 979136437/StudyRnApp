@@ -39,15 +39,19 @@ internal object RecyclerListRegistry {
     lists[host.listId]?.get()?.attachHost(host)
   }
 
-  @Synchronized
   fun unregisterHost(host: HybridRecyclerCellHostView) {
+    unregisterHost(host, host.listId, host.slotId.toInt())
+  }
+
+  @Synchronized
+  fun unregisterHost(host: HybridRecyclerCellHostView, listId: String, slotId: Int) {
     RecyclerTrace.log(
       host,
       "registry-unregister-host",
-      "listId=${host.listId} slot=${host.slotId.toInt()} itemKey=${host.itemKey}",
+      "listId=$listId slot=$slotId itemKey=${host.itemKey}",
     )
-    hosts[host.listId]?.remove(host.slotId.toInt())
-    lists[host.listId]?.get()?.detachHost(host)
+    if (hosts[listId]?.get(slotId)?.get() === host) hosts[listId]?.remove(slotId)
+    lists[listId]?.get()?.detachHost(host, slotId)
   }
 
   @Synchronized

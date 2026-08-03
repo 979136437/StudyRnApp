@@ -14,7 +14,13 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
   func afterUpdate() {
     let nextSlotId = Int(slotId)
     guard previousListId != listId || previousSlotId != nextSlotId else { return }
-    if !previousListId.isEmpty { RecyclerListRegistry.unregister(host: self) }
+    if !previousListId.isEmpty {
+      RecyclerListRegistry.unregister(
+        host: self,
+        listId: previousListId,
+        slotId: previousSlotId
+      )
+    }
     previousListId = listId
     previousSlotId = nextSlotId
     RecyclerListRegistry.register(host: self)

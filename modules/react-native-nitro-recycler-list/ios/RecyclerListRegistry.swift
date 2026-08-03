@@ -37,10 +37,20 @@ enum RecyclerListRegistry {
   }
 
   static func unregister(host: HybridRecyclerCellHostView) {
+    unregister(host: host, listId: host.listId, slotId: Int(host.slotId))
+  }
+
+  static func unregister(
+    host: HybridRecyclerCellHostView,
+    listId: String,
+    slotId: Int
+  ) {
     lock.lock()
-    hosts[host.listId]?.removeValue(forKey: Int(host.slotId))
-    let list = lists[host.listId]?.value
+    if hosts[listId]?[slotId]?.value === host {
+      hosts[listId]?.removeValue(forKey: slotId)
+    }
+    let list = lists[listId]?.value
     lock.unlock()
-    list?.detachHost(host)
+    list?.detachHost(host, slot: slotId)
   }
 }

@@ -25,6 +25,7 @@ import { readSavedOffset, saveOffset } from './core/scrollState';
 import { normalizeSecondLevelOptions } from './core/secondLevel';
 import { areSlotBindingsEqual } from './core/slotBindings';
 import { logNitroRecyclerTrace } from './core/trace';
+import { translateVisibleRange } from './core/visibleRange';
 import NativeRecyclerListRefreshEventSource, {
   type RecyclerListRefreshPullEvent,
   type RecyclerListTabScrollEvent,
@@ -309,18 +310,8 @@ function RecyclerListInner<T>(
   }, [dataVersion, loadMoreState, onEndReached]);
 
   const translateRange = useCallback(
-    (range: VisibleRange): VisibleRange => {
-      if (data.length === 0 || range.first < 0 || range.last < 0) {
-        return EMPTY_RANGE;
-      }
-      return {
-        first: Math.max(
-          0,
-          Math.min(data.length - 1, range.first - headerCount),
-        ),
-        last: Math.max(0, Math.min(data.length - 1, range.last - headerCount)),
-      };
-    },
+    (range: VisibleRange): VisibleRange =>
+      translateVisibleRange(range, data.length, headerCount),
     [data.length, headerCount],
   );
 
@@ -351,7 +342,19 @@ function RecyclerListInner<T>(
         gate.current.retry();
         nativeRef.current?.retryEndReached();
       },
-      getState: () => nativeRef.current?.getState() ?? EMPTY_STATE,
+      getState: () => {
+        const state = nativeRef.current?.getState();
+        if (!state) return EMPTY_STATE;
+        const range = translateRange({
+          first: state.firstVisibleIndex,
+          last: state.lastVisibleIndex,
+        });
+        return {
+          ...state,
+          firstVisibleIndex: range.first,
+          lastVisibleIndex: range.last,
+        };
+      },
     }),
     [data.length, headerCount, translateRange],
   );

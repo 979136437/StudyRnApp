@@ -17,8 +17,20 @@ const androidRecyclerListSource = new URL(
   '../../../android/src/main/java/com/margelo/nitro/recyclerlist/HybridRecyclerListView.kt',
   import.meta.url,
 );
+const androidHostSource = new URL(
+  '../../../android/src/main/java/com/margelo/nitro/recyclerlist/HybridRecyclerCellHostView.kt',
+  import.meta.url,
+);
+const androidRegistrySource = new URL(
+  '../../../android/src/main/java/com/margelo/nitro/recyclerlist/RecyclerListRegistry.kt',
+  import.meta.url,
+);
 const iosRecyclerListSource = new URL(
   '../../../ios/HybridRecyclerListView.swift',
+  import.meta.url,
+);
+const iosHostSource = new URL(
+  '../../../ios/HybridRecyclerCellHostView.swift',
   import.meta.url,
 );
 const iosLayoutSource = new URL(
@@ -27,6 +39,10 @@ const iosLayoutSource = new URL(
 );
 const iosCellSource = new URL(
   '../../../ios/RecyclerCellContainer.swift',
+  import.meta.url,
+);
+const iosRegistrySource = new URL(
+  '../../../ios/RecyclerListRegistry.swift',
   import.meta.url,
 );
 const iosRefreshTransitionSource = new URL(
@@ -81,6 +97,57 @@ describe('React Native 0.86 compatibility', () => {
     expect(androidSource).toContain('scheduleHostAttachment(host)');
     expect(iosSource).toContain(
       'DispatchQueue.main.async { [weak self, weak host] in',
+    );
+    expect(iosSource).toContain(
+      'override func didAddSubview(_ subview: UIView)',
+    );
+    expect(iosSource).toContain('view.onManagedChildAdded =');
+    expect(iosSource).toContain('host.view.isHidden = true');
+    expect(iosSource).toContain('scheduleHostAttachment(host)');
+    expect(iosSource).toContain('host.view.superview === view');
+  });
+
+  it('unregisters recycled hosts by their previous native identity', () => {
+    const listSource = readFileSync(iosRecyclerListSource, 'utf8');
+    const iosHost = readFileSync(iosHostSource, 'utf8');
+    const registrySource = readFileSync(iosRegistrySource, 'utf8');
+    const androidHost = readFileSync(androidHostSource, 'utf8');
+    const androidRegistry = readFileSync(androidRegistrySource, 'utf8');
+
+    expect(listSource).toContain('guard hosts[slot] === host else {');
+    expect(iosHost).toContain('listId: previousListId');
+    expect(iosHost).toContain('slotId: previousSlotId');
+    expect(registrySource).toContain(
+      'if hosts[listId]?[slotId]?.value === host {',
+    );
+    expect(registrySource).toContain('list?.detachHost(host, slot: slotId)');
+    expect(androidHost).toContain(
+      'RecyclerListRegistry.unregisterHost(this, previousListId, previousSlotId)',
+    );
+    expect(androidRegistry).toContain(
+      'if (hosts[listId]?.get(slotId)?.get() === host)',
+    );
+    expect(androidRegistry).toContain(
+      'lists[listId]?.get()?.detachHost(host, slotId)',
+    );
+  });
+
+  it('honors scrollToIndex viewPosition on both native platforms', () => {
+    const androidSource = readFileSync(androidRecyclerListSource, 'utf8');
+    const iosSource = readFileSync(iosRecyclerListSource, 'utf8');
+
+    expect(androidSource).toContain(
+      'val position = viewPosition.coerceIn(0.0, 1.0).toFloat()',
+    );
+    expect(androidSource).toContain('override fun calculateDtToFit(');
+    expect(androidSource).toContain(
+      'scrollToPositionWithOffset(target, offset)',
+    );
+    expect(iosSource).toContain(
+      'let position = CGFloat(min(1, max(0, viewPosition)))',
+    );
+    expect(iosSource).toContain(
+      'itemStart - leadingInset - (viewportSize - itemSize) * position',
     );
   });
 

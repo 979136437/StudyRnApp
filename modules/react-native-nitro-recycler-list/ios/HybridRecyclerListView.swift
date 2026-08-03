@@ -4,6 +4,7 @@ import UIKit
 final class RecyclerListContainer: UIView {
   let layout = RecyclerCollectionLayout()
   lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+  var onManagedChildAdded: ((UIView) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -14,6 +15,12 @@ final class RecyclerListContainer: UIView {
   }
 
   required init?(coder: NSCoder) { nil }
+
+  override func didAddSubview(_ subview: UIView) {
+    super.didAddSubview(subview)
+    guard subview !== collectionView else { return }
+    onManagedChildAdded?(subview)
+  }
 
   override func layoutSubviews() {
     super.layoutSubviews()
@@ -105,6 +112,12 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
   override init() {
     super.init()
     coordinator.owner = self
+    view.onManagedChildAdded = { [weak self] child in
+      guard let self,
+            let host = self.hosts.values.first(where: { $0.view === child }) else { return }
+      host.view.isHidden = true
+      self.scheduleHostAttachment(host)
+    }
     view.collectionView.dataSource = coordinator
     view.collectionView.delegate = coordinator
     view.collectionView.register(RecyclerCollectionCell.self, forCellWithReuseIdentifier: "NitroRecyclerCell:default")
@@ -172,18 +185,35 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     hosts[slot] = host
     // `afterUpdate()` may run before Fabric has inserted this host into its React parent.
     // Defer native reparenting until the current component mounting transaction completes.
+    scheduleHostAttachment(host)
+  }
+
+  private func scheduleHostAttachment(_ host: HybridRecyclerCellHostView) {
+    let slot = Int(host.slotId)
     let generation = lifecycleGeneration
     DispatchQueue.main.async { [weak self, weak host] in
       guard let self, let host, generation == self.lifecycleGeneration,
-            self.hosts[slot] === host,
-            let cell = self.cells[slot]?.value else { return }
-      self.attach(host: host, to: cell)
+            self.hosts[slot] === host else { return }
+      self.attachHostIfManaged(host)
     }
   }
 
-  func detachHost(_ host: HybridRecyclerCellHostView) {
-    hosts.removeValue(forKey: Int(host.slotId))
-    host.view.removeFromSuperview()
+  private func attachHostIfManaged(_ host: HybridRecyclerCellHostView) {
+    let slot = Int(host.slotId)
+    guard host.view.superview === view,
+          hosts[slot] === host,
+          let cell = cells[slot]?.value else { return }
+    attach(host: host, to: cell)
+  }
+
+  func detachHost(_ host: HybridRecyclerCellHostView, slot: Int? = nil) {
+    let slot = slot ?? Int(host.slotId)
+    guard hosts[slot] === host else {
+      removeHostViewIfOwned(host)
+      return
+    }
+    hosts.removeValue(forKey: slot)
+    removeHostViewIfOwned(host)
   }
 
   func bind(cell: RecyclerCollectionCell, index: Int) {
@@ -261,8 +291,34 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     guard descriptors.indices.contains(target) else {
       throw NSError(domain: "NitroRecyclerList", code: 1, userInfo: [NSLocalizedDescriptionKey: "scrollToIndex index out of bounds: \(target)"])
     }
-    let position: UICollectionView.ScrollPosition = horizontal ? .left : .top
-    view.collectionView.scrollToItem(at: IndexPath(item: target, section: 0), at: position, animated: animated)
+    let collectionView = view.collectionView
+    collectionView.layoutIfNeeded()
+    let indexPath = IndexPath(item: target, section: 0)
+    guard let frame = view.layout.layoutAttributesForItem(at: indexPath)?.frame else { return }
+    let position = CGFloat(min(1, max(0, viewPosition)))
+    let leadingInset = horizontal
+      ? collectionView.adjustedContentInset.left
+      : collectionView.adjustedContentInset.top
+    let trailingInset = horizontal
+      ? collectionView.adjustedContentInset.right
+      : collectionView.adjustedContentInset.bottom
+    let viewportSize = horizontal
+      ? collectionView.bounds.width - leadingInset - trailingInset
+      : collectionView.bounds.height - leadingInset - trailingInset
+    let itemSize = horizontal ? frame.width : frame.height
+    let itemStart = horizontal ? frame.minX : frame.minY
+    let minimumOffset = -leadingInset
+    let contentSize = horizontal ? collectionView.contentSize.width : collectionView.contentSize.height
+    let boundsSize = horizontal ? collectionView.bounds.width : collectionView.bounds.height
+    let maximumOffset = max(minimumOffset, contentSize - boundsSize + trailingInset)
+    let targetOffset = min(
+      maximumOffset,
+      max(minimumOffset, itemStart - leadingInset - (viewportSize - itemSize) * position)
+    )
+    let point = horizontal
+      ? CGPoint(x: targetOffset, y: collectionView.contentOffset.y)
+      : CGPoint(x: collectionView.contentOffset.x, y: targetOffset)
+    collectionView.setContentOffset(point, animated: animated)
   }
 
   func scrollToEnd(animated: Bool) throws {
@@ -339,6 +395,7 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     resetRefresh()
     RecyclerListRegistry.unregister(list: self, id: listId)
     RecyclerTabCoordinatorRegistry.unregister(self)
+    view.onManagedChildAdded = nil
     view.collectionView.dataSource = nil
     view.collectionView.delegate = nil
   }
@@ -351,6 +408,12 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     cell.contentView.addSubview(host.view)
     host.view.isHidden = false
     cell.setNeedsLayout()
+  }
+
+  private func removeHostViewIfOwned(_ host: HybridRecyclerCellHostView) {
+    let parent = host.view.superview
+    let isOwnedCell = cells.values.contains { $0.value?.contentView === parent }
+    if parent === view || isOwnedCell { host.view.removeFromSuperview() }
   }
 
   private func scheduleBindingsPublish() {
