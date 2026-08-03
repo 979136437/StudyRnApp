@@ -120,7 +120,14 @@ describe('React Native 0.86 compatibility', () => {
     expect(iosSource).toContain(
       'DispatchQueue.main.async { [weak self, weak host] in',
     );
-    expect(iosSource).toContain('host.view.isHidden = true');
+    expect(iosSource).toContain('componentView.isHidden = true');
+    expect(iosSource).toContain('componentView.isHidden = false');
+    expect(iosSource).not.toContain('host.view.isHidden');
+    expect(iosSource).toContain('private func isHostContentCurrent(');
+    expect(iosSource).toContain('guard let cell = cells[slot]?.value else {');
+    expect(iosSource).toContain(
+      'host.itemKey == descriptor.key && host.itemType == descriptor.type',
+    );
     expect(iosSource).toContain('scheduleHostAttachment(host)');
     expect(iosSource).toContain(
       'guard let componentView = componentView(for: host)',
@@ -134,6 +141,8 @@ describe('React Native 0.86 compatibility', () => {
     expect(iosSource).toContain('func reconcileHost(');
     expect(iosCell).toContain('@objc(nitroRecyclerComponentDidMount)');
     expect(iosHost).toContain('view.onComponentViewMounted =');
+    expect(iosHost).toContain('RecyclerListRegistry.reconcile(host: self)');
+    expect(iosHost).toContain('previousItemKey = itemKey');
     expect(iosRegistry).toContain('static func reconcile(');
     expect(generatedList).toContain(
       '- (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index',

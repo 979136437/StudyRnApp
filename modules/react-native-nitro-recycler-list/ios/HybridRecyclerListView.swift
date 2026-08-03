@@ -189,10 +189,17 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     let slot = Int(host.slotId)
     guard let componentView = componentView(for: host),
           let parent = componentView.superview,
-          hosts[slot] === host,
-          let cell = cells[slot]?.value else { return }
+          hosts[slot] === host else { return }
+    guard let cell = cells[slot]?.value else {
+      componentView.isHidden = true
+      return
+    }
+    guard isHostContentCurrent(host, in: cell) else {
+      componentView.isHidden = true
+      return
+    }
     if parent === cell.contentView {
-      host.view.isHidden = false
+      componentView.isHidden = false
       return
     }
     attach(host: host, to: cell)
@@ -204,11 +211,18 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
     guard let componentView = componentView(for: host),
           componentView.superview != nil else { return }
     guard let cell = cells[slot]?.value else {
-      host.view.isHidden = true
+      componentView.isHidden = true
       return
     }
-    guard componentView.superview !== cell.contentView else { return }
-    host.view.isHidden = true
+    guard isHostContentCurrent(host, in: cell) else {
+      componentView.isHidden = true
+      return
+    }
+    guard componentView.superview !== cell.contentView else {
+      componentView.isHidden = false
+      return
+    }
+    componentView.isHidden = true
     scheduleHostAttachment(host)
   }
 
@@ -407,13 +421,27 @@ final class HybridRecyclerListView: HybridRecyclerListViewSpec, RecyclableView {
 
   private func attach(host: HybridRecyclerCellHostView, to cell: RecyclerCollectionCell) {
     guard let componentView = componentView(for: host) else { return }
+    guard isHostContentCurrent(host, in: cell) else {
+      componentView.isHidden = true
+      return
+    }
+    componentView.isHidden = true
     componentView.removeFromSuperview()
     cell.contentView.subviews.forEach { $0.removeFromSuperview() }
     componentView.frame = cell.contentView.bounds
     componentView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     cell.contentView.addSubview(componentView)
-    host.view.isHidden = false
+    componentView.isHidden = false
     cell.setNeedsLayout()
+  }
+
+  private func isHostContentCurrent(
+    _ host: HybridRecyclerCellHostView,
+    in cell: RecyclerCollectionCell
+  ) -> Bool {
+    guard descriptors.indices.contains(cell.bindingIndex) else { return false }
+    let descriptor = descriptors[cell.bindingIndex]
+    return host.itemKey == descriptor.key && host.itemType == descriptor.type
   }
 
   private func removeHostViewIfOwned(_ host: HybridRecyclerCellHostView) {

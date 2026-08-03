@@ -10,6 +10,8 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
 
   private var previousListId = ""
   private var previousSlotId = -1
+  private var previousItemKey = ""
+  private var previousItemType = "default"
 
   override init() {
     super.init()
@@ -21,8 +23,10 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
 
   func afterUpdate() {
     let nextSlotId = Int(slotId)
-    guard previousListId != listId || previousSlotId != nextSlotId else { return }
-    if !previousListId.isEmpty {
+    let registrationChanged = previousListId != listId || previousSlotId != nextSlotId
+    let contentChanged = previousItemKey != itemKey || previousItemType != itemType
+    guard registrationChanged || contentChanged else { return }
+    if registrationChanged && !previousListId.isEmpty {
       RecyclerListRegistry.unregister(
         host: self,
         listId: previousListId,
@@ -31,13 +35,21 @@ final class HybridRecyclerCellHostView: HybridRecyclerCellHostViewSpec, Recyclab
     }
     previousListId = listId
     previousSlotId = nextSlotId
-    RecyclerListRegistry.register(host: self)
+    previousItemKey = itemKey
+    previousItemType = itemType
+    if registrationChanged {
+      RecyclerListRegistry.register(host: self)
+    } else {
+      RecyclerListRegistry.reconcile(host: self)
+    }
   }
 
   func prepareForRecycle() {
     RecyclerListRegistry.unregister(host: self)
     previousListId = ""
     previousSlotId = -1
+    previousItemKey = ""
+    previousItemType = "default"
     view.layer.removeAllAnimations()
     view.transform = .identity
     view.alpha = 1
