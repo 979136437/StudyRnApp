@@ -20,9 +20,7 @@ enum class RefreshPhase(@DoNotStrip @Keep val value: Int) {
   PULLING(1),
   READY(2),
   REFRESHING(3),
-  SUCCESS(4),
-  FAILURE(5),
-  SETTLING(6);
+  SETTLING(4);
 
   companion object
 }

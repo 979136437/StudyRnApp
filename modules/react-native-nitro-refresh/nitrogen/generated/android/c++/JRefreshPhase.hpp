@@ -54,12 +54,6 @@ namespace margelo::nitro::refresh {
         case RefreshPhase::REFRESHING:
           static const auto fieldREFRESHING = clazz->getStaticField<JRefreshPhase>("REFRESHING");
           return clazz->getStaticFieldValue(fieldREFRESHING);
-        case RefreshPhase::SUCCESS:
-          static const auto fieldSUCCESS = clazz->getStaticField<JRefreshPhase>("SUCCESS");
-          return clazz->getStaticFieldValue(fieldSUCCESS);
-        case RefreshPhase::FAILURE:
-          static const auto fieldFAILURE = clazz->getStaticField<JRefreshPhase>("FAILURE");
-          return clazz->getStaticFieldValue(fieldFAILURE);
         case RefreshPhase::SETTLING:
           static const auto fieldSETTLING = clazz->getStaticField<JRefreshPhase>("SETTLING");
           return clazz->getStaticFieldValue(fieldSETTLING);

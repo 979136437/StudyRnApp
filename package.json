@@ -53,7 +53,7 @@
     "react-native-view-shot": "5.1.0",
     "react-native-web": "0.21.2",
     "react-native-webview": "13.16.1",
-    "react-native-worklets": "0.10.1",
+    "react-native-worklets": "catalog:",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^3.4.17"
   },
@@ -63,6 +63,7 @@
     "babel-preset-expo": "~57.0.5",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
+    "react-doctor": "0.7.2",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
@@ -86,12 +87,15 @@
     "build:production": "eas build --profile production --platform all --non-interactive",
     "run:android": "expo run:android --device",
     "run:ios": "expo run:ios --device",
-    "postinstall": "pnpm doctor"
+    "postinstall": "pnpm doctor",
+    "reInstall": "rimraf node_modules && rimraf pnpm-lock.yaml && pnpm install",
+    "react-doctor": "npx react-doctor@latest"
   },
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@sentry/cli",
       "esbuild",
       "unrs-resolver"
     ]

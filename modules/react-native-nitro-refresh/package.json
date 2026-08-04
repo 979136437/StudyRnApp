@@ -27,7 +27,7 @@
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
     "react-native-reanimated": "catalog:",
-    "react-native-worklets": ">=0.10.0"
+    "react-native-worklets": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
@@ -36,7 +36,7 @@
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
     "react-native-reanimated": "catalog:",
-    "react-native-worklets": "0.10.1",
+    "react-native-worklets": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

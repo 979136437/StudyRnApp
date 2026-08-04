@@ -11,7 +11,6 @@
 #import <react/renderer/components/NitroRefreshSpec/ComponentDescriptors.h>
 #import <react/renderer/components/NitroRefreshSpec/EventEmitters.h>
 #import <react/renderer/components/NitroRefreshSpec/Props.h>
-#include <cmath>
 
 using namespace facebook::react;
 
@@ -22,17 +21,11 @@ static const CGFloat NitroRefreshMinimumDimension = 1;
 static const CGFloat NitroRefreshMinimumDragRate = 0.01;
 static const CGFloat NitroRefreshLayoutEpsilon = 0.5;
 static const NSTimeInterval NitroRefreshReboundDuration = 0.28;
-static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 
 @interface NitroRefreshControlComponentView () <NitroRefreshViewBinding, RCTCustomPullToRefreshViewProtocol>
 - (void)beginRefreshingAndNotify:(BOOL)notify;
-- (void)finishRefreshingWithResult:(NSString *)result resultDuration:(double)resultDuration;
-- (void)pullToMax;
-- (void)scheduleResultDismissAfter:(double)resultDuration;
-- (void)cancelResultDismiss;
 - (void)captureScrollBaseline:(UIScrollView *)scrollView;
 - (void)updateActiveOffsetForConfigurationChange;
-- (BOOL)isShowingResult;
 - (void)settleToIdle;
 - (void)updatePhase:(NSString *)phase offset:(CGFloat)offset progress:(CGFloat)progress;
 @end
@@ -56,12 +49,9 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   CGFloat _currentProgress;
   NSString *_phase;
   BOOL _readyToRefresh;
-  BOOL _programmaticPull;
   CADisplayLink *_transitionDisplayLink;
   CGFloat _transitionStartOffset;
   CGFloat _transitionStartProgress;
-  dispatch_block_t _resultDismissBlock;
-  NSUInteger _resultDismissGeneration;
   // 刷新期间会临时修改 contentInset，必须保存业务原值并在结束或回收时恢复。
   UIEdgeInsets _originalContentInset;
   // contentInset 改变后 adjustedContentInset.top 也会改变；动画位移必须始终相对原基线。
@@ -69,11 +59,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   BOOL _hasOriginalContentInset;
   BOOL _originalAlwaysBounceVertical;
   BOOL _hasOriginalAlwaysBounceVertical;
-}
-
-+ (void)load
-{
-  [super load];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -95,7 +80,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 
 - (void)dealloc
 {
-  [self cancelResultDismiss];
   // CADisplayLink 强持有 target；即使 ComponentView 未走正常回收路径也必须主动断开。
   [_transitionDisplayLink invalidate];
 }
@@ -109,12 +93,14 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 {
   const auto &newProps = static_cast<const NitroRefreshControlViewProps &>(*props);
   NSString *nextControllerId = RCTNSStringFromString(newProps.controllerId);
+  BOOL controllerChanged =
+      _controllerId != nextControllerId && ![_controllerId isEqualToString:nextControllerId];
   CGFloat previousThreshold = _threshold;
   CGFloat previousHeaderHeight = _headerHeight;
   CGFloat previousLimit = _limit;
 
   // Fabric 复用 ComponentView 时 id 可能变化，先解除旧绑定再关联新控制器。
-  if (_controllerId != nil && ![_controllerId isEqualToString:nextControllerId]) {
+  if (controllerChanged && _controllerId.length > 0) {
     [NitroRefreshControllerRegistry detachControllerId:_controllerId binding:self];
   }
 
@@ -127,11 +113,11 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   _dragRate = MIN(NitroRefreshDefaultDragRate,
                   MAX(NitroRefreshMinimumDragRate, newProps.dragRate));
 
-  if (_controllerId.length > 0) {
+  if (controllerChanged && _controllerId.length > 0) {
     [NitroRefreshControllerRegistry attachControllerId:_controllerId binding:self];
   }
   if (!_enabled) {
-    [self cancelRefreshFromController];
+    [self settleToIdle];
   }
 
   [super updateProps:props oldProps:oldProps];
@@ -155,7 +141,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   if (self.superview != nil) {
     [self attachToScrollView];
   } else {
-    [self cancelResultDismiss];
     [self detachFromScrollView];
   }
 }
@@ -163,7 +148,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 - (void)prepareForRecycle
 {
   // Fabric 回收不等同于 dealloc，所有手势 target、inset 和注册表关系都要主动清理。
-  [self cancelResultDismiss];
   [self detachFromScrollView];
   if (_controllerId.length > 0) {
     [NitroRefreshControllerRegistry detachControllerId:_controllerId binding:self];
@@ -171,7 +155,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   _controllerId = nil;
   _phase = @"idle";
   _readyToRefresh = NO;
-  _programmaticPull = NO;
   _refreshing = NO;
   _controlledRefreshing = NO;
   _currentOffset = 0;
@@ -203,7 +186,7 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   if (scrollView != nil) {
     [scrollView.panGestureRecognizer removeTarget:self action:@selector(handlePan:)];
     // 卸载或换宿主时必须恢复 inset，避免列表留下永久顶部空白。
-    BOOL shouldRestoreTop = _refreshing || _programmaticPull || _currentOffset > 0;
+    BOOL shouldRestoreTop = _refreshing || _currentOffset > 0;
     if (_hasOriginalContentInset) {
       scrollView.contentInset = _originalContentInset;
       if (shouldRestoreTop) {
@@ -223,8 +206,7 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 
 - (void)handlePan:(UIPanGestureRecognizer *)gesture
 {
-  if (!_enabled || _refreshing || _programmaticPull ||
-      [_phase isEqualToString:@"success"] || [_phase isEqualToString:@"failure"]) {
+  if (!_enabled || _refreshing) {
     return;
   }
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
@@ -272,48 +254,18 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
     if (refreshing) {
       self->_controlledRefreshing = YES;
       [self beginRefreshingAndNotify:NO];
-    } else if (self->_controlledRefreshing || self->_refreshing || [self isShowingResult]) {
+    } else if (self->_controlledRefreshing || self->_refreshing) {
       self->_controlledRefreshing = NO;
       [self settleToIdle];
     }
   });
 }
 
-- (void)beginRefreshFromController
-{
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self beginRefreshingAndNotify:YES];
-  });
-}
-
-- (void)cancelRefreshFromController
-{
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self settleToIdle];
-  });
-}
-
-- (void)finishRefreshFromController:(NSString *)result resultDuration:(double)resultDuration
-{
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self finishRefreshingWithResult:result resultDuration:resultDuration];
-  });
-}
-
-- (void)pullToMaxFromController
-{
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self pullToMax];
-  });
-}
-
 - (void)beginRefreshingAndNotify:(BOOL)notify
 {
-  if (!_enabled || _refreshing ||
-      (_programmaticPull && ![_phase isEqualToString:@"ready"])) {
+  if (!_enabled || _refreshing) {
     return;
   }
-  [self cancelResultDismiss];
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView != nil) {
     [self captureScrollBaseline:scrollView];
@@ -321,7 +273,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   _controlledRefreshing = YES;
   _refreshing = YES;
   _readyToRefresh = NO;
-  _programmaticPull = NO;
 
   if (scrollView != nil) {
     CGFloat initialOffset = [self visibleOffsetForScrollView:scrollView];
@@ -360,106 +311,6 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   }
 }
 
-- (void)finishRefreshingWithResult:(NSString *)result resultDuration:(double)resultDuration
-{
-  BOOL canFinish = _refreshing || (_programmaticPull && [_phase isEqualToString:@"ready"]);
-  if (!canFinish ||
-      (![result isEqualToString:@"success"] && ![result isEqualToString:@"failure"])) {
-    return;
-  }
-
-  [self cancelResultDismiss];
-  _controlledRefreshing = NO;
-  _refreshing = NO;
-  _readyToRefresh = NO;
-  _programmaticPull = NO;
-
-  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
-  CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
-  [self updatePhase:result offset:initialOffset progress:1];
-  [self scheduleResultDismissAfter:resultDuration];
-
-  if (scrollView != nil) {
-    UIEdgeInsets inset = _originalContentInset;
-    inset.top += _headerHeight;
-    [self startTrackingTransition];
-    [UIView animateWithDuration:NitroRefreshReboundDuration
-        delay:0
-        options:UIViewAnimationOptionBeginFromCurrentState |
-                UIViewAnimationOptionCurveEaseOut |
-                UIViewAnimationOptionAllowUserInteraction
-        animations:^{
-          scrollView.contentInset = inset;
-          CGPoint point = scrollView.contentOffset;
-          point.y = -(self->_originalAdjustedTop + self->_headerHeight);
-          scrollView.contentOffset = point;
-        }
-        completion:^(BOOL finished) {
-          if (!finished || ![self->_phase isEqualToString:result] ||
-              self->_scrollViewComponentView.scrollView != scrollView) {
-            return;
-          }
-          [self stopTrackingTransition];
-          [self updatePhase:result offset:self->_headerHeight progress:1];
-        }];
-  } else {
-    [self updatePhase:result offset:_headerHeight progress:1];
-  }
-}
-
-- (void)pullToMax
-{
-  if (!_enabled || _refreshing || _programmaticPull ||
-      (![_phase isEqualToString:@"idle"] && ![_phase isEqualToString:@"settling"])) {
-    return;
-  }
-
-  [self cancelResultDismiss];
-  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
-  if (scrollView != nil) {
-    [self captureScrollBaseline:scrollView];
-  }
-  _programmaticPull = YES;
-  _readyToRefresh = NO;
-
-  CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
-  [self updatePhase:@"pulling"
-             offset:initialOffset
-           progress:MIN(1, initialOffset / _threshold)];
-
-  if (scrollView != nil) {
-    if (!_hasOriginalContentInset) {
-      _originalContentInset = scrollView.contentInset;
-      _originalAdjustedTop = scrollView.adjustedContentInset.top;
-      _hasOriginalContentInset = YES;
-    }
-    UIEdgeInsets inset = _originalContentInset;
-    inset.top += _limit;
-    [self startTrackingTransition];
-    [UIView animateWithDuration:NitroRefreshReboundDuration
-        delay:0
-        options:UIViewAnimationOptionBeginFromCurrentState |
-                UIViewAnimationOptionCurveEaseOut |
-                UIViewAnimationOptionAllowUserInteraction
-        animations:^{
-          scrollView.contentInset = inset;
-          CGPoint point = scrollView.contentOffset;
-          point.y = -(self->_originalAdjustedTop + self->_limit);
-          scrollView.contentOffset = point;
-        }
-        completion:^(BOOL finished) {
-          if (!finished || !self->_programmaticPull ||
-              self->_scrollViewComponentView.scrollView != scrollView) {
-            return;
-          }
-          [self stopTrackingTransition];
-          [self updatePhase:@"ready" offset:self->_limit progress:1];
-        }];
-  } else {
-    [self updatePhase:@"ready" offset:_limit progress:1];
-  }
-}
-
 - (void)captureScrollBaseline:(UIScrollView *)scrollView
 {
   _originalContentInset = scrollView.contentInset;
@@ -469,24 +320,18 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 
 - (void)updateActiveOffsetForConfigurationChange
 {
-  BOOL isHeldPhase = _refreshing || [self isShowingResult];
-  BOOL isProgrammaticPull =
-      _programmaticPull &&
-      ([_phase isEqualToString:@"pulling"] || [_phase isEqualToString:@"ready"]);
-  if (!isHeldPhase && !isProgrammaticPull) {
+  if (!_refreshing) {
     if (_currentOffset > _limit) {
       [self updatePhase:_phase offset:_limit progress:_currentProgress];
     }
     return;
   }
 
-  CGFloat targetOffset = isProgrammaticPull ? _limit : _headerHeight;
+  CGFloat targetOffset = _headerHeight;
   NSString *targetPhase = _phase;
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView == nil) {
-    [self updatePhase:isProgrammaticPull ? @"ready" : targetPhase
-               offset:targetOffset
-             progress:1];
+    [self updatePhase:targetPhase offset:targetOffset progress:1];
     return;
   }
 
@@ -498,7 +343,7 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   CGFloat initialOffset = [self visibleOffsetForScrollView:scrollView];
   [self updatePhase:targetPhase
              offset:initialOffset
-           progress:isHeldPhase ? 1 : MIN(1, initialOffset / _threshold)];
+           progress:1];
 
   UIEdgeInsets inset = _originalContentInset;
   inset.top += targetOffset;
@@ -518,61 +363,11 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
         if (!finished || self->_scrollViewComponentView.scrollView != scrollView) {
           return;
         }
-        if (isProgrammaticPull) {
-          if (!self->_programmaticPull) {
-            return;
-          }
-          [self stopTrackingTransition];
-          [self updatePhase:@"ready" offset:self->_limit progress:1];
-        } else if ([self->_phase isEqualToString:targetPhase]) {
+        if ([self->_phase isEqualToString:targetPhase]) {
           [self stopTrackingTransition];
           [self updatePhase:targetPhase offset:self->_headerHeight progress:1];
         }
       }];
-}
-
-- (void)scheduleResultDismissAfter:(double)resultDuration
-{
-  [self cancelResultDismiss];
-  NSTimeInterval duration = std::isfinite(resultDuration)
-      ? MAX(0, resultDuration) / 1000.0
-      : NitroRefreshDefaultResultDuration;
-  NSUInteger generation = _resultDismissGeneration;
-  __weak __typeof(self) weakSelf = self;
-  dispatch_block_t block = dispatch_block_create(static_cast<dispatch_block_flags_t>(0), ^{
-    __strong __typeof(weakSelf) self = weakSelf;
-    if (self == nil || generation != self->_resultDismissGeneration) {
-      return;
-    }
-    self->_resultDismissBlock = nil;
-    if ([self isShowingResult]) {
-      [self settleToIdle];
-    }
-  });
-  _resultDismissBlock = block;
-
-  if (duration == 0) {
-    dispatch_async(dispatch_get_main_queue(), block);
-  } else {
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(duration * NSEC_PER_SEC)),
-        dispatch_get_main_queue(),
-        block);
-  }
-}
-
-- (void)cancelResultDismiss
-{
-  if (_resultDismissBlock != nil) {
-    dispatch_block_cancel(_resultDismissBlock);
-    _resultDismissBlock = nil;
-  }
-  _resultDismissGeneration += 1;
-}
-
-- (BOOL)isShowingResult
-{
-  return [_phase isEqualToString:@"success"] || [_phase isEqualToString:@"failure"];
 }
 
 - (void)settleToIdle
@@ -580,11 +375,9 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   if (!_refreshing && _currentOffset == 0 && [_phase isEqualToString:@"idle"]) {
     return;
   }
-  [self cancelResultDismiss];
   _controlledRefreshing = NO;
   _refreshing = NO;
   _readyToRefresh = NO;
-  _programmaticPull = NO;
 
   UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   UIEdgeInsets targetInset = _hasOriginalContentInset ? _originalContentInset : UIEdgeInsetsZero;
@@ -661,9 +454,7 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
 
   CGFloat offset = [self visibleOffsetForScrollView:scrollView];
   CGFloat progress;
-  if ([_phase isEqualToString:@"refreshing"] ||
-      [_phase isEqualToString:@"success"] ||
-      [_phase isEqualToString:@"failure"]) {
+  if ([_phase isEqualToString:@"refreshing"]) {
     progress = 1;
   } else if ([_phase isEqualToString:@"settling"] && _transitionStartOffset > 0) {
     // 回弹进度沿用松手时的值并按剩余位移等比衰减，避免低于阈值时突然变大。
@@ -680,15 +471,8 @@ static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
   _phase = phase;
   _currentOffset = MAX(0, MIN(_limit, offset));
   _currentProgress = MIN(1, MAX(0, progress));
-  if (_controllerId.length > 0) {
-    // 快照只在原生对象之间更新；只有 getState 主动读取时才跨越 JSI。
-    [NitroRefreshControllerRegistry updateControllerId:_controllerId
-                                                  phase:phase
-                                                 offset:_currentOffset
-                                             refreshing:_refreshing];
-    if (phaseChanged) {
-      [NitroRefreshControllerRegistry notifyControllerId:_controllerId phase:phase];
-    }
+  if (phaseChanged && _controllerId.length > 0) {
+    [NitroRefreshControllerRegistry notifyControllerId:_controllerId phase:phase];
   }
   [self emitPull];
 }

@@ -25,10 +25,6 @@ public extension RefreshPhase {
         self = .ready
       case "refreshing":
         self = .refreshing
-      case "success":
-        self = .success
-      case "failure":
-        self = .failure
       case "settling":
         self = .settling
       default:
@@ -49,10 +45,6 @@ public extension RefreshPhase {
         return "ready"
       case .refreshing:
         return "refreshing"
-      case .success:
-        return "success"
-      case .failure:
-        return "failure"
       case .settling:
         return "settling"
     }

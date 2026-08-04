@@ -7,9 +7,8 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Nitro HybridObject 的 Android 实现。
  *
- * 该对象保存 React 的受控刷新意图、离散回调和最新原生快照；实际手势、位移与动画由
- * [NitroRefreshLayout] 处理。逐帧快照只在原生对象之间传递，只有 JS 主动调用
- * [getState] 时才跨越 JSI。
+ * 该对象只保存 React 的受控刷新意图和离散回调；实际手势、连续位移与动画均由
+ * [NitroRefreshLayout] 处理，避免在高频更新路径中维护 JS 不会读取的状态副本。
  */
 class HybridRefreshController : HybridRefreshControllerSpec() {
   override val id: String = UUID.randomUUID().toString()
@@ -17,8 +16,6 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
   private var onRefresh: (() -> Unit)? = null
   private var onStateChange: ((RefreshPhase) -> Unit)? = null
   @Volatile private var requestedRefreshing = false
-  @Volatile private var latestState =
-    RefreshStateSnapshot(RefreshPhase.IDLE, 0.0, false)
   private var binding = WeakReference<NitroRefreshLayout>(null)
 
   init {
@@ -44,26 +41,6 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
     }
   }
 
-  override fun beginRefresh() {
-    binding.get()?.beginRefreshFromController()
-  }
-
-  override fun cancelRefresh() {
-    requestedRefreshing = false
-    binding.get()?.cancelRefreshFromController()
-  }
-
-  override fun finishRefresh(refreshResult: RefreshResult, resultDuration: Double) {
-    requestedRefreshing = false
-    binding.get()?.finishRefreshFromController(refreshResult, resultDuration)
-  }
-
-  override fun getState(): RefreshStateSnapshot = latestState
-
-  override fun pullToMax() {
-    binding.get()?.pullToMaxFromController()
-  }
-
   override fun setRefreshing(refreshing: Boolean) {
     // 即使视图尚未挂载也保存意图，attach 时会立即补同步初始 refreshing=true。
     requestedRefreshing = refreshing
@@ -72,7 +49,6 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
 
   internal fun attach(view: NitroRefreshLayout) {
     binding = WeakReference(view)
-    view.publishStateToController()
     view.setRefreshingFromController(requestedRefreshing)
   }
 
@@ -83,17 +59,13 @@ class HybridRefreshController : HybridRefreshControllerSpec() {
   }
 
   internal fun requestRefresh() {
-    // 用户手势和 beginRefresh 都先进入 refreshing，再通知 JS。
+    // 用户手势先进入 refreshing，再通知 JS 回写受控属性。
     requestedRefreshing = true
     onRefresh?.invoke()
   }
 
   internal fun notifyPhase(phase: RefreshPhase) {
     onStateChange?.invoke(phase)
-  }
-
-  internal fun updateSnapshot(phase: RefreshPhase, offset: Double, refreshing: Boolean) {
-    latestState = RefreshStateSnapshot(phase, offset, refreshing)
   }
 
   companion object {

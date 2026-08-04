@@ -39,15 +39,6 @@ describe('reduceRefreshState', () => {
       RefreshState.Idle,
     ]);
   });
-
-  it('成功和失败内部结果阶段都折叠为 End', () => {
-    expect(reduceRefreshState(RefreshState.Refreshing, 'success')).toBe(
-      RefreshState.End,
-    );
-    expect(reduceRefreshState(RefreshState.Refreshing, 'failure')).toBe(
-      RefreshState.End,
-    );
-  });
 });
 
 describe('RefreshStateCoordinator', () => {
@@ -70,7 +61,7 @@ describe('RefreshStateCoordinator', () => {
       'ready',
       'refreshing',
       'refreshing',
-      'success',
+      'settling',
       'settling',
       'idle',
       'idle',

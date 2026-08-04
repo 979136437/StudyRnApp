@@ -11,12 +11,12 @@ import {
   RefreshHeader,
   RefreshLayout,
   RefreshState,
+  useRefreshAnimation,
   type RefreshOffsetEvent,
 } from 'react-native-nitro-refresh';
 import Animated, { useAnimatedProps } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useRefreshAnimation } from '../../../modules/react-native-nitro-refresh/src/refresh-context';
 import {
   labelForRefreshState,
   shouldResetRefreshAnimation,

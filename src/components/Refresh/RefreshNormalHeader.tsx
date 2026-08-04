@@ -14,13 +14,13 @@ import {
   RefreshHeader,
   RefreshLayout,
   RefreshState,
+  useRefreshAnimation,
 } from 'react-native-nitro-refresh';
 import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
 
-import { useRefreshAnimation } from '../../../modules/react-native-nitro-refresh/src/refresh-context';
 import {
   formatRefreshTime,
   isRefreshIndicatorVisible,

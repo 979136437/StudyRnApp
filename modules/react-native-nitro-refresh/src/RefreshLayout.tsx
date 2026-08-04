@@ -80,13 +80,16 @@ export function RefreshLayout(
   const stateValue = useSharedValue<RefreshStateValue>(INITIAL_REFRESH_STATE);
   const hasRefreshed = useSharedValue<boolean>(false);
   const offsetCallbackRef = useRef(onChangeOffset);
-  const stateCoordinatorRef = useRef(
-    new RefreshStateCoordinator({ onEnd, onIdle, onPulling, onRefreshing }),
+  const [stateCoordinator] = useState(
+    () =>
+      new RefreshStateCoordinator({ onEnd, onIdle, onPulling, onRefreshing }),
   );
-  const controlledCoordinatorRef = useRef(new ControlledRefreshCoordinator());
+  const [controlledCoordinator] = useState(
+    () => new ControlledRefreshCoordinator(),
+  );
 
   offsetCallbackRef.current = onChangeOffset;
-  stateCoordinatorRef.current.updateCallbacks({
+  stateCoordinator.updateCallbacks({
     onEnd,
     onIdle,
     onPulling,
@@ -100,16 +103,16 @@ export function RefreshLayout(
       setRefreshRequestVersion((version) => version + 1);
     });
     controller.setOnStateChange((phase) => {
-      const nextState = stateCoordinatorRef.current.accept(phase);
+      const nextState = stateCoordinator.accept(phase);
       if (nextState !== undefined) {
         setState(nextState);
       }
     });
     return () => controller.clearCallbacks();
-  }, [controller]);
+  }, [controller, stateCoordinator]);
 
   useEffect(() => {
-    const nextValue = controlledCoordinatorRef.current.next(
+    const nextValue = controlledCoordinator.next(
       enable,
       refreshing,
       refreshRequestVersion > 0,
@@ -117,7 +120,13 @@ export function RefreshLayout(
     if (nextValue !== undefined) {
       controller.setRefreshing(nextValue);
     }
-  }, [controller, enable, refreshing, refreshRequestVersion]);
+  }, [
+    controlledCoordinator,
+    controller,
+    enable,
+    refreshing,
+    refreshRequestVersion,
+  ]);
 
   const dispatchOffset = useCallback((nextOffset: number) => {
     offsetCallbackRef.current?.({
@@ -141,11 +150,6 @@ export function RefreshLayout(
         case 'refreshing':
           hasRefreshed.value = true;
           stateValue.value = RefreshState.Refreshing;
-          break;
-        case 'success':
-        case 'failure':
-          hasRefreshed.value = true;
-          stateValue.value = RefreshState.End;
           break;
         case 'settling':
           stateValue.value = hasRefreshed.value

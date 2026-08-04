@@ -14,16 +14,10 @@ namespace NitroRefresh { class HybridRefreshControllerSpec_cxx; }
 
 // Forward declaration of `RefreshPhase` to properly resolve imports.
 namespace margelo::nitro::refresh { enum class RefreshPhase; }
-// Forward declaration of `RefreshResult` to properly resolve imports.
-namespace margelo::nitro::refresh { enum class RefreshResult; }
-// Forward declaration of `RefreshStateSnapshot` to properly resolve imports.
-namespace margelo::nitro::refresh { struct RefreshStateSnapshot; }
 
 #include <string>
 #include <functional>
 #include "RefreshPhase.hpp"
-#include "RefreshResult.hpp"
-#include "RefreshStateSnapshot.hpp"
 
 #include "NitroRefresh-Swift-Cxx-Umbrella.hpp"
 
@@ -92,38 +86,6 @@ namespace margelo::nitro::refresh {
     }
     inline void clearCallbacks() override {
       auto __result = _swiftPart.clearCallbacks();
-      if (__result.hasError()) [[unlikely]] {
-        std::rethrow_exception(__result.error());
-      }
-    }
-    inline void beginRefresh() override {
-      auto __result = _swiftPart.beginRefresh();
-      if (__result.hasError()) [[unlikely]] {
-        std::rethrow_exception(__result.error());
-      }
-    }
-    inline void cancelRefresh() override {
-      auto __result = _swiftPart.cancelRefresh();
-      if (__result.hasError()) [[unlikely]] {
-        std::rethrow_exception(__result.error());
-      }
-    }
-    inline void finishRefresh(RefreshResult refreshResult, double resultDuration) override {
-      auto __result = _swiftPart.finishRefresh(static_cast<int>(refreshResult), std::forward<decltype(resultDuration)>(resultDuration));
-      if (__result.hasError()) [[unlikely]] {
-        std::rethrow_exception(__result.error());
-      }
-    }
-    inline RefreshStateSnapshot getState() override {
-      auto __result = _swiftPart.getState();
-      if (__result.hasError()) [[unlikely]] {
-        std::rethrow_exception(__result.error());
-      }
-      auto __value = std::move(__result.value());
-      return __value;
-    }
-    inline void pullToMax() override {
-      auto __result = _swiftPart.pullToMax();
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

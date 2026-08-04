@@ -21,7 +21,6 @@ const RefreshAnimationContext =
 
 export const RefreshAnimationProvider = RefreshAnimationContext.Provider;
 
-/** 仅供包内业务 Header 使用，避免把内部 SharedValue 约定扩大为公共 API。 */
 export function useRefreshAnimation(): RefreshAnimationContextValue {
   const value = use(RefreshAnimationContext);
   if (value == null) {

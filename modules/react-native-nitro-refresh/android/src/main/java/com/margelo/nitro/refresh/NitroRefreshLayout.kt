@@ -15,13 +15,12 @@ import com.facebook.react.uimanager.UIManagerHelper
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToLong
 
 /**
  * Android 下拉刷新原生容器。
  *
- * 连续位移通过 Fabric 事件发送给 Reanimated，离散阶段及命令通过 Nitro 控制器传递。
- * 程序化拉满、结果停留和回弹均在主线程内完成，不会逐帧调用 JavaScript。
+ * 连续位移通过 Fabric 事件发送给 Reanimated，离散阶段及受控刷新意图通过 Nitro
+ * 控制器传递。手势阻尼与回弹均在主线程内完成，不会逐帧调用 JavaScript。
  */
 internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   /** 禁用时立即取消当前刷新或下拉动画，并把内容恢复到原位。 */
@@ -38,7 +37,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       scheduleConfigurationUpdate()
     }
 
-  /** 刷新中及结果态的内容保持高度，单位为 dp。 */
+  /** 刷新中的内容保持高度，单位为 dp。 */
   var headerHeightDp = DEFAULT_HEADER_HEIGHT_DP
     set(value) {
       field = value
@@ -59,7 +58,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private var initialX = 0f
   private var initialY = 0f
   private var dragging = false
-  private var programmaticPull = false
   // 记录最近一次已接受的受控意图。它与 phase 分开保存，因为用户松手会先进入
   // Refreshing，随后 React 才会回传 refreshing=true；两者不能互相替代。
   private var controlledRefreshing = false
@@ -68,7 +66,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private var phase = RefreshPhase.IDLE
   private var controller: HybridRefreshController? = null
   private var animator: ValueAnimator? = null
-  private var resultDismissRunnable: Runnable? = null
   private val configurationUpdateRunnable = Runnable { applyConfigurationUpdate() }
 
   private val thresholdPx: Float
@@ -90,12 +87,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     controller?.attach(this)
   }
 
-  internal fun publishStateToController() {
-    publishSnapshot()
-  }
-
   override fun onDetachedFromWindow() {
-    cancelResultDismiss()
     removeCallbacks(configurationUpdateRunnable)
     animator?.cancel()
     animator = null
@@ -196,115 +188,35 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       if (refreshing) {
         controlledRefreshing = true
         beginRefreshing(false)
-      } else if (
-        controlledRefreshing || phase == RefreshPhase.REFRESHING || isResultPhase()
-      ) {
+      } else if (controlledRefreshing || phase == RefreshPhase.REFRESHING) {
         controlledRefreshing = false
         settleToIdle()
       }
     }
   }
 
-  fun beginRefreshFromController() {
-    post { beginRefreshing(true) }
-  }
-
-  fun cancelRefreshFromController() {
-    post { cancelCurrentAction() }
-  }
-
-  fun finishRefreshFromController(result: RefreshResult, resultDuration: Double) {
-    post { finishRefreshing(result, resultDuration) }
-  }
-
-  fun pullToMaxFromController() {
-    post { pullToMax() }
-  }
-
   private fun beginRefreshing(notifyJs: Boolean): Boolean {
     if (!refreshEnabled || dragging || phase == RefreshPhase.REFRESHING) return false
-    if (programmaticPull && phase != RefreshPhase.READY) return false
 
-    cancelResultDismiss()
     controlledRefreshing = true
-    programmaticPull = false
     setPhase(RefreshPhase.REFRESHING)
     animateOffsetTo(headerHeightPx, 1f)
     if (notifyJs) controller?.requestRefresh()
     return true
   }
 
-  private fun finishRefreshing(result: RefreshResult, resultDuration: Double) {
-    val canFinish =
-      phase == RefreshPhase.REFRESHING ||
-        (programmaticPull && phase == RefreshPhase.READY)
-    if (!canFinish) return
-
-    cancelResultDismiss()
-    controlledRefreshing = false
-    programmaticPull = false
-    setPhase(
-      if (result == RefreshResult.SUCCESS) RefreshPhase.SUCCESS else RefreshPhase.FAILURE,
-    )
-    scheduleResultDismiss(resultDuration)
-    animateOffsetTo(headerHeightPx, 1f)
-  }
-
-  private fun pullToMax() {
-    if (!refreshEnabled || dragging) return
-    if (phase != RefreshPhase.IDLE && phase != RefreshPhase.SETTLING) return
-
-    cancelResultDismiss()
-    programmaticPull = true
-    setPhase(RefreshPhase.PULLING)
-    animateOffsetTo(limitPx) {
-      if (programmaticPull && phase == RefreshPhase.PULLING) {
-        setPhase(RefreshPhase.READY)
-      }
-    }
-  }
-
   private fun cancelCurrentAction() {
-    cancelResultDismiss()
     controlledRefreshing = false
-    programmaticPull = false
     dragging = false
     settleToIdle()
   }
 
   private fun settleToIdle() {
-    cancelResultDismiss()
-    programmaticPull = false
     if (offsetPx == 0f && phase == RefreshPhase.IDLE) return
     setPhase(RefreshPhase.SETTLING)
     animateOffsetTo(0f, decayProgress = true) {
       setPhase(RefreshPhase.IDLE)
     }
-  }
-
-  private fun scheduleResultDismiss(resultDuration: Double) {
-    cancelResultDismiss()
-    val durationMs =
-      if (resultDuration.isFinite()) {
-        resultDuration.coerceAtLeast(0.0).roundToLong()
-      } else {
-        DEFAULT_RESULT_DURATION_MS
-      }
-    val runnable = Runnable {
-      resultDismissRunnable = null
-      if (isResultPhase()) settleToIdle()
-    }
-    resultDismissRunnable = runnable
-    if (durationMs == 0L) {
-      post(runnable)
-    } else {
-      postDelayed(runnable, durationMs)
-    }
-  }
-
-  private fun cancelResultDismiss() {
-    resultDismissRunnable?.let(::removeCallbacks)
-    resultDismissRunnable = null
   }
 
   private fun scheduleConfigurationUpdate() {
@@ -314,15 +226,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun applyConfigurationUpdate() {
     when {
-      phase == RefreshPhase.REFRESHING || isResultPhase() ->
-        animateOffsetTo(headerHeightPx, 1f)
-      programmaticPull &&
-        (phase == RefreshPhase.PULLING || phase == RefreshPhase.READY) ->
-        animateOffsetTo(limitPx) {
-          if (programmaticPull && phase == RefreshPhase.PULLING) {
-            setPhase(RefreshPhase.READY)
-          }
-        }
+      phase == RefreshPhase.REFRESHING -> animateOffsetTo(headerHeightPx, 1f)
       offsetPx > limitPx -> setOffset(limitPx)
     }
   }
@@ -391,7 +295,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun emitPull() {
     val offsetDp = PixelUtil.toDIPFromPixel(offsetPx).toDouble()
-    publishSnapshot(offsetDp)
 
     val reactContext = context as? ThemedReactContext ?: return
     UIManagerHelper.getEventDispatcher(reactContext)?.dispatchEvent(
@@ -405,24 +308,8 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     )
   }
 
-  private fun publishSnapshot(
-    offsetDp: Double = PixelUtil.toDIPFromPixel(offsetPx).toDouble(),
-  ) {
-    controller?.updateSnapshot(
-      phase,
-      offsetDp,
-      phase == RefreshPhase.REFRESHING,
-    )
-  }
-
   private fun isInteractionLocked(): Boolean =
-    programmaticPull ||
-      phase == RefreshPhase.REFRESHING ||
-      phase == RefreshPhase.SETTLING ||
-      isResultPhase()
-
-  private fun isResultPhase(): Boolean =
-    phase == RefreshPhase.SUCCESS || phase == RefreshPhase.FAILURE
+    phase == RefreshPhase.REFRESHING || phase == RefreshPhase.SETTLING
 
   private fun canChildScrollUp(): Boolean {
     val child = if (childCount > 0) getChildAt(0) else null
@@ -449,7 +336,6 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     private const val DEFAULT_LIMIT_DP = 160.0
     private const val DEFAULT_DRAG_RATE = 1.0
     private const val MIN_DRAG_RATE = 0.01
-    private const val DEFAULT_RESULT_DURATION_MS = 800L
     private const val REBOUND_DURATION_MS = 280L
     private const val OFFSET_EPSILON_PX = 0.5f
   }

@@ -10,7 +10,7 @@ export interface RefreshStateCallbacks {
 }
 
 /**
- * 将内部七阶段压缩为公共四阶段。
+ * 将原生内部五阶段压缩为公共四阶段。
  *
  * `settling` 是否属于 End 取决于它之前是否真正刷新过：不足阈值松手和取消拖动
  * 都会经过内部 settling，但公共状态必须继续保持 Idle；刷新完成后的 settling 才是
@@ -25,9 +25,6 @@ export function reduceRefreshState(
       return RefreshState.Pulling;
     case 'refreshing':
       return RefreshState.Refreshing;
-    case 'success':
-    case 'failure':
-      return RefreshState.End;
     case 'settling':
       return previousState === RefreshState.Refreshing ||
         previousState === RefreshState.End

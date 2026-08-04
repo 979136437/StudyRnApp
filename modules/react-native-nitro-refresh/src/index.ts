@@ -8,3 +8,4 @@ export type {
   RefreshOffsetNativeEvent,
   RefreshStateCallback,
 } from './types';
+export { useRefreshAnimation } from './refresh-context';

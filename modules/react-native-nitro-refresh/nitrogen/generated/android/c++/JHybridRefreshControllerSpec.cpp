@@ -7,24 +7,16 @@
 
 #include "JHybridRefreshControllerSpec.hpp"
 
-// Forward declaration of `RefreshStateSnapshot` to properly resolve imports.
-namespace margelo::nitro::refresh { struct RefreshStateSnapshot; }
 // Forward declaration of `RefreshPhase` to properly resolve imports.
 namespace margelo::nitro::refresh { enum class RefreshPhase; }
-// Forward declaration of `RefreshResult` to properly resolve imports.
-namespace margelo::nitro::refresh { enum class RefreshResult; }
 
 #include <string>
-#include "RefreshStateSnapshot.hpp"
-#include "JRefreshStateSnapshot.hpp"
-#include "RefreshPhase.hpp"
-#include "JRefreshPhase.hpp"
 #include <functional>
 #include "JFunc_void.hpp"
 #include <NitroModules/JNICallable.hpp>
+#include "RefreshPhase.hpp"
 #include "JFunc_void_RefreshPhase.hpp"
-#include "RefreshResult.hpp"
-#include "JRefreshResult.hpp"
+#include "JRefreshPhase.hpp"
 
 namespace margelo::nitro::refresh {
 
@@ -73,27 +65,6 @@ namespace margelo::nitro::refresh {
   }
   void JHybridRefreshControllerSpec::clearCallbacks() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("clearCallbacks");
-    method(_javaPart);
-  }
-  void JHybridRefreshControllerSpec::beginRefresh() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("beginRefresh");
-    method(_javaPart);
-  }
-  void JHybridRefreshControllerSpec::cancelRefresh() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("cancelRefresh");
-    method(_javaPart);
-  }
-  void JHybridRefreshControllerSpec::finishRefresh(RefreshResult refreshResult, double resultDuration) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JRefreshResult> /* refreshResult */, double /* resultDuration */)>("finishRefresh");
-    method(_javaPart, JRefreshResult::fromCpp(refreshResult), resultDuration);
-  }
-  RefreshStateSnapshot JHybridRefreshControllerSpec::getState() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JRefreshStateSnapshot>()>("getState");
-    auto __result = method(_javaPart);
-    return __result->toCpp();
-  }
-  void JHybridRefreshControllerSpec::pullToMax() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("pullToMax");
     method(_javaPart);
   }
   void JHybridRefreshControllerSpec::setRefreshing(bool refreshing) {

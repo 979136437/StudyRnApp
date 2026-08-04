@@ -5,10 +5,6 @@ import NitroModules
 /// 使用 class-only 协议以便注册表安全地持有弱引用。
 @objc public protocol NitroRefreshViewBinding: AnyObject {
   func setRefreshingFromController(_ refreshing: Bool)
-  func beginRefreshFromController()
-  func cancelRefreshFromController()
-  func finishRefreshFromController(_ result: String, resultDuration: Double)
-  func pullToMaxFromController()
 }
 
 private final class WeakController {
@@ -84,21 +80,6 @@ public final class NitroRefreshControllerRegistry: NSObject {
     controller(for: controllerId)?.notifyPhase(phase)
   }
 
-  @objc(updateControllerId:phase:offset:refreshing:)
-  public static func update(
-    controllerId: String,
-    phase: String,
-    offset: Double,
-    refreshing: Bool
-  ) {
-    guard let phase = RefreshPhase(fromString: phase) else { return }
-    controller(for: controllerId)?.updateState(
-      phase: phase,
-      offset: offset,
-      refreshing: refreshing
-    )
-  }
-
   private static func controller(for id: String) -> HybridRefreshController? {
     lock.lock()
     let controller = controllers[id]?.value
@@ -118,10 +99,6 @@ final class HybridRefreshController: HybridRefreshControllerSpec {
   private var onStateChange: ((RefreshPhase) -> Void)?
   private weak var binding: (any NitroRefreshViewBinding)?
   private var requestedRefreshing = false
-  private let stateLock = NSLock()
-  private var latestPhase: RefreshPhase = .idle
-  private var latestOffset = 0.0
-  private var latestRefreshing = false
 
   override init() {
     super.init()
@@ -141,48 +118,6 @@ final class HybridRefreshController: HybridRefreshControllerSpec {
     onRefresh = nil
     onStateChange = nil
     NitroRefreshControllerRegistry.unregister(self)
-  }
-
-  func beginRefresh() throws {
-    DispatchQueue.main.async { [weak self] in
-      self?.binding?.beginRefreshFromController()
-    }
-  }
-
-  func cancelRefresh() throws {
-    requestedRefreshing = false
-    DispatchQueue.main.async { [weak self] in
-      self?.binding?.cancelRefreshFromController()
-    }
-  }
-
-  func finishRefresh(refreshResult: RefreshResult, resultDuration: Double) throws {
-    requestedRefreshing = false
-    DispatchQueue.main.async { [weak self] in
-      self?.binding?.finishRefreshFromController(
-        refreshResult.stringValue,
-        resultDuration: resultDuration
-      )
-    }
-  }
-
-  func getState() throws -> RefreshStateSnapshot {
-    stateLock.lock()
-    let phase = latestPhase
-    let offset = latestOffset
-    let refreshing = latestRefreshing
-    stateLock.unlock()
-    return RefreshStateSnapshot(
-      phase: phase,
-      offset: offset,
-      refreshing: refreshing
-    )
-  }
-
-  func pullToMax() throws {
-    DispatchQueue.main.async { [weak self] in
-      self?.binding?.pullToMaxFromController()
-    }
   }
 
   func setRefreshing(refreshing: Bool) throws {
@@ -215,15 +150,4 @@ final class HybridRefreshController: HybridRefreshControllerSpec {
     onStateChange?(phase)
   }
 
-  fileprivate func updateState(
-    phase: RefreshPhase,
-    offset: Double,
-    refreshing: Bool
-  ) {
-    stateLock.lock()
-    latestPhase = phase
-    latestOffset = offset
-    latestRefreshing = refreshing
-    stateLock.unlock()
-  }
 }
