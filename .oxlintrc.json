@@ -1,6 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "import"],
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "import"
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -18,14 +25,18 @@
     ".claude/**",
     ".codegraph/**",
     "android/app/build/**",
-    "dist/**"
+    "dist/**",
+    ".tmp*"
   ],
   "rules": {
-    "eqeqeq": ["warn", "smart"],
-    "import/first": "warn",
-    "no-extend-native": "warn",
+    "eqeqeq": [
+      "error",
+      "smart"
+    ],
+    "import/first": "error",
+    "no-extend-native": "error",
     "no-unused-expressions": [
-      "warn",
+      "error",
       {
         "allowShortCircuit": true,
         "enforceForJSX": true
@@ -47,31 +58,41 @@
       }
     ],
     "no-var": "error",
-    "react/exhaustive-deps": "warn",
+    "react/exhaustive-deps": "error",
     "react/jsx-no-target-blank": "off",
-    "react/no-this-in-sfc": "warn",
-    "react/no-unknown-property": "warn",
+    "react/no-this-in-sfc": "error",
+    "react/no-unknown-property": "error",
     "react/react-in-jsx-scope": "off",
     "react/rules-of-hooks": "error",
     "react/self-closing-comp": [
       "error",
-      { "component": true, "html": true }
+      {
+        "component": true,
+        "html": true
+      }
     ],
-    "typescript/array-type": ["warn", { "default": "array" }],
+    "typescript/array-type": [
+      "error",
+      {
+        "default": "array"
+      }
+    ],
     "typescript/consistent-type-assertions": [
-      "warn",
+      "error",
       {
         "assertionStyle": "as",
         "objectLiteralTypeAssertions": "allow"
       }
     ],
-    "typescript/no-empty-object-type": "warn",
-    "typescript/no-extra-non-null-assertion": "warn",
-    "typescript/no-wrapper-object-types": "warn"
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-wrapper-object-types": "error"
   },
   "overrides": [
     {
-      "files": ["metro.config.js"],
+      "files": [
+        "metro.config.js"
+      ],
       "env": {
         "node": true
       }
