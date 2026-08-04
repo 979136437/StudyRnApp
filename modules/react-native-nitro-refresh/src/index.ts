@@ -1,8 +1,10 @@
-export { RefreshControl } from './RefreshControl';
-export { RefreshPhase, RefreshResult } from './types';
+export { RefreshHeader } from './RefreshHeader';
+export { RefreshLayout } from './RefreshLayout';
+export { RefreshState } from './types';
 export type {
-  RefreshControlProps,
-  RefreshControlRef,
-  RefreshHeaderContext,
-  RefreshStateSnapshot,
+  RefreshHeaderProps,
+  RefreshLayoutProps,
+  RefreshOffsetEvent,
+  RefreshOffsetNativeEvent,
+  RefreshStateCallback,
 } from './types';

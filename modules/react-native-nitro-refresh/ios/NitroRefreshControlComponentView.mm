@@ -15,12 +15,22 @@
 
 using namespace facebook::react;
 
+static const CGFloat NitroRefreshDefaultHeaderHeight = 80;
+static const CGFloat NitroRefreshDefaultLimit = 160;
+static const CGFloat NitroRefreshDefaultDragRate = 1;
+static const CGFloat NitroRefreshMinimumDimension = 1;
+static const CGFloat NitroRefreshMinimumDragRate = 0.01;
+static const CGFloat NitroRefreshLayoutEpsilon = 0.5;
+static const NSTimeInterval NitroRefreshReboundDuration = 0.28;
+static const NSTimeInterval NitroRefreshDefaultResultDuration = 0.8;
+
 @interface NitroRefreshControlComponentView () <NitroRefreshViewBinding, RCTCustomPullToRefreshViewProtocol>
 - (void)beginRefreshingAndNotify:(BOOL)notify;
 - (void)finishRefreshingWithResult:(NSString *)result resultDuration:(double)resultDuration;
 - (void)pullToMax;
 - (void)scheduleResultDismissAfter:(double)resultDuration;
 - (void)cancelResultDismiss;
+- (void)captureScrollBaseline:(UIScrollView *)scrollView;
 - (void)updateActiveOffsetForConfigurationChange;
 - (BOOL)isShowingResult;
 - (void)settleToIdle;
@@ -35,6 +45,9 @@ using namespace facebook::react;
   NSString *_controllerId;
   BOOL _enabled;
   BOOL _refreshing;
+  // 与 _refreshing 分开保存最近一次 React 受控意图。用户松手会先更新原生状态，
+  // React 随后才回传 true；该字段用于识别重复属性和未被调用方确认的刷新请求。
+  BOOL _controlledRefreshing;
   CGFloat _threshold;
   CGFloat _headerHeight;
   CGFloat _limit;
@@ -71,10 +84,10 @@ using namespace facebook::react;
     self.userInteractionEnabled = NO;
     _props = NitroRefreshControlViewShadowNode::defaultSharedProps();
     _enabled = YES;
-    _threshold = 80;
-    _headerHeight = 80;
-    _limit = 160;
-    _dragRate = 1;
+    _threshold = NitroRefreshDefaultHeaderHeight;
+    _headerHeight = NitroRefreshDefaultHeaderHeight;
+    _limit = NitroRefreshDefaultLimit;
+    _dragRate = NitroRefreshDefaultDragRate;
     _phase = @"idle";
   }
   return self;
@@ -108,10 +121,11 @@ using namespace facebook::react;
   _controllerId = nextControllerId;
   _enabled = newProps.enabled;
   // JS 已执行校验；原生层仍保留最后一道保护，避免除零或负 inset。
-  _threshold = MAX(1, newProps.threshold);
-  _headerHeight = MAX(1, newProps.headerHeight);
+  _threshold = MAX(NitroRefreshMinimumDimension, newProps.threshold);
+  _headerHeight = MAX(NitroRefreshMinimumDimension, newProps.headerHeight);
   _limit = MAX(MAX(_threshold, _headerHeight), newProps.limit);
-  _dragRate = MIN(1, MAX(0.01, newProps.dragRate));
+  _dragRate = MIN(NitroRefreshDefaultDragRate,
+                  MAX(NitroRefreshMinimumDragRate, newProps.dragRate));
 
   if (_controllerId.length > 0) {
     [NitroRefreshControllerRegistry attachControllerId:_controllerId binding:self];
@@ -128,9 +142,9 @@ using namespace facebook::react;
     scrollView.alwaysBounceVertical = _enabled ? YES : _originalAlwaysBounceVertical;
   }
   if (_enabled &&
-      (ABS(previousThreshold - _threshold) >= 0.5 ||
-       ABS(previousHeaderHeight - _headerHeight) >= 0.5 ||
-       ABS(previousLimit - _limit) >= 0.5)) {
+      (ABS(previousThreshold - _threshold) >= NitroRefreshLayoutEpsilon ||
+       ABS(previousHeaderHeight - _headerHeight) >= NitroRefreshLayoutEpsilon ||
+       ABS(previousLimit - _limit) >= NitroRefreshLayoutEpsilon)) {
     [self updateActiveOffsetForConfigurationChange];
   }
 }
@@ -159,6 +173,7 @@ using namespace facebook::react;
   _readyToRefresh = NO;
   _programmaticPull = NO;
   _refreshing = NO;
+  _controlledRefreshing = NO;
   _currentOffset = 0;
   _currentProgress = 0;
   [super prepareForRecycle];
@@ -174,9 +189,7 @@ using namespace facebook::react;
     return;
   }
   // 只保存未进入刷新状态时的业务 inset，后续结束刷新时精确恢复。
-  _originalContentInset = scrollView.contentInset;
-  _originalAdjustedTop = scrollView.adjustedContentInset.top;
-  _hasOriginalContentInset = YES;
+  [self captureScrollBaseline:scrollView];
   _originalAlwaysBounceVertical = scrollView.alwaysBounceVertical;
   _hasOriginalAlwaysBounceVertical = YES;
   scrollView.alwaysBounceVertical = _enabled ? YES : _originalAlwaysBounceVertical;
@@ -190,8 +203,14 @@ using namespace facebook::react;
   if (scrollView != nil) {
     [scrollView.panGestureRecognizer removeTarget:self action:@selector(handlePan:)];
     // 卸载或换宿主时必须恢复 inset，避免列表留下永久顶部空白。
+    BOOL shouldRestoreTop = _refreshing || _programmaticPull || _currentOffset > 0;
     if (_hasOriginalContentInset) {
       scrollView.contentInset = _originalContentInset;
+      if (shouldRestoreTop) {
+        CGPoint point = scrollView.contentOffset;
+        point.y = -_originalAdjustedTop;
+        scrollView.contentOffset = point;
+      }
     }
     if (_hasOriginalAlwaysBounceVertical) {
       scrollView.alwaysBounceVertical = _originalAlwaysBounceVertical;
@@ -213,7 +232,14 @@ using namespace facebook::react;
     return;
   }
 
-  // 始终相对挂载时的顶部基线计算，避免刷新期间 contentInset 改变后坐标系跳变。
+  if (gesture.state == UIGestureRecognizerStateBegan) {
+    // 导航栏、旋转和安全区变化都可能更新 adjustedContentInset。每次空闲手势开始时
+    // 重新捕获业务基线，避免沿用挂载时的旧 safe-area top。
+    [self captureScrollBaseline:scrollView];
+    return;
+  }
+
+  // 始终相对当前手势开始时的顶部基线计算，避免刷新期间 contentInset 改变后坐标系跳变。
   CGFloat rawOffset = MAX(0, -(scrollView.contentOffset.y + _originalAdjustedTop));
   // UIScrollView 已经把手指位移转换成带系统阻尼的可见内容位移。offset 必须使用这个
   // 实际位移，刷新头才能紧贴列表；再次乘 dragRate 会让刷新头只移动列表的一部分。
@@ -244,8 +270,10 @@ using namespace facebook::react;
   // Nitro 控制器可能从任意线程调用；所有 UIKit 修改统一回到主队列。
   dispatch_async(dispatch_get_main_queue(), ^{
     if (refreshing) {
+      self->_controlledRefreshing = YES;
       [self beginRefreshingAndNotify:NO];
-    } else if (![self isShowingResult]) {
+    } else if (self->_controlledRefreshing || self->_refreshing || [self isShowingResult]) {
+      self->_controlledRefreshing = NO;
       [self settleToIdle];
     }
   });
@@ -286,17 +314,16 @@ using namespace facebook::react;
     return;
   }
   [self cancelResultDismiss];
+  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
+  if (scrollView != nil) {
+    [self captureScrollBaseline:scrollView];
+  }
+  _controlledRefreshing = YES;
   _refreshing = YES;
   _readyToRefresh = NO;
   _programmaticPull = NO;
 
-  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   if (scrollView != nil) {
-    if (!_hasOriginalContentInset) {
-      _originalContentInset = scrollView.contentInset;
-      _originalAdjustedTop = scrollView.adjustedContentInset.top;
-      _hasOriginalContentInset = YES;
-    }
     CGFloat initialOffset = [self visibleOffsetForScrollView:scrollView];
     [self updatePhase:@"refreshing" offset:initialOffset progress:1];
 
@@ -304,7 +331,7 @@ using namespace facebook::react;
     UIEdgeInsets inset = _originalContentInset;
     inset.top += _headerHeight;
     [self startTrackingTransition];
-    [UIView animateWithDuration:0.28
+    [UIView animateWithDuration:NitroRefreshReboundDuration
         delay:0
         options:UIViewAnimationOptionBeginFromCurrentState |
                 UIViewAnimationOptionCurveEaseOut |
@@ -342,6 +369,7 @@ using namespace facebook::react;
   }
 
   [self cancelResultDismiss];
+  _controlledRefreshing = NO;
   _refreshing = NO;
   _readyToRefresh = NO;
   _programmaticPull = NO;
@@ -352,15 +380,10 @@ using namespace facebook::react;
   [self scheduleResultDismissAfter:resultDuration];
 
   if (scrollView != nil) {
-    if (!_hasOriginalContentInset) {
-      _originalContentInset = scrollView.contentInset;
-      _originalAdjustedTop = scrollView.adjustedContentInset.top;
-      _hasOriginalContentInset = YES;
-    }
     UIEdgeInsets inset = _originalContentInset;
     inset.top += _headerHeight;
     [self startTrackingTransition];
-    [UIView animateWithDuration:0.28
+    [UIView animateWithDuration:NitroRefreshReboundDuration
         delay:0
         options:UIViewAnimationOptionBeginFromCurrentState |
                 UIViewAnimationOptionCurveEaseOut |
@@ -392,10 +415,13 @@ using namespace facebook::react;
   }
 
   [self cancelResultDismiss];
+  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
+  if (scrollView != nil) {
+    [self captureScrollBaseline:scrollView];
+  }
   _programmaticPull = YES;
   _readyToRefresh = NO;
 
-  UIScrollView *scrollView = _scrollViewComponentView.scrollView;
   CGFloat initialOffset = scrollView != nil ? [self visibleOffsetForScrollView:scrollView] : _currentOffset;
   [self updatePhase:@"pulling"
              offset:initialOffset
@@ -410,7 +436,7 @@ using namespace facebook::react;
     UIEdgeInsets inset = _originalContentInset;
     inset.top += _limit;
     [self startTrackingTransition];
-    [UIView animateWithDuration:0.28
+    [UIView animateWithDuration:NitroRefreshReboundDuration
         delay:0
         options:UIViewAnimationOptionBeginFromCurrentState |
                 UIViewAnimationOptionCurveEaseOut |
@@ -432,6 +458,13 @@ using namespace facebook::react;
   } else {
     [self updatePhase:@"ready" offset:_limit progress:1];
   }
+}
+
+- (void)captureScrollBaseline:(UIScrollView *)scrollView
+{
+  _originalContentInset = scrollView.contentInset;
+  _originalAdjustedTop = scrollView.adjustedContentInset.top;
+  _hasOriginalContentInset = YES;
 }
 
 - (void)updateActiveOffsetForConfigurationChange
@@ -470,7 +503,7 @@ using namespace facebook::react;
   UIEdgeInsets inset = _originalContentInset;
   inset.top += targetOffset;
   [self startTrackingTransition];
-  [UIView animateWithDuration:0.28
+  [UIView animateWithDuration:NitroRefreshReboundDuration
       delay:0
       options:UIViewAnimationOptionBeginFromCurrentState |
               UIViewAnimationOptionCurveEaseOut |
@@ -501,7 +534,9 @@ using namespace facebook::react;
 - (void)scheduleResultDismissAfter:(double)resultDuration
 {
   [self cancelResultDismiss];
-  NSTimeInterval duration = std::isfinite(resultDuration) ? MAX(0, resultDuration) / 1000.0 : 0.8;
+  NSTimeInterval duration = std::isfinite(resultDuration)
+      ? MAX(0, resultDuration) / 1000.0
+      : NitroRefreshDefaultResultDuration;
   NSUInteger generation = _resultDismissGeneration;
   __weak __typeof(self) weakSelf = self;
   dispatch_block_t block = dispatch_block_create(static_cast<dispatch_block_flags_t>(0), ^{
@@ -546,6 +581,7 @@ using namespace facebook::react;
     return;
   }
   [self cancelResultDismiss];
+  _controlledRefreshing = NO;
   _refreshing = NO;
   _readyToRefresh = NO;
   _programmaticPull = NO;
@@ -561,7 +597,7 @@ using namespace facebook::react;
     // 显式动画 contentInset 和 contentOffset，避免系统回弹与另一条补间动画叠加。
     // CADisplayLink 会读取这条动画的呈现位置，自定义刷新头无需猜测 UIKit 曲线。
     [self startTrackingTransition];
-    [UIView animateWithDuration:0.28
+    [UIView animateWithDuration:NitroRefreshReboundDuration
         delay:0
         options:UIViewAnimationOptionBeginFromCurrentState |
                 UIViewAnimationOptionCurveEaseOut |

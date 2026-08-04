@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.8",
+    "@lottiefiles/dotlottie-react": "^0.13.5",
     "@quidone/react-native-wheel-picker": "^1.7.1",
     "@react-native-async-storage/async-storage": "catalog:",
     "@sentry/react-native": "catalog:",
@@ -31,6 +32,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
     "expo-video-metadata": "^1.5.0",
+    "lottie-react-native": "~7.3.8",
     "nativewind": "4.2.6",
     "react": "catalog:",
     "react-dom": "19.2.3",

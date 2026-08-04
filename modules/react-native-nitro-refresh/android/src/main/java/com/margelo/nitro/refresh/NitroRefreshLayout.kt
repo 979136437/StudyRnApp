@@ -32,34 +32,37 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     }
 
   /** 触发刷新的可见下拉阈值，单位为 dp。 */
-  var thresholdDp = 80.0
+  var thresholdDp = DEFAULT_HEADER_HEIGHT_DP
     set(value) {
       field = value
       scheduleConfigurationUpdate()
     }
 
   /** 刷新中及结果态的内容保持高度，单位为 dp。 */
-  var headerHeightDp = 80.0
+  var headerHeightDp = DEFAULT_HEADER_HEIGHT_DP
     set(value) {
       field = value
       scheduleConfigurationUpdate()
     }
 
   /** 内容允许下移的最大距离，单位为 dp。 */
-  var limitDp = 160.0
+  var limitDp = DEFAULT_LIMIT_DP
     set(value) {
       field = value
       scheduleConfigurationUpdate()
     }
 
   /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
-  var dragRate = 1.0
+  var dragRate = DEFAULT_DRAG_RATE
 
   private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
   private var initialX = 0f
   private var initialY = 0f
   private var dragging = false
   private var programmaticPull = false
+  // 记录最近一次已接受的受控意图。它与 phase 分开保存，因为用户松手会先进入
+  // Refreshing，随后 React 才会回传 refreshing=true；两者不能互相替代。
+  private var controlledRefreshing = false
   private var offsetPx = 0f
   private var progress = 0f
   private var phase = RefreshPhase.IDLE
@@ -75,7 +78,10 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private val limitPx: Float
     get() =
       PixelUtil.toPixelFromDIP(
-        max(max(limitDp, headerHeightDp), thresholdDp / dragRate.coerceAtLeast(0.01)),
+        max(
+          max(limitDp, headerHeightDp),
+          thresholdDp / dragRate.coerceAtLeast(MIN_DRAG_RATE),
+        ),
       )
 
   fun attachController(controllerId: String) {
@@ -188,8 +194,12 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   fun setRefreshingFromController(refreshing: Boolean) {
     post {
       if (refreshing) {
+        controlledRefreshing = true
         beginRefreshing(false)
-      } else if (!isResultPhase()) {
+      } else if (
+        controlledRefreshing || phase == RefreshPhase.REFRESHING || isResultPhase()
+      ) {
+        controlledRefreshing = false
         settleToIdle()
       }
     }
@@ -216,6 +226,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     if (programmaticPull && phase != RefreshPhase.READY) return false
 
     cancelResultDismiss()
+    controlledRefreshing = true
     programmaticPull = false
     setPhase(RefreshPhase.REFRESHING)
     animateOffsetTo(headerHeightPx, 1f)
@@ -230,6 +241,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     if (!canFinish) return
 
     cancelResultDismiss()
+    controlledRefreshing = false
     programmaticPull = false
     setPhase(
       if (result == RefreshResult.SUCCESS) RefreshPhase.SUCCESS else RefreshPhase.FAILURE,
@@ -254,6 +266,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun cancelCurrentAction() {
     cancelResultDismiss()
+    controlledRefreshing = false
     programmaticPull = false
     dragging = false
     settleToIdle()
@@ -272,7 +285,11 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private fun scheduleResultDismiss(resultDuration: Double) {
     cancelResultDismiss()
     val durationMs =
-      if (resultDuration.isFinite()) resultDuration.coerceAtLeast(0.0).roundToLong() else 800L
+      if (resultDuration.isFinite()) {
+        resultDuration.coerceAtLeast(0.0).roundToLong()
+      } else {
+        DEFAULT_RESULT_DURATION_MS
+      }
     val runnable = Runnable {
       resultDismissRunnable = null
       if (isResultPhase()) settleToIdle()
@@ -317,7 +334,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     completion: (() -> Unit)? = null,
   ) {
     animator?.cancel()
-    if (abs(offsetPx - target) < 0.5f) {
+    if (abs(offsetPx - target) < OFFSET_EPSILON_PX) {
       animator = null
       setOffset(target, if (decayProgress) 0f else progressOverride)
       completion?.invoke()
@@ -327,7 +344,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
     val startOffset = offsetPx
     val startProgress = progress
     animator = ValueAnimator.ofFloat(startOffset, target).apply {
-      duration = 220
+      duration = REBOUND_DURATION_MS
       interpolator = DecelerateInterpolator()
       addUpdateListener {
         val animatedOffset = it.animatedValue as Float
@@ -399,13 +416,41 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   private fun isInteractionLocked(): Boolean =
-    programmaticPull || phase == RefreshPhase.REFRESHING || isResultPhase()
+    programmaticPull ||
+      phase == RefreshPhase.REFRESHING ||
+      phase == RefreshPhase.SETTLING ||
+      isResultPhase()
 
   private fun isResultPhase(): Boolean =
     phase == RefreshPhase.SUCCESS || phase == RefreshPhase.FAILURE
 
   private fun canChildScrollUp(): Boolean {
     val child = if (childCount > 0) getChildAt(0) else null
-    return child?.canScrollVertically(-1) ?: false
+    return child?.let(::canViewScrollUp) ?: false
+  }
+
+  /**
+   * FlashList 和部分复合列表会在 Fabric 宿主下再嵌套真正可滚动的原生子视图。
+   * 逐层查找可向上滚动的可见节点，避免只检查外层 ViewGroup 时误判已经到顶。
+   */
+  private fun canViewScrollUp(view: View): Boolean {
+    if (view.canScrollVertically(-1)) return true
+    if (view !is ViewGroup) return false
+
+    for (index in 0 until view.childCount) {
+      val child = view.getChildAt(index)
+      if (child.visibility == View.VISIBLE && canViewScrollUp(child)) return true
+    }
+    return false
+  }
+
+  companion object {
+    private const val DEFAULT_HEADER_HEIGHT_DP = 80.0
+    private const val DEFAULT_LIMIT_DP = 160.0
+    private const val DEFAULT_DRAG_RATE = 1.0
+    private const val MIN_DRAG_RATE = 0.01
+    private const val DEFAULT_RESULT_DURATION_MS = 800L
+    private const val REBOUND_DURATION_MS = 280L
+    private const val OFFSET_EPSILON_PX = 0.5f
   }
 }

@@ -37,22 +37,22 @@ internal class NitroRefreshControlManager :
     view.refreshEnabled = value
   }
 
-  @ReactProp(name = "threshold", defaultDouble = 80.0)
+  @ReactProp(name = "threshold", defaultDouble = DEFAULT_HEADER_HEIGHT_DP)
   override fun setThreshold(view: NitroRefreshLayout, value: Double) {
     view.thresholdDp = value
   }
 
-  @ReactProp(name = "headerHeight", defaultDouble = 80.0)
+  @ReactProp(name = "headerHeight", defaultDouble = DEFAULT_HEADER_HEIGHT_DP)
   override fun setHeaderHeight(view: NitroRefreshLayout, value: Double) {
     view.headerHeightDp = value
   }
 
-  @ReactProp(name = "limit", defaultDouble = 160.0)
+  @ReactProp(name = "limit", defaultDouble = DEFAULT_LIMIT_DP)
   override fun setLimit(view: NitroRefreshLayout, value: Double) {
     view.limitDp = value
   }
 
-  @ReactProp(name = "dragRate", defaultDouble = 1.0)
+  @ReactProp(name = "dragRate", defaultDouble = DEFAULT_DRAG_RATE)
   override fun setDragRate(view: NitroRefreshLayout, value: Double) {
     view.dragRate = value
   }
@@ -63,5 +63,8 @@ internal class NitroRefreshControlManager :
 
   companion object {
     const val REACT_CLASS = "NitroRefreshControlView"
+    private const val DEFAULT_HEADER_HEIGHT_DP = 80.0
+    private const val DEFAULT_LIMIT_DP = 160.0
+    private const val DEFAULT_DRAG_RATE = 1.0
   }
 }

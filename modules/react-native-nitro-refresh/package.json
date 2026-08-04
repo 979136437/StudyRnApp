@@ -19,13 +19,15 @@
   ],
   "scripts": {
     "specs": "nitrogen",
+    "test": "vitest run src/core/__tests__",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
-    "react-native-reanimated": "catalog:"
+    "react-native-reanimated": "catalog:",
+    "react-native-worklets": ">=0.10.0"
   },
   "devDependencies": {
     "@types/react": "catalog:",
@@ -34,7 +36,9 @@
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
     "react-native-reanimated": "catalog:",
-    "typescript": "catalog:"
+    "react-native-worklets": "0.10.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "codegenConfig": {
     "name": "NitroRefreshSpec",
