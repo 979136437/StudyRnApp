@@ -12,6 +12,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { RequestProvider } from 'react-native-request-kit/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { HeroTransitionProvider } from '@/components/hero/hero-transition';
 import { request } from '@/request';
 
 initializeSentry();
@@ -25,7 +26,14 @@ function RootLayout(): React.JSX.Element {
           <SafeAreaProvider>
             <DiagnosticsLifecycle />
             <DiagnosticsErrorBoundary>
-              <Stack screenOptions={{ headerShown: false }} />
+              <HeroTransitionProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen
+                    name="feed/[id]"
+                    options={{ animation: 'none' }}
+                  />
+                </Stack>
+              </HeroTransitionProvider>
             </DiagnosticsErrorBoundary>
           </SafeAreaProvider>
         </KeyboardProvider>

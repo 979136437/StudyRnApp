@@ -1,18 +1,19 @@
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
-  type ListRenderItem,
 } from 'react-native';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
+import { FeedCard, type FeedItem } from '@/components/feed/feed-card';
+import { HeroSource } from '@/components/hero/hero-transition';
 import {
   RefreshAnimateHeader,
   RefreshNormalHeader,
@@ -31,41 +32,31 @@ const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
 
 type RefreshHeaderMode = 'normal' | 'animated';
 
-interface FeedItem {
-  id: string;
-  title: string;
-  summary: string;
-  time: string;
-}
-
-const INITIAL_ITEMS: FeedItem[] = [
-  {
-    id: 'initial-1',
-    title: '晨间数据已同步',
-    summary: '今日任务与关键指标已经更新，团队可以开始处理新的工作项。',
-    time: '刚刚',
-  },
-  {
-    id: 'initial-2',
-    title: '设计评审已结束',
-    summary: '交互细节已确认，相关调整进入开发排期。',
-    time: '1 分钟前',
-  },
-  {
-    id: 'initial-3',
-    title: '移动端版本进入验证',
-    summary: '本轮功能验证已经开始，当前没有阻塞问题。',
-    time: '2 分钟前',
-  },
-];
+const INITIAL_ITEMS: FeedItem[] = Array.from({ length: 10000 }, (_, index) => ({
+  id: `initial-${index + 1}`,
+  title: `晨间数据已同步${index + 1}`,
+  summary: `今日任务与关键指标已经更新，团队可以开始处理新的工作项。`,
+  time: `刚刚`,
+}));
 
 const renderFeedItem: ListRenderItem<FeedItem> = ({ item }) => (
-  <View style={styles.item}>
-    <View style={styles.itemHeader}>
-      <Text style={styles.itemTitle}>{item.title}</Text>
-      <Text style={styles.itemTime}>{item.time}</Text>
-    </View>
-    <Text style={styles.itemSummary}>{item.summary}</Text>
+  <View style={styles.itemColumn}>
+    <HeroSource
+      accessibilityLabel={`查看${item.title}`}
+      heroId={`feed-${item.id}`}
+      href={{
+        pathname: '/feed/[id]',
+        params: {
+          id: item.id,
+          summary: item.summary,
+          time: item.time,
+          title: item.title,
+        },
+      }}
+      overlay={<FeedCard fill item={item} />}
+    >
+      <FeedCard item={item} />
+    </HeroSource>
   </View>
 );
 
@@ -130,7 +121,7 @@ export default function Home(): React.JSX.Element {
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
-      <FlatList
+      <FlashList
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top + CONTENT_TOP_PADDING },
@@ -138,6 +129,8 @@ export default function Home(): React.JSX.Element {
         data={items}
         ItemSeparatorComponent={ItemSeparator}
         keyExtractor={keyExtractor}
+        masonry
+        numColumns={2}
         ListHeaderComponent={
           <View style={styles.pageHeader}>
             <View style={styles.titleRow}>
@@ -247,7 +240,7 @@ const colors = {
 const styles = StyleSheet.create({
   content: {
     paddingBottom: 32,
-    paddingHorizontal: CONTENT_HORIZONTAL_PADDING,
+    paddingHorizontal: CONTENT_HORIZONTAL_PADDING / 2,
   },
   eyebrow: {
     color: colors.accent,
@@ -255,35 +248,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0,
   },
-  item: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-  },
-  itemHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  itemSummary: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
-  },
-  itemTime: {
-    color: colors.muted,
-    flexShrink: 0,
-    fontSize: 12,
-  },
-  itemTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
+  itemColumn: {
+    marginInline: CONTENT_HORIZONTAL_PADDING / 4,
   },
   pageHeader: {
     marginBottom: 20,
