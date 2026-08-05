@@ -1,0 +1,2 @@
+export const POPUP_ANIMATION_DURATION = 180;
+export const DEFAULT_TOAST_DURATION = 1500;

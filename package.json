@@ -42,6 +42,7 @@
     "react-native-diagnostics": "workspace:*",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "1.21.9",
+    "react-native-popup-kit": "workspace:*",
     "react-native-nitro-modules": "catalog:",
     "react-native-nitro-refresh": "workspace:*",
     "react-native-pager-view": "8.0.2",

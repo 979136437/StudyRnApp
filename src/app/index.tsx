@@ -8,6 +8,20 @@ import {
   View,
 } from 'react-native';
 import {
+  PopupProvider,
+  closeAllPopups,
+  closePopup,
+  hideLoading,
+  showLoading,
+  showModal,
+  showPopup,
+  showToast,
+  useModal,
+  useToast,
+  type PopupComponentProps,
+  type PopupId,
+} from 'react-native-popup-kit';
+import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
@@ -62,11 +76,37 @@ const renderFeedItem: ListRenderItem<FeedItem> = ({ item }) => (
 
 const keyExtractor = (item: FeedItem): string => item.id;
 
+function openGlobalModal(): void {
+  void showModal({
+    content: '输入备注并确认，结果会通过 Promise 返回。',
+    editable: true,
+    placeholderText: '备注',
+    title: '全局 Modal',
+  }).then(
+    (result) => {
+      showToast({
+        icon: result.confirm ? 'success' : 'none',
+        title: result.confirm
+          ? `已确认：${result.content || '无备注'}`
+          : '已取消',
+      });
+    },
+    () => undefined,
+  );
+}
+
+function closeEveryPopup(): void {
+  void closeAllPopups().then((result) => {
+    showToast({ icon: 'none', title: `已关闭 ${result.closed} 个弹窗` });
+  });
+}
+
 export default function Home(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [headerMode, setHeaderMode] = useState<RefreshHeaderMode>('animated');
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState(INITIAL_ITEMS);
+  const [activePopupId, setActivePopupId] = useState<PopupId | null>(null);
   const refreshCountRef = useRef(0);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,6 +158,32 @@ export default function Home(): React.JSX.Element {
     ) : (
       <RefreshNormalHeader onRefresh={beginRefresh} refreshing={refreshing} />
     );
+
+  const openCustomPopup = (): void => {
+    const task = showPopup({
+      component: BottomPopupExample,
+      placement: 'bottom',
+    });
+    setActivePopupId(task.id);
+    void task.then(
+      () =>
+        setActivePopupId((currentId) =>
+          currentId === task.id ? null : currentId,
+        ),
+      () =>
+        setActivePopupId((currentId) =>
+          currentId === task.id ? null : currentId,
+        ),
+    );
+  };
+
+  const closeCurrentPopup = (): void => {
+    if (activePopupId === null) {
+      showToast({ icon: 'none', title: '当前没有可关闭的 Popup' });
+      return;
+    }
+    void closePopup(activePopupId);
+  };
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
@@ -173,6 +239,41 @@ export default function Home(): React.JSX.Element {
                 setMode={setHeaderMode}
               />
             </View>
+
+            <View style={styles.demoSection}>
+              <View style={styles.demoHeading}>
+                <Text style={styles.demoTitle}>全局 API</Text>
+                <Text style={styles.demoMeta}>根 PopupProvider</Text>
+              </View>
+              <View style={styles.demoActions}>
+                <DemoButton
+                  label="Toast"
+                  onPress={() =>
+                    showToast({ icon: 'success', title: '全局 Toast 已显示' })
+                  }
+                />
+                <DemoButton
+                  label="Loading"
+                  onPress={() => showLoading({ title: '正在处理' })}
+                />
+                <DemoButton
+                  label="关闭 Loading"
+                  onPress={() => void hideLoading({ noConflict: true })}
+                />
+                <DemoButton label="Modal" onPress={openGlobalModal} />
+                <DemoButton label="底部 Popup" onPress={openCustomPopup} />
+                <DemoButton
+                  disabled={activePopupId === null}
+                  label="关闭当前"
+                  onPress={closeCurrentPopup}
+                />
+                <DemoButton label="关闭全部" onPress={closeEveryPopup} />
+              </View>
+            </View>
+
+            <PopupProvider scope="local">
+              <LocalPopupExamples />
+            </PopupProvider>
           </View>
         }
         refreshControl={refreshControl}
@@ -180,6 +281,86 @@ export default function Home(): React.JSX.Element {
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
+  );
+}
+
+function BottomPopupExample({ close }: PopupComponentProps): React.JSX.Element {
+  return (
+    <View style={styles.bottomPopup}>
+      <View style={styles.popupHandle} />
+      <Text style={styles.popupTitle}>自定义底部 Popup</Text>
+      <Text style={styles.popupCopy}>
+        该内容通过 showPopup 的 component 选项传入。
+      </Text>
+      <DemoButton label="完成" onPress={() => void close()} primary />
+    </View>
+  );
+}
+
+function LocalPopupExamples(): React.JSX.Element {
+  const { showToast: showLocalToast } = useToast();
+  const { showModal: showLocalModal } = useModal();
+
+  return (
+    <View style={styles.demoSection}>
+      <View style={styles.demoHeading}>
+        <Text style={styles.demoTitle}>局部 Hooks</Text>
+        <Text style={styles.demoMeta}>最近的 PopupProvider</Text>
+      </View>
+      <View style={styles.demoActions}>
+        <DemoButton
+          label="局部 Toast"
+          onPress={() =>
+            showLocalToast({ icon: 'none', title: '只在局部宿主内显示' })
+          }
+        />
+        <DemoButton
+          label="局部 Modal"
+          onPress={() => {
+            void showLocalModal({
+              content: '该弹窗由 useModal 调用。',
+              title: '局部作用域',
+            }).catch(() => undefined);
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+interface DemoButtonProps {
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+}
+
+function DemoButton({
+  disabled = false,
+  label,
+  onPress,
+  primary = false,
+}: DemoButtonProps): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.demoButton,
+        primary && styles.demoButtonPrimary,
+        pressed && styles.demoButtonPressed,
+        disabled && styles.demoButtonDisabled,
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[styles.demoButtonText, primary && styles.demoButtonTextPrimary]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -238,9 +419,75 @@ const colors = {
 } as const;
 
 const styles = StyleSheet.create({
+  bottomPopup: {
+    alignItems: 'stretch',
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    gap: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    width: '100%',
+  },
   content: {
     paddingBottom: 32,
     paddingHorizontal: CONTENT_HORIZONTAL_PADDING / 2,
+  },
+  demoActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  demoButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: 'center',
+    minWidth: 96,
+    paddingHorizontal: 12,
+  },
+  demoButtonDisabled: {
+    opacity: 0.45,
+  },
+  demoButtonPressed: {
+    opacity: 0.7,
+  },
+  demoButtonPrimary: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  demoButtonText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  demoButtonTextPrimary: {
+    color: colors.buttonText,
+  },
+  demoHeading: {
+    alignItems: 'baseline',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  demoMeta: {
+    color: colors.muted,
+    fontSize: 12,
+  },
+  demoSection: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+    paddingTop: 18,
+  },
+  demoTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   eyebrow: {
     color: colors.accent,
@@ -252,7 +499,27 @@ const styles = StyleSheet.create({
     marginInline: CONTENT_HORIZONTAL_PADDING / 4,
   },
   pageHeader: {
+    gap: 20,
     marginBottom: 20,
+  },
+  popupCopy: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  popupHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    height: 4,
+    width: 36,
+  },
+  popupTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   refreshButton: {
     alignItems: 'center',
@@ -307,7 +574,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     borderRadius: 7,
     flexDirection: 'row',
-    marginTop: 20,
     padding: 3,
   },
   separator: {
