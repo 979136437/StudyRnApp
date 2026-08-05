@@ -76,6 +76,7 @@ export interface ShowPopupOptions extends PopupCallbacks<PopupResult> {
   id?: PopupId;
   content?: ReactNode | ((context: PopupRenderContext) => ReactNode);
   placement?: PopupPlacement;
+  /** 仅控制遮罩是否可见，Popup 显示期间始终拦截宿主区域操作。 */
   mask?: boolean;
   closeOnMaskPress?: boolean;
   closeOnBackPress?: boolean;
@@ -88,18 +89,16 @@ export type ToastIcon = 'success' | 'error' | 'loading' | 'none';
 
 export interface ShowToastOptions extends PopupCallbacks<PopupCallbackResult> {
   id?: PopupId;
-  title: string;
+  title: ReactNode;
   icon?: ToastIcon;
   image?: string | ImageSourcePropType;
   duration?: number;
-  mask?: boolean;
   component?: ComponentType<ToastComponentProps>;
 }
 
 export interface ShowLoadingOptions extends PopupCallbacks<PopupCallbackResult> {
   id?: PopupId;
-  title: string;
-  mask?: boolean;
+  title: ReactNode;
   component?: ComponentType<LoadingComponentProps>;
 }
 
@@ -109,12 +108,12 @@ export interface HidePromptOptions extends PopupCallbacks<PopupCallbackResult> {
 
 export interface ShowModalOptions extends PopupCallbacks<ModalResult> {
   id?: PopupId;
-  title?: string;
-  content?: string;
+  title?: ReactNode;
+  content?: ReactNode;
   showCancel?: boolean;
-  cancelText?: string;
+  cancelText?: ReactNode;
   cancelColor?: string;
-  confirmText?: string;
+  confirmText?: ReactNode;
   confirmColor?: string;
   editable?: boolean;
   placeholderText?: string;

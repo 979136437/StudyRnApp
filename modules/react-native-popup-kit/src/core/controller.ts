@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type {
   HidePromptOptions,
   ModalResult,
@@ -54,6 +56,7 @@ interface ManagedInstanceBase<TResult extends PopupCallbackResult> {
   order: number;
   closing: boolean;
   mask: boolean;
+  /** 仅表示是否进入阻塞展示队列；所有可见 Layer 都会拦截宿主区域操作。 */
   blocking: boolean;
   closeOnBackPress: boolean;
   lifecycle: Lifecycle<TResult>;
@@ -163,14 +166,20 @@ function validateId(id?: PopupId): void {
   }
 }
 
-function validateTitle(title: string, method: string): void {
-  if (title.trim().length === 0) {
+function validateTitle(title: ReactNode, method: string): void {
+  const isEmpty =
+    title === null ||
+    title === undefined ||
+    typeof title === 'boolean' ||
+    (typeof title === 'string' && title.trim().length === 0);
+  if (isEmpty) {
     throw new PopupError('INVALID_OPTIONS', `${method}:fail title 不能为空`);
   }
 }
 
-function validateButton(text: string | undefined, name: string): void {
-  if (text !== undefined && Array.from(text).length > BUTTON_TEXT_LIMIT) {
+function validateButton(text: ReactNode, name: string): void {
+  // ReactNode 无法按字符计数，微信式四字限制仅对字符串按钮文案生效。
+  if (typeof text === 'string' && Array.from(text).length > BUTTON_TEXT_LIMIT) {
     throw new PopupError(
       'INVALID_OPTIONS',
       `showModal:fail ${name} 最多 4 个字符`,
@@ -323,7 +332,8 @@ export class PopupController implements PopupApi {
         kind: 'toast',
         options: { ...options, duration },
         order: nextPopupOrder(),
-        mask: options.mask ?? false,
+        // Toast 不暴露视觉遮罩配置，交互拦截统一由 PopupLayer 的透明覆盖层负责。
+        mask: false,
         blocking: false,
         closeOnBackPress: false,
         closing: false,
@@ -356,7 +366,8 @@ export class PopupController implements PopupApi {
         kind: 'loading',
         options,
         order: nextPopupOrder(),
-        mask: options.mask ?? false,
+        // Loading 固定保持背景透明，页面交互仍由全屏透明覆盖层拦截。
+        mask: false,
         blocking: false,
         closeOnBackPress: false,
         closing: false,

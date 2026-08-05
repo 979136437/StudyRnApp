@@ -1,7 +1,8 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 
 import type { ModalComponentProps } from '../types';
 import { DEFAULT_POPUP_APPEARANCE } from './defaults';
+import { OptionNode } from './option-node';
 import { styles } from './styles';
 
 export function DefaultModal({
@@ -20,13 +21,13 @@ export function DefaultModal({
       style={styles.modal}
     >
       <View style={styles.modalBody}>
-        {options.title ? (
-          <Text style={styles.modalTitle}>{options.title}</Text>
+        {options.title !== undefined && options.title !== null ? (
+          <OptionNode style={styles.modalTitle}>{options.title}</OptionNode>
         ) : null}
-        {options.content ? (
-          <Text selectable style={styles.modalContent}>
+        {options.content !== undefined && options.content !== null ? (
+          <OptionNode selectable style={styles.modalContent}>
             {options.content}
-          </Text>
+          </OptionNode>
         ) : null}
         {options.editable ? (
           <TextInput
@@ -46,13 +47,9 @@ export function DefaultModal({
           <Pressable
             accessibilityRole="button"
             onPress={onCancel}
-            style={({ pressed }) => [
-              styles.modalButton,
-              styles.modalCancelButton,
-              { opacity: pressed ? 0.55 : 1 },
-            ]}
+            style={[styles.modalButton, styles.modalCancelButton]}
           >
-            <Text
+            <OptionNode
               style={[
                 styles.modalButtonText,
                 {
@@ -62,18 +59,15 @@ export function DefaultModal({
               ]}
             >
               {options.cancelText ?? '取消'}
-            </Text>
+            </OptionNode>
           </Pressable>
         ) : null}
         <Pressable
           accessibilityRole="button"
           onPress={onConfirm}
-          style={({ pressed }) => [
-            styles.modalButton,
-            { opacity: pressed ? 0.55 : 1 },
-          ]}
+          style={styles.modalButton}
         >
-          <Text
+          <OptionNode
             style={[
               styles.modalButtonText,
               {
@@ -83,7 +77,7 @@ export function DefaultModal({
             ]}
           >
             {options.confirmText ?? '确定'}
-          </Text>
+          </OptionNode>
         </Pressable>
       </View>
     </View>

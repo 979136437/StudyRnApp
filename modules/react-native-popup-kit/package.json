@@ -27,14 +27,18 @@
   "peerDependencies": {
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-native-safe-area-context": "catalog:"
+    "react-native-reanimated": "catalog:",
+    "react-native-safe-area-context": "catalog:",
+    "react-native-worklets": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-test-renderer": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
+    "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "catalog:",
+    "react-native-worklets": "catalog:",
     "react-test-renderer": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

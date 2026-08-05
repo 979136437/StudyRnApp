@@ -1,12 +1,12 @@
-import { useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import { use, useLayoutEffect, useState } from 'react';
 import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PopupController } from '../core/controller';
 import { registerHost } from '../core/registry';
 import type { PopupProviderProps } from '../types';
-import { PopupContext } from './context';
-import { PopupLayer } from './popup-layer';
+import { PopupContext, PopupRenderHostContext } from './context';
+import { PopupLayers } from './popup-layers';
+import { PopupRenderHost } from './render-host';
 import { styles } from './styles';
 
 export function PopupProvider({
@@ -15,49 +15,39 @@ export function PopupProvider({
   style,
 }: PopupProviderProps): React.JSX.Element {
   const [controller] = useState(() => new PopupController());
-  const snapshot = useSyncExternalStore(
-    controller.subscribe,
-    controller.getSnapshot,
-    controller.getSnapshot,
-  );
-  const insets = useSafeAreaInsets();
+  const parentRenderHost = use(PopupRenderHostContext);
+  const [ownedRenderHost] = useState(() => new PopupRenderHost(controller));
+  const ownsRenderHost = scope === 'global' || parentRenderHost === null;
+  const renderHost = ownsRenderHost ? ownedRenderHost : parentRenderHost;
 
   useLayoutEffect(() => {
     controller.mount();
     const unregister = registerHost(controller, scope);
+    // 局部控制器仍独立管理状态，但交由根宿主渲染，避免被局部布局裁切。
+    const unregisterRenderer = ownsRenderHost
+      ? undefined
+      : renderHost.register(controller);
     return () => {
+      unregisterRenderer?.();
       unregister();
       controller.dispose();
     };
-  }, [controller, scope]);
+  }, [controller, ownsRenderHost, renderHost, scope]);
 
   return (
     <PopupContext value={controller}>
-      <View
-        collapsable={false}
-        style={[
-          scope === 'global' ? styles.globalHost : styles.localHost,
-          style,
-        ]}
-      >
-        {children}
-        {snapshot.visible.map((instance) => (
-          <PopupLayer
-            controller={controller}
-            insets={insets}
-            instance={instance}
-            key={instance.id}
-          />
-        ))}
-        {snapshot.prompt === null ? null : (
-          <PopupLayer
-            controller={controller}
-            insets={insets}
-            instance={snapshot.prompt}
-            key={snapshot.prompt.id}
-          />
-        )}
-      </View>
+      <PopupRenderHostContext value={renderHost}>
+        <View
+          collapsable={false}
+          style={[
+            scope === 'global' ? styles.globalHost : styles.localHost,
+            style,
+          ]}
+        >
+          {children}
+          {ownsRenderHost ? <PopupLayers host={ownedRenderHost} /> : null}
+        </View>
+      </PopupRenderHostContext>
     </PopupContext>
   );
 }

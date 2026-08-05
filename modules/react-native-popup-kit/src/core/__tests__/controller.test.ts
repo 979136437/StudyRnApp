@@ -1,6 +1,8 @@
+import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { closeAllPopups, closePopup } from '../../api';
+import { PopupRenderHost } from '../../react/render-host';
 import { PopupController, PopupError } from '../controller';
 import { registerHost, resetRegistryForTests } from '../registry';
 import { triggerHardwareBack } from './react-native.mock';
@@ -32,6 +34,28 @@ afterEach(() => {
 });
 
 describe('PopupController', () => {
+  it('Toast 与 Loading 固定使用透明视觉层', async () => {
+    const { controller, unmount } = mountController();
+
+    const popup = controller.showPopup({ content: 'Popup' });
+    expect(controller.getSnapshot().visible[0]?.mask).toBe(true);
+    await controller.close(popup.id, 'api');
+
+    controller.showToast({ duration: 10_000, title: 'Toast' });
+    expect(controller.getSnapshot().prompt?.mask).toBe(false);
+    await controller.hideToast();
+
+    controller.showLoading({ title: 'Loading' });
+    expect(controller.getSnapshot().prompt?.mask).toBe(false);
+    await controller.hideLoading();
+
+    const modal = controller.showModal({ title: 'Modal' });
+    expect(controller.getSnapshot().visible[0]?.mask).toBe(true);
+    controller.respondModal(modal.id, false);
+    await modal;
+    unmount();
+  });
+
   it('Popup 可仅通过 component 提供渲染内容', async () => {
     const { controller, unmount } = mountController();
     const Component = () => null;
@@ -157,6 +181,49 @@ describe('PopupController', () => {
     expect(complete).toHaveBeenCalledTimes(1);
     await controller.hideLoading();
     unmount();
+  });
+
+  it('展示文案支持 ReactNode 并原样交给渲染层', async () => {
+    const { controller, unmount } = mountController();
+    const CustomContent = () => null;
+    const node = createElement(CustomContent);
+
+    controller.showToast({ duration: 10_000, title: node });
+    expect(controller.getSnapshot().prompt?.options.title).toBe(node);
+    await controller.hideToast();
+
+    const modal = controller.showModal({
+      cancelText: node,
+      confirmText: node,
+      content: node,
+      title: node,
+    });
+    expect(controller.getSnapshot().visible[0]?.options).toMatchObject({
+      cancelText: node,
+      confirmText: node,
+      content: node,
+      title: node,
+    });
+    controller.respondModal(modal.id, false);
+    await modal;
+    unmount();
+  });
+});
+
+describe('PopupRenderHost', () => {
+  it('局部控制器由根宿主渲染并在注销后移除', () => {
+    const rootController = new PopupController();
+    const localController = new PopupController();
+    const renderHost = new PopupRenderHost(rootController);
+    const unregister = renderHost.register(localController);
+
+    expect(renderHost.getSnapshot()).toEqual([rootController, localController]);
+    expect(renderHost.getControllerKey(rootController)).not.toBe(
+      renderHost.getControllerKey(localController),
+    );
+
+    unregister();
+    expect(renderHost.getSnapshot()).toEqual([rootController]);
   });
 });
 

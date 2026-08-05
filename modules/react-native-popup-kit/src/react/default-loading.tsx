@@ -1,19 +1,18 @@
-import { useEffect } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import type { LoadingComponentProps } from '../types';
 import { DEFAULT_POPUP_APPEARANCE } from './defaults';
+import { OptionNode, optionNodeAccessibilityLabel } from './option-node';
 import { styles } from './styles';
 
 export function DefaultLoading({
   options,
 }: LoadingComponentProps): React.JSX.Element {
-  useEffect(() => {
-    void AccessibilityInfo.announceForAccessibility(options.title);
-  }, [options.title]);
+  const accessibilityTitle = optionNodeAccessibilityLabel(options.title);
 
   return (
     <View
+      accessibilityLabel={accessibilityTitle}
       accessibilityLiveRegion="polite"
       accessibilityRole="progressbar"
       style={styles.toast}
@@ -22,9 +21,9 @@ export function DefaultLoading({
         color={DEFAULT_POPUP_APPEARANCE.toastTextColor}
         size="large"
       />
-      <Text numberOfLines={1} style={styles.toastText}>
+      <OptionNode numberOfLines={1} style={styles.toastText}>
         {options.title}
-      </Text>
+      </OptionNode>
     </View>
   );
 }

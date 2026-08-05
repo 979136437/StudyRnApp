@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react';
-import {
-  Animated,
+import { useCallback, useEffect } from 'react';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, {
+  cancelAnimation,
   Easing,
-  Pressable,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import type { EdgeInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { POPUP_ANIMATION_DURATION } from '../core/constants';
 import { type ManagedPopup, PopupController } from '../core/controller';
 import type {
   ClosePopupResult,
+  PopupId,
   PopupPlacement,
   PopupRenderContext,
 } from '../types';
@@ -28,6 +31,9 @@ interface PopupLayerProps {
   insets: EdgeInsets;
   instance: ManagedPopup;
 }
+
+const POPUP_ENTER_OFFSET = 24;
+const POPUP_ENTER_SCALE = 0.96;
 
 function placementStyle(
   placement: PopupPlacement,
@@ -80,44 +86,6 @@ function placementStyle(
         paddingLeft: safeInsets.left + 20,
       };
   }
-}
-
-function transformForPlacement(
-  progress: Animated.Value,
-  placement: PopupPlacement,
-): Animated.WithAnimatedArray<
-  | { scale: Animated.AnimatedInterpolation<number> }
-  | { translateX: Animated.AnimatedInterpolation<number> }
-  | { translateY: Animated.AnimatedInterpolation<number> }
-> {
-  if (placement === 'left' || placement === 'right') {
-    return [
-      {
-        translateX: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [placement === 'left' ? -24 : 24, 0],
-        }),
-      },
-    ];
-  }
-  if (placement === 'top' || placement === 'bottom') {
-    return [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [placement === 'top' ? -24 : 24, 0],
-        }),
-      },
-    ];
-  }
-  return [
-    {
-      scale: progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.96, 1],
-      }),
-    },
-  ];
 }
 
 function popupPlacement(instance: ManagedPopup): PopupPlacement {
@@ -189,45 +157,98 @@ export function PopupLayer({
   insets,
   instance,
 }: PopupLayerProps): React.JSX.Element {
-  const [progress] = useState(() => new Animated.Value(0));
+  const progress = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
   const placement = popupPlacement(instance);
+  // ManagedPopup 持有生命周期 Promise，worklet 闭包只能捕获拆出的可序列化原始值。
+  const instanceId = instance.id;
+  const isClosing = instance.closing;
+  const completeClose = useCallback(
+    (id: PopupId) => controller.completeClose(id),
+    [controller],
+  );
+  const layerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+  const contentAnimatedStyle = useAnimatedStyle(() => {
+    if (placement === 'left' || placement === 'right') {
+      return {
+        transform: [
+          {
+            translateX:
+              (placement === 'left'
+                ? -POPUP_ENTER_OFFSET
+                : POPUP_ENTER_OFFSET) *
+              (1 - progress.value),
+          },
+        ],
+      };
+    }
+    if (placement === 'top' || placement === 'bottom') {
+      return {
+        transform: [
+          {
+            translateY:
+              (placement === 'top' ? -POPUP_ENTER_OFFSET : POPUP_ENTER_OFFSET) *
+              (1 - progress.value),
+          },
+        ],
+      };
+    }
+    return {
+      transform: [
+        {
+          scale: POPUP_ENTER_SCALE + progress.value * (1 - POPUP_ENTER_SCALE),
+        },
+      ],
+    };
+  }, [placement]);
 
   useEffect(() => {
-    const animation = Animated.timing(progress, {
-      duration: POPUP_ANIMATION_DURATION,
-      easing: instance.closing
-        ? Easing.in(Easing.cubic)
-        : Easing.out(Easing.cubic),
-      toValue: instance.closing ? 0 : 1,
-      useNativeDriver: true,
-    });
-    animation.start(({ finished }) => {
-      if (finished && instance.closing) controller.completeClose(instance.id);
-    });
-    return () => animation.stop();
-  }, [controller, instance.closing, instance.id, progress]);
+    progress.value = withTiming(
+      isClosing ? 0 : 1,
+      {
+        duration: reduceMotion ? 0 : POPUP_ANIMATION_DURATION,
+        easing: isClosing ? Easing.in(Easing.cubic) : Easing.out(Easing.cubic),
+      },
+      (finished) => {
+        if (finished && isClosing) {
+          // 动画回调运行在 UI 线程，关闭收尾必须切回 RN 线程更新控制器状态。
+          scheduleOnRN(completeClose, instanceId);
+        }
+      },
+    );
+    return () => cancelAnimation(progress);
+  }, [completeClose, instanceId, isClosing, progress, reduceMotion]);
 
   const useSafeArea =
     instance.kind === 'popup' ? (instance.options.useSafeArea ?? true) : true;
   const closeOnMask =
     instance.kind === 'popup' && (instance.options.closeOnMaskPress ?? true);
+  // mask 仅控制颜色；透明覆盖层仍需存在，确保任何弹窗都不会把事件传给页面。
+  const overlayStyle = instance.mask
+    ? [styles.mask, { backgroundColor: DEFAULT_POPUP_APPEARANCE.maskColor }]
+    : styles.mask;
 
   return (
     <Animated.View
-      pointerEvents={instance.mask ? 'auto' : 'box-none'}
-      style={[styles.layer, { opacity: progress, zIndex: instance.order }]}
+      accessibilityViewIsModal
+      pointerEvents="auto"
+      style={[styles.layer, { zIndex: instance.order }, layerAnimatedStyle]}
     >
-      {instance.mask ? (
+      {closeOnMask ? (
         <Pressable
-          accessibilityLabel={closeOnMask ? '关闭弹窗' : undefined}
-          disabled={!closeOnMask}
+          accessibilityLabel="关闭弹窗"
           onPress={() => void controller.close(instance.id, 'overlay')}
-          style={[
-            styles.mask,
-            { backgroundColor: DEFAULT_POPUP_APPEARANCE.maskColor },
-          ]}
+          style={overlayStyle}
         />
-      ) : null}
+      ) : (
+        <View
+          accessibilityElementsHidden
+          pointerEvents="auto"
+          style={overlayStyle}
+        />
+      )}
       <View
         pointerEvents="box-none"
         style={[
@@ -236,10 +257,7 @@ export function PopupLayer({
         ]}
       >
         <Animated.View
-          style={[
-            animatedContainerStyle(placement),
-            { transform: transformForPlacement(progress, placement) },
-          ]}
+          style={[animatedContainerStyle(placement), contentAnimatedStyle]}
         >
           <PopupContent controller={controller} instance={instance} />
         </Animated.View>

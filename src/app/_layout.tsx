@@ -22,6 +22,10 @@ installGlobalErrorHandler();
 
 const ROOT_STACK_OPTIONS = { headerShown: false } as const;
 const FEED_SCREEN_OPTIONS = { animation: 'none' } as const;
+const POPUP_DEMO_SCREEN_OPTIONS = {
+  headerShown: true,
+  title: '弹窗示例',
+} as const;
 
 function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
   return (
@@ -43,6 +47,7 @@ function AppNavigator(): React.JSX.Element {
   return (
     <Stack screenOptions={ROOT_STACK_OPTIONS}>
       <Stack.Screen name="feed/[id]" options={FEED_SCREEN_OPTIONS} />
+      <Stack.Screen name="popup-demo" options={POPUP_DEMO_SCREEN_OPTIONS} />
     </Stack>
   );
 }

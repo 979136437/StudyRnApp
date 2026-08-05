@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   Image,
   Text,
@@ -10,6 +8,7 @@ import {
 
 import type { ToastComponentProps } from '../types';
 import { DEFAULT_POPUP_APPEARANCE } from './defaults';
+import { OptionNode, optionNodeAccessibilityLabel } from './option-node';
 import { styles } from './styles';
 
 function imageSource(image: string | ImageSourcePropType): ImageSourcePropType {
@@ -21,13 +20,11 @@ export function DefaultToast({
 }: ToastComponentProps): React.JSX.Element {
   const icon = options.icon ?? 'success';
   const hasIcon = icon !== 'none' || options.image !== undefined;
-
-  useEffect(() => {
-    void AccessibilityInfo.announceForAccessibility(options.title);
-  }, [options.title]);
+  const accessibilityTitle = optionNodeAccessibilityLabel(options.title);
 
   return (
     <View
+      accessibilityLabel={accessibilityTitle}
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
       style={[styles.toast, !hasIcon && styles.toastWithoutIcon]}
@@ -48,9 +45,9 @@ export function DefaultToast({
           {icon === 'success' ? '✓' : '!'}
         </Text>
       )}
-      <Text numberOfLines={hasIcon ? 1 : 2} style={styles.toastText}>
+      <OptionNode numberOfLines={hasIcon ? 1 : 2} style={styles.toastText}>
         {options.title}
-      </Text>
+      </OptionNode>
     </View>
   );
 }
