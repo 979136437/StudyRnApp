@@ -15,8 +15,6 @@
 using namespace facebook::react;
 
 static const CGFloat NitroRefreshDefaultHeaderHeight = 80;
-// 未显式配置二级下拉距离时，最大位移与第一刷新阈值保持一致。
-static const CGFloat NitroRefreshDefaultLimit = NitroRefreshDefaultHeaderHeight;
 static const CGFloat NitroRefreshDefaultDragRate = 1;
 static const CGFloat NitroRefreshMinimumDimension = 1;
 static const CGFloat NitroRefreshMinimumDragRate = 0.01;
@@ -72,7 +70,8 @@ static const NSTimeInterval NitroRefreshReboundDuration = 0.28;
     _enabled = YES;
     _threshold = NitroRefreshDefaultHeaderHeight;
     _headerHeight = NitroRefreshDefaultHeaderHeight;
-    _limit = NitroRefreshDefaultLimit;
+    // 最大距离没有原生默认值，挂载后始终采用 Fabric 传入的 Header 高度或 maxDistance。
+    _limit = NitroRefreshMinimumDimension;
     _dragRate = NitroRefreshDefaultDragRate;
     _phase = @"idle";
   }
@@ -224,6 +223,13 @@ static const NSTimeInterval NitroRefreshReboundDuration = 0.28;
 
   // 始终相对当前手势开始时的顶部基线计算，避免刷新期间 contentInset 改变后坐标系跳变。
   CGFloat rawOffset = MAX(0, -(scrollView.contentOffset.y + _originalAdjustedTop));
+  if (gesture.state == UIGestureRecognizerStateChanged && rawOffset > _limit) {
+    // 仅钳制回调值会让 UIKit 的弹性位移继续露出刷新头下方空白；同步限制真实偏移，
+    // 同时以 adjustedContentInset 基线计算，确保安全区只参与定位而不计入下拉距离。
+    CGPoint point = scrollView.contentOffset;
+    point.y = -(_originalAdjustedTop + _limit);
+    scrollView.contentOffset = point;
+  }
   // UIScrollView 已经把手指位移转换成带系统阻尼的可见内容位移。offset 必须使用这个
   // 实际位移，刷新头才能紧贴列表；再次乘 dragRate 会让刷新头只移动列表的一部分。
   CGFloat offset = MIN(_limit, rawOffset);
