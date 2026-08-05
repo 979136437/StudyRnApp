@@ -15,15 +15,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import {
-  DEFAULT_REFRESH_DRAG_RATE,
-  REFRESH_MAX_DISTANCE_MULTIPLIER,
-} from './constants';
+import { DEFAULT_REFRESH_DRAG_RATE } from './constants';
 import { identifyRefreshChildren } from './core/children';
 import {
   ControlledRefreshCoordinator,
+  isMaxStageEnabled,
   RefreshStateCoordinator,
   resolveRefreshHeaderHeight,
+  resolveRefreshMaxDistance,
 } from './core/refresh-state';
 import NativeNitroRefreshControl, {
   type NativeProps,
@@ -52,9 +51,11 @@ export function RefreshLayout(
     children,
     enable = true,
     header: headerProp,
+    maxDistance: maxDistanceProp,
     onChangeOffset,
     onEnd,
     onIdle,
+    onMax,
     onPulling,
     onRefreshing,
     refreshing,
@@ -67,7 +68,14 @@ export function RefreshLayout(
     flattenedHeaderStyle?.height,
     __DEV__ ? console.warn : undefined,
   );
-  const maxDistance = headerHeight * REFRESH_MAX_DISTANCE_MULTIPLIER;
+  const maxDistance = resolveRefreshMaxDistance(
+    maxDistanceProp,
+    headerHeight,
+    __DEV__ ? console.warn : undefined,
+  );
+  // 默认最大距离与刷新阈值一致，但不改变既有四阶段语义。只有调用方显式提供更大
+  // 距离时才启用 Max，避免普通刷新在达到第一阈值时同时发布两个状态。
+  const hasMaxStage = isMaxStageEnabled(maxDistanceProp, headerHeight);
 
   // HybridObject 与 Fabric 视图通过稳定 id 配对，组件生命周期内不能重新创建。
   const [controller] = useState(() =>
@@ -79,22 +87,41 @@ export function RefreshLayout(
   const progress = useSharedValue(0);
   const stateValue = useSharedValue<RefreshStateValue>(INITIAL_REFRESH_STATE);
   const hasRefreshed = useSharedValue<boolean>(false);
+  const hasReachedMax = useSharedValue<boolean>(false);
   const offsetCallbackRef = useRef(onChangeOffset);
   const [stateCoordinator] = useState(
     () =>
-      new RefreshStateCoordinator({ onEnd, onIdle, onPulling, onRefreshing }),
+      new RefreshStateCoordinator({
+        onEnd,
+        onIdle,
+        onMax,
+        onPulling,
+        onRefreshing,
+      }),
   );
   const [controlledCoordinator] = useState(
     () => new ControlledRefreshCoordinator(),
   );
 
-  offsetCallbackRef.current = onChangeOffset;
-  stateCoordinator.updateCallbacks({
+  useEffect(() => {
+    // 提交完成后再更新可变回调容器，避免并发渲染被丢弃时泄漏尚未提交的属性。
+    offsetCallbackRef.current = onChangeOffset;
+    stateCoordinator.updateCallbacks({
+      onEnd,
+      onIdle,
+      onMax,
+      onPulling,
+      onRefreshing,
+    });
+  }, [
+    onChangeOffset,
     onEnd,
     onIdle,
+    onMax,
     onPulling,
     onRefreshing,
-  });
+    stateCoordinator,
+  ]);
 
   useEffect(() => {
     controller.setOnRefresh(() => {
@@ -134,6 +161,15 @@ export function RefreshLayout(
     } as RefreshOffsetEvent);
   }, []);
   const hasOffsetCallback = onChangeOffset !== undefined;
+  const dispatchDerivedState = useCallback(
+    (nextState: RefreshStateValue) => {
+      const acceptedState = stateCoordinator.acceptState(nextState);
+      if (acceptedState !== undefined) {
+        setState(acceptedState);
+      }
+    },
+    [stateCoordinator],
+  );
 
   // Fabric 直接事件先在界面线程更新 SharedValue。只有调用方显式监听 offset 时，才会
   // 额外通过 scheduleOnRN 构造并发送符合上游形状的 JavaScript 事件。
@@ -162,6 +198,25 @@ export function RefreshLayout(
           break;
         default:
           stateValue.value = RefreshState.Idle;
+      }
+
+      if (hasMaxStage && event.phase === 'ready') {
+        const reachedMax = event.offset >= maxDistance;
+        if (reachedMax !== hasReachedMax.value) {
+          hasReachedMax.value = reachedMax;
+          const nextState = reachedMax
+            ? RefreshState.Max
+            : RefreshState.Pulling;
+          stateValue.value = nextState;
+          scheduleOnRN(dispatchDerivedState, nextState);
+        } else if (reachedMax) {
+          stateValue.value = RefreshState.Max;
+        }
+      } else if (hasReachedMax.value) {
+        hasReachedMax.value = false;
+        // 离开二级阈值时由同一 Fabric 事件发布目标状态，避免 Nitro 回调与界面线程
+        // 事件到达 JavaScript 的先后顺序不同而残留 Max。
+        scheduleOnRN(dispatchDerivedState, stateValue.value);
       }
 
       if (hasOffsetCallback) {

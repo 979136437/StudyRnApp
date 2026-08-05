@@ -14,6 +14,7 @@ describe('普通刷新头视图状态', () => {
     expect(labelForRefreshState(RefreshState.Pulling)).toBe('松开立即刷新');
     expect(labelForRefreshState(RefreshState.Refreshing)).toBe('正在刷新...');
     expect(labelForRefreshState(RefreshState.End)).toBe('刷新完成');
+    expect(labelForRefreshState(RefreshState.Max)).toBe('已达到二级阈值');
   });
 
   it('仅在 Refreshing 显示加载指示器', () => {
@@ -21,6 +22,7 @@ describe('普通刷新头视图状态', () => {
     expect(isRefreshIndicatorVisible(RefreshState.Pulling)).toBe(false);
     expect(isRefreshIndicatorVisible(RefreshState.Refreshing)).toBe(true);
     expect(isRefreshIndicatorVisible(RefreshState.End)).toBe(false);
+    expect(isRefreshIndicatorVisible(RefreshState.Max)).toBe(false);
   });
 
   it('按两位小时和分钟格式化最后更新时间', () => {
@@ -34,5 +36,6 @@ describe('动画刷新头视图状态', () => {
     expect(shouldResetRefreshAnimation(RefreshState.Pulling)).toBe(false);
     expect(shouldResetRefreshAnimation(RefreshState.Refreshing)).toBe(false);
     expect(shouldResetRefreshAnimation(RefreshState.End)).toBe(true);
+    expect(shouldResetRefreshAnimation(RefreshState.Max)).toBe(false);
   });
 });

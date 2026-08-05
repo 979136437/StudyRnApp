@@ -32,7 +32,7 @@ export interface NativeProps extends ViewProps {
   /** 刷新中及结果态的内容保持高度。 */
   headerHeight?: WithDefault<Double, 80>;
   /** 原生内容允许下移的最大距离。 */
-  limit?: WithDefault<Double, 160>;
+  limit?: WithDefault<Double, 80>;
   /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
   dragRate?: WithDefault<Double, 1>;
   /** 连续位移事件；由 Reanimated 在界面线程消费。 */

@@ -4,6 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -12,6 +14,7 @@ import android.view.animation.DecelerateInterpolator
 import com.facebook.react.uimanager.PixelUtil
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -27,6 +30,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   var refreshEnabled = true
     set(value) {
       field = value
+      debugLog { "config enabled=$value" }
       if (!value) cancelCurrentAction()
     }
 
@@ -34,6 +38,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   var thresholdDp = DEFAULT_HEADER_HEIGHT_DP
     set(value) {
       field = value
+      debugLog { "config threshold=${formatDp(value)} (${formatPx(thresholdPx)})" }
       scheduleConfigurationUpdate()
     }
 
@@ -41,6 +46,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   var headerHeightDp = DEFAULT_HEADER_HEIGHT_DP
     set(value) {
       field = value
+      debugLog { "config headerHeight=${formatDp(value)} (${formatPx(headerHeightPx)})" }
       scheduleConfigurationUpdate()
     }
 
@@ -48,16 +54,24 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   var limitDp = DEFAULT_LIMIT_DP
     set(value) {
       field = value
+      debugLog { "config limit=${formatDp(value)} effective=${formatPx(limitPx)}" }
       scheduleConfigurationUpdate()
     }
 
   /** 可见下拉距离转换为触发进度时使用的灵敏度。 */
   var dragRate = DEFAULT_DRAG_RATE
+    set(value) {
+      field = value
+      debugLog { "config dragRate=$value effectiveLimit=${formatPx(limitPx)}" }
+    }
 
   private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+  private val debugLoggingEnabled =
+    (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
   private var initialX = 0f
   private var initialY = 0f
   private var dragging = false
+  private var lastLoggedDragBucket = NO_DRAG_BUCKET
   // 记录最近一次已接受的受控意图。它与 phase 分开保存，因为用户松手会先进入
   // Refreshing，随后 React 才会回传 refreshing=true；两者不能互相替代。
   private var controlledRefreshing = false
@@ -82,6 +96,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
       )
 
   fun attachController(controllerId: String) {
+    debugLog { "controller attach id=$controllerId ${configurationSummary()}" }
     controller?.detach(this)
     controller = HybridRefreshController.find(controllerId)
     controller?.attach(this)
@@ -121,12 +136,22 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         initialX = event.x
         initialY = event.y
         dragging = false
+        lastLoggedDragBucket = NO_DRAG_BUCKET
+        debugLog {
+          "gesture down local=(${formatPx(event.x)}, ${formatPx(event.y)}) " +
+            "rawY=${formatPx(event.rawY)} touchSlop=${formatPx(touchSlop.toFloat())} " +
+            "canScrollUp=${canChildScrollUp()} ${configurationSummary()}"
+        }
       }
       MotionEvent.ACTION_MOVE -> {
         val dx = event.x - initialX
         val dy = event.y - initialY
         if (dy > touchSlop && dy > abs(dx) && !canChildScrollUp()) {
           dragging = true
+          debugLog {
+            "gesture intercepted dx=${formatPx(dx)} dy=${formatPx(dy)} " +
+              "rawY=${formatPx(event.rawY)}"
+          }
           parent?.requestDisallowInterceptTouchEvent(true)
           return true
         }
@@ -153,16 +178,18 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
           val rawDistance = max(0f, event.y - initialY - touchSlop)
           val visibleOffset = min(limitPx, rawDistance)
           val triggerOffset = min(limitPx, rawDistance * dragRate.toFloat())
+          val nextPhase =
+            if (triggerOffset >= thresholdPx) RefreshPhase.READY else RefreshPhase.PULLING
+          logDragSample(event, rawDistance, visibleOffset, triggerOffset, nextPhase)
           setOffset(visibleOffset, triggerOffset / thresholdPx)
-          setPhase(
-            if (triggerOffset >= thresholdPx) RefreshPhase.READY else RefreshPhase.PULLING,
-          )
+          setPhase(nextPhase)
         }
         return dragging
       }
       MotionEvent.ACTION_CANCEL -> {
         val wasDragging = dragging
         dragging = false
+        debugLog { "gesture cancelled dragging=$wasDragging ${currentStateSummary()}" }
         if (wasDragging) settleToIdle()
         return true
       }
@@ -170,6 +197,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
         val wasDragging = dragging
         // beginRefreshing 会拒绝仍在进行的拖拽；先结束手势，再处理松手结果。
         dragging = false
+        debugLog { "gesture released dragging=$wasDragging ${currentStateSummary()}" }
         if (wasDragging) {
           if (phase == RefreshPhase.READY) {
             beginRefreshing(true)
@@ -184,6 +212,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   fun setRefreshingFromController(refreshing: Boolean) {
+    debugLog { "controlled refreshing=$refreshing ${currentStateSummary()}" }
     post {
       if (refreshing) {
         controlledRefreshing = true
@@ -196,8 +225,15 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   }
 
   private fun beginRefreshing(notifyJs: Boolean): Boolean {
-    if (!refreshEnabled || dragging || phase == RefreshPhase.REFRESHING) return false
+    if (!refreshEnabled || dragging || phase == RefreshPhase.REFRESHING) {
+      debugLog {
+        "refresh start ignored notifyJs=$notifyJs enabled=$refreshEnabled " +
+          "dragging=$dragging phase=$phase"
+      }
+      return false
+    }
 
+    debugLog { "refresh start notifyJs=$notifyJs ${currentStateSummary()}" }
     controlledRefreshing = true
     setPhase(RefreshPhase.REFRESHING)
     animateOffsetTo(headerHeightPx, 1f)
@@ -213,6 +249,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun settleToIdle() {
     if (offsetPx == 0f && phase == RefreshPhase.IDLE) return
+    debugLog { "settle start ${currentStateSummary()}" }
     setPhase(RefreshPhase.SETTLING)
     animateOffsetTo(0f, decayProgress = true) {
       setPhase(RefreshPhase.IDLE)
@@ -288,6 +325,7 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   private fun setPhase(next: RefreshPhase) {
     if (phase == next) return
+    debugLog { "phase $phase -> $next ${currentStateSummary()}" }
     phase = next
     emitPull()
     controller?.notifyPhase(next)
@@ -311,6 +349,56 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
   private fun isInteractionLocked(): Boolean =
     phase == RefreshPhase.REFRESHING || phase == RefreshPhase.SETTLING
 
+  /**
+   * 按固定 dp 区间采样拖动日志，并在阶段即将变化时强制输出。日志同时包含本地坐标、
+   * 屏幕坐标、原始手指位移、可见位移和用于阈值判断的位移，可直接判断偏差发生在
+   * MotionEvent 坐标、密度换算还是 dragRate 计算阶段。
+   */
+  private fun logDragSample(
+    event: MotionEvent,
+    rawDistancePx: Float,
+    visibleOffsetPx: Float,
+    triggerOffsetPx: Float,
+    nextPhase: RefreshPhase,
+  ) {
+    if (!debugLoggingEnabled) return
+
+    val visibleOffsetDp = PixelUtil.toDIPFromPixel(visibleOffsetPx).toDouble()
+    val bucket = (visibleOffsetDp / DEBUG_LOG_STEP_DP).toInt()
+    if (bucket == lastLoggedDragBucket && nextPhase == phase) return
+    lastLoggedDragBucket = bucket
+
+    val rawDistanceDp = PixelUtil.toDIPFromPixel(rawDistancePx).toDouble()
+    val triggerOffsetDp = PixelUtil.toDIPFromPixel(triggerOffsetPx).toDouble()
+    Log.d(
+      LOG_TAG,
+      "drag localY=${formatPx(event.y)} rawY=${formatPx(event.rawY)} " +
+        "raw=${formatDp(rawDistanceDp)} visible=${formatDp(visibleOffsetDp)} " +
+        "trigger=${formatDp(triggerOffsetDp)}/${formatDp(thresholdDp)} " +
+        "progress=${formatDecimal(triggerOffsetPx / thresholdPx)} nextPhase=$nextPhase",
+    )
+  }
+
+  private fun configurationSummary(): String =
+    "threshold=${formatDp(thresholdDp)}(${formatPx(thresholdPx)}) " +
+      "header=${formatDp(headerHeightDp)}(${formatPx(headerHeightPx)}) " +
+      "limit=${formatDp(limitDp)}(${formatPx(limitPx)}) dragRate=$dragRate"
+
+  private fun currentStateSummary(): String =
+    "phase=$phase offset=${formatDp(PixelUtil.toDIPFromPixel(offsetPx).toDouble())} " +
+      "progress=${formatDecimal(progress)}"
+
+  private inline fun debugLog(message: () -> String) {
+    if (debugLoggingEnabled) Log.d(LOG_TAG, message())
+  }
+
+  private fun formatDp(value: Double): String = "${formatDecimal(value)}dp"
+
+  private fun formatPx(value: Float): String = "${formatDecimal(value)}px"
+
+  private fun formatDecimal(value: Number): String =
+    String.format(LOG_LOCALE, "%.2f", value.toDouble())
+
   private fun canChildScrollUp(): Boolean {
     val child = if (childCount > 0) getChildAt(0) else null
     return child?.let(::canViewScrollUp) ?: false
@@ -333,10 +421,14 @@ internal class NitroRefreshLayout(context: Context) : ViewGroup(context) {
 
   companion object {
     private const val DEFAULT_HEADER_HEIGHT_DP = 80.0
-    private const val DEFAULT_LIMIT_DP = 160.0
+    private const val DEFAULT_LIMIT_DP = DEFAULT_HEADER_HEIGHT_DP
     private const val DEFAULT_DRAG_RATE = 1.0
     private const val MIN_DRAG_RATE = 0.01
     private const val REBOUND_DURATION_MS = 280L
     private const val OFFSET_EPSILON_PX = 0.5f
+    private const val DEBUG_LOG_STEP_DP = 8.0
+    private const val NO_DRAG_BUCKET = -1
+    private const val LOG_TAG = "NitroRefreshLayout"
+    private val LOG_LOCALE = Locale.US
   }
 }

@@ -1,10 +1,9 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   type ActivityIndicatorProps,
   type ImageSourcePropType,
   type ImageStyle,
-  StyleSheet,
   Text,
   type TextStyle,
   View,
@@ -20,7 +19,9 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { RefreshHeaderBaseProps } from './refresh-header-types';
 import {
   formatRefreshTime,
   isRefreshIndicatorVisible,
@@ -29,26 +30,14 @@ import {
 
 const NORMAL_HEADER_HEIGHT = 80;
 const ARROW_ANIMATION_DURATION_MS = 200;
-const ICON_SIZE = 30;
-const COPY_WIDTH = 150;
-const COPY_GAP = 10;
-const TITLE_FONT_SIZE = 16;
-const TIME_FONT_SIZE = 12;
-const TIME_GAP = 6;
-const DEFAULT_FOREGROUND_COLOR = '#333333';
 const DEFAULT_INDICATOR_COLOR = '#808080';
 
 const DEFAULT_ARROW_SOURCE =
   require('./assets/icon_down_arrow.png') as ImageSourcePropType;
 
-export interface RefreshNormalHeaderProps {
-  refreshing: boolean;
-  onRefresh?: () => void;
-  enable?: boolean;
-  children?: ReactElement | null;
+export interface RefreshNormalHeaderProps extends RefreshHeaderBaseProps {
   arrowIcon?: ImageSourcePropType;
   activityIndicatorProps?: ActivityIndicatorProps;
-  containerStyle?: ViewStyle;
   titleStyle?: TextStyle;
   timeStyle?: TextStyle;
   leftContainerStyle?: ViewStyle;
@@ -58,7 +47,7 @@ export interface RefreshNormalHeaderProps {
 
 type NormalHeaderContentProps = Omit<
   RefreshNormalHeaderProps,
-  'children' | 'enable' | 'onRefresh' | 'refreshing' | 'containerStyle'
+  keyof RefreshHeaderBaseProps
 >;
 
 /**
@@ -85,7 +74,10 @@ function NormalHeaderContent({
     transform: [
       {
         rotate: withTiming(
-          stateValue.value === RefreshState.Pulling ? '180deg' : '0deg',
+          stateValue.value === RefreshState.Pulling ||
+            stateValue.value === RefreshState.Max
+            ? '180deg'
+            : '0deg',
           { duration: ARROW_ANIMATION_DURATION_MS },
         ),
       },
@@ -99,12 +91,23 @@ function NormalHeaderContent({
   }, [state]);
 
   return (
-    <View style={styles.normalContent}>
-      <View style={[styles.iconSlot, leftContainerStyle]}>
+    <View
+      className="w-full items-center justify-center flex-row gap-5 bg-red-500"
+      style={[
+        {
+          height: NORMAL_HEADER_HEIGHT,
+        },
+      ]}
+    >
+      <View
+        className="items-center justify-center bg-blue-500"
+        style={[leftContainerStyle]}
+      >
         <Animated.Image
           resizeMode="contain"
           source={arrowIcon}
-          style={[styles.arrow, imageStyle, arrowStyle]}
+          className="size-5 absolute"
+          style={[imageStyle, arrowStyle]}
         />
         {isRefreshIndicatorVisible(state) ? (
           <ActivityIndicator
@@ -114,11 +117,14 @@ function NormalHeaderContent({
           />
         ) : null}
       </View>
-      <View style={[styles.copy, rightContainerStyle]}>
-        <Text style={[styles.title, titleStyle]}>
+      <View
+        className="items-center justify-center gap-1"
+        style={[rightContainerStyle]}
+      >
+        <Text className="text-[#333] text-xl" style={[titleStyle]}>
           {labelForRefreshState(state)}
         </Text>
-        <Text style={[styles.time, timeStyle]}>
+        <Text className="text-[#333] text-sm" style={[timeStyle]}>
           最后更新：{lastRefreshTime}
         </Text>
       </View>
@@ -131,18 +137,28 @@ export function RefreshNormalHeader({
   children,
   containerStyle,
   enable,
+  maxDistance,
+  onChangeOffset,
+  onMax,
   onRefresh,
   refreshing,
   ...contentProps
 }: RefreshNormalHeaderProps): React.JSX.Element {
+  const inset = useSafeAreaInsets();
   return (
     <RefreshLayout
       enable={enable}
+      maxDistance={maxDistance}
       header={
-        <RefreshHeader style={[styles.normalHeader, containerStyle]}>
+        <RefreshHeader
+          className="items-center justify-center pt-safe bg-blue-500"
+          style={[containerStyle, { height: NORMAL_HEADER_HEIGHT + inset.top }]}
+        >
           <NormalHeaderContent {...contentProps} />
         </RefreshHeader>
       }
+      onChangeOffset={onChangeOffset}
+      onMax={onMax}
       onRefreshing={onRefresh}
       refreshing={refreshing}
     >
@@ -150,43 +166,3 @@ export function RefreshNormalHeader({
     </RefreshLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  arrow: {
-    height: ICON_SIZE,
-    position: 'absolute',
-    tintColor: DEFAULT_INDICATOR_COLOR,
-    width: ICON_SIZE,
-  },
-  copy: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: COPY_WIDTH,
-  },
-  iconSlot: {
-    alignItems: 'center',
-    height: ICON_SIZE,
-    justifyContent: 'center',
-    width: ICON_SIZE,
-  },
-  normalContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: COPY_GAP,
-    justifyContent: 'center',
-  },
-  normalHeader: {
-    alignItems: 'center',
-    height: NORMAL_HEADER_HEIGHT,
-    justifyContent: 'center',
-  },
-  time: {
-    color: DEFAULT_FOREGROUND_COLOR,
-    fontSize: TIME_FONT_SIZE,
-    marginTop: TIME_GAP,
-  },
-  title: {
-    color: DEFAULT_FOREGROUND_COLOR,
-    fontSize: TITLE_FONT_SIZE,
-  },
-});

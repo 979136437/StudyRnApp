@@ -1,5 +1,5 @@
 import LottieView, { type LottieViewProps } from 'lottie-react-native';
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,11 +12,11 @@ import {
   RefreshLayout,
   RefreshState,
   useRefreshAnimation,
-  type RefreshOffsetEvent,
 } from 'react-native-nitro-refresh';
 import Animated, { useAnimatedProps } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { RefreshHeaderBaseProps } from './refresh-header-types';
 import {
   labelForRefreshState,
   shouldResetRefreshAnimation,
@@ -33,16 +33,10 @@ const DEFAULT_ANIMATION_SOURCE =
   require('./assets/gifloading.json') as LottieViewProps['source'];
 const AnimatedLottieView = Animated.createAnimatedComponent(LottieView);
 
-export interface RefreshAnimateHeaderProps {
-  refreshing: boolean;
-  onRefresh?: () => void;
-  enable?: boolean;
-  children?: ReactElement | null;
+export interface RefreshAnimateHeaderProps extends RefreshHeaderBaseProps {
   source?: LottieViewProps['source'];
   /** 是否在 Refreshing 阶段循环播放动画，默认为 true。 */
   animated?: boolean;
-  onChangeOffset?: (event: RefreshOffsetEvent) => void;
-  containerStyle?: ViewStyle;
   lottieStyle?: ViewStyle;
   titleStyle?: TextStyle;
   lottieOptions?: Omit<
@@ -109,7 +103,10 @@ export function RefreshAnimateHeader({
   children,
   containerStyle,
   enable,
+  height = ANIMATION_CONTENT_HEIGHT,
+  maxDistance,
   onChangeOffset,
+  onMax,
   onRefresh,
   refreshing,
   ...contentProps
@@ -120,6 +117,7 @@ export function RefreshAnimateHeader({
   return (
     <RefreshLayout
       enable={enable}
+      maxDistance={maxDistance}
       header={
         <RefreshHeader
           style={[
@@ -132,6 +130,7 @@ export function RefreshAnimateHeader({
         </RefreshHeader>
       }
       onChangeOffset={onChangeOffset}
+      onMax={onMax}
       onRefreshing={onRefresh}
       refreshing={refreshing}
     >
@@ -147,7 +146,6 @@ const styles = StyleSheet.create({
   },
   animateHeader: {
     alignItems: 'center',
-    height: ANIMATION_CONTENT_HEIGHT,
     justifyContent: 'center',
   },
   lottie: {

@@ -64,7 +64,7 @@ internal class NitroRefreshControlManager :
   companion object {
     const val REACT_CLASS = "NitroRefreshControlView"
     private const val DEFAULT_HEADER_HEIGHT_DP = 80.0
-    private const val DEFAULT_LIMIT_DP = 160.0
+    private const val DEFAULT_LIMIT_DP = DEFAULT_HEADER_HEIGHT_DP
     private const val DEFAULT_DRAG_RATE = 1.0
   }
 }

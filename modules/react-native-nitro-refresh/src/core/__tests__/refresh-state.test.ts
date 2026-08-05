@@ -4,10 +4,12 @@ import { DEFAULT_REFRESH_HEADER_HEIGHT } from '../../constants';
 import { RefreshState } from '../../types';
 import {
   ControlledRefreshCoordinator,
+  isMaxStageEnabled,
   RefreshStateCoordinator,
   reduceRefreshState,
   resolveControlledRefreshing,
   resolveRefreshHeaderHeight,
+  resolveRefreshMaxDistance,
 } from '../refresh-state';
 
 describe('reduceRefreshState', () => {
@@ -38,6 +40,12 @@ describe('reduceRefreshState', () => {
       RefreshState.End,
       RefreshState.Idle,
     ]);
+  });
+
+  it('晚到的 ready 通知不会覆盖由位移事件派生的 Max', () => {
+    expect(reduceRefreshState(RefreshState.Max, 'ready')).toBe(
+      RefreshState.Max,
+    );
   });
 });
 
@@ -87,6 +95,22 @@ describe('RefreshStateCoordinator', () => {
     expect(staleCallback).not.toHaveBeenCalled();
     expect(currentCallback).toHaveBeenCalledWith(RefreshState.Pulling);
   });
+
+  it('Max 状态在跨越二级阈值时去重，并允许回拉后再次进入', () => {
+    const onMax = vi.fn();
+    const onPulling = vi.fn();
+    const coordinator = new RefreshStateCoordinator({ onMax, onPulling });
+
+    coordinator.accept('ready');
+    coordinator.acceptState(RefreshState.Max);
+    coordinator.acceptState(RefreshState.Max);
+    coordinator.acceptState(RefreshState.Pulling);
+    coordinator.acceptState(RefreshState.Max);
+
+    expect(onMax).toHaveBeenCalledTimes(2);
+    expect(onMax).toHaveBeenLastCalledWith(RefreshState.Max);
+    expect(onPulling).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('ControlledRefreshCoordinator', () => {
@@ -127,4 +151,41 @@ describe('resolveRefreshHeaderHeight', () => {
       expect(warn).toHaveBeenCalledOnce();
     },
   );
+});
+
+describe('resolveRefreshMaxDistance', () => {
+  it('未配置时默认与刷新阈值一致', () => {
+    expect(resolveRefreshMaxDistance(undefined, 80)).toBe(80);
+  });
+
+  it('接受大于或等于刷新阈值的有限数值', () => {
+    expect(resolveRefreshMaxDistance(80, 80)).toBe(80);
+    expect(resolveRefreshMaxDistance(160, 80)).toBe(160);
+  });
+
+  it.each([0, 79, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    '非法最大距离 %s 警告并回退到刷新阈值',
+    (maxDistance) => {
+      const warn = vi.fn();
+      expect(resolveRefreshMaxDistance(maxDistance, 80, warn)).toBe(80);
+      expect(warn).toHaveBeenCalledOnce();
+    },
+  );
+});
+
+describe('isMaxStageEnabled', () => {
+  it('未传最大距离时不启用 Max，因此不会进入 onMax 回调链路', () => {
+    expect(isMaxStageEnabled(undefined, 80)).toBe(false);
+  });
+
+  it.each([80, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    '最大距离 %s 不大于有效阈值时不启用 Max',
+    (maxDistance) => {
+      expect(isMaxStageEnabled(maxDistance, 80)).toBe(false);
+    },
+  );
+
+  it('仅显式传入大于第一阈值的有限数值时启用 Max', () => {
+    expect(isMaxStageEnabled(160, 80)).toBe(true);
+  });
 });

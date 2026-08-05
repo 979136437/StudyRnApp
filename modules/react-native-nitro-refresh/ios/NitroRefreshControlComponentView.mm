@@ -15,7 +15,8 @@
 using namespace facebook::react;
 
 static const CGFloat NitroRefreshDefaultHeaderHeight = 80;
-static const CGFloat NitroRefreshDefaultLimit = 160;
+// 未显式配置二级下拉距离时，最大位移与第一刷新阈值保持一致。
+static const CGFloat NitroRefreshDefaultLimit = NitroRefreshDefaultHeaderHeight;
 static const CGFloat NitroRefreshDefaultDragRate = 1;
 static const CGFloat NitroRefreshMinimumDimension = 1;
 static const CGFloat NitroRefreshMinimumDragRate = 0.01;

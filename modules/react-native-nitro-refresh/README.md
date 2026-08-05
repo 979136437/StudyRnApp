@@ -1,6 +1,6 @@
 # react-native-nitro-refresh
 
-基于现有 Nitro HybridObject 与 Fabric 原生视图实现的受控下拉刷新组件。公共 API、四阶段状态和组件用法对齐上游刷新组件；Android 与 iOS 的手势阻尼、保持和回弹继续由本模块维护，不依赖 MJRefresh 或 SmartRefreshLayout。
+基于现有 Nitro HybridObject 与 Fabric 原生视图实现的受控下拉刷新组件。公共 API、基础四阶段状态和组件用法对齐上游刷新组件，并提供可选的二级下拉状态；Android 与 iOS 的手势阻尼、保持和回弹继续由本模块维护，不依赖 MJRefresh 或 SmartRefreshLayout。
 
 ## 公共入口
 
@@ -8,7 +8,7 @@
 
 - `RefreshLayout`：连接滚动组件、受控属性、原生状态机与回调。
 - `RefreshHeader`：声明一个具有固定数值高度的自定义刷新头。
-- `RefreshState`：`Idle`、`Pulling`、`Refreshing`、`End` 四个稳定状态。
+- `RefreshState`：`Idle`、`Pulling`、`Refreshing`、`End` 四个基础状态，以及可选的 `Max` 二级状态。
 
 旧的 `RefreshControl`、`RefreshPhase`、`RefreshResult` 和命令式 ref 接口不再导出，也不提供兼容别名。
 
@@ -42,6 +42,10 @@ const [refreshing, setRefreshing] = useState(false);
       onPulling={(state) => {
         console.log(state === RefreshState.Pulling);
       }}
+      maxDistance={160}
+      onMax={(state) => {
+        console.log(state === RefreshState.Max);
+      }}
       onRefreshing={() => {
         setRefreshing(true);
         void reload().finally(() => setRefreshing(false));
@@ -66,6 +70,11 @@ const [refreshing, setRefreshing] = useState(false);
 4. 调用方把 `refreshing` 改为 `false` 后进入 `RefreshState.End`。
 5. 原生回弹完成后恢复 `RefreshState.Idle`。
 
+默认最大下拉距离与 Header 高度一致，因此不会进入额外状态。显式传入大于 Header
+高度的 `maxDistance` 后，达到该距离会进入 `RefreshState.Max` 并调用一次 `onMax`；
+继续拖动不会重复调用，回拉到该距离以下会恢复 `Pulling`，再次达到时可以再次触发。
+松手后仍进入受控的 `Refreshing`，业务可以使用 `Max` 和 `onMax` 驱动二级内容。
+
 不足阈值松手、取消或失败的拖动不会进入 `Pulling`、`Refreshing` 或 `End`。内部 Nitro 的 `pulling`、`ready`、`success`、`failure`、`settling` 等阶段不会从公共入口泄漏。
 
 ## 受控刷新
@@ -88,6 +97,11 @@ const [refreshing, setRefreshing] = useState(false);
 
 缺少高度、百分比高度、`0`、负数、`NaN` 或无穷值会在开发环境输出警告，并回退到 `80`。原生层仍有最小值保护，防止非法数据造成负 inset 或除零。
 
+`maxDistance` 控制刷新头允许展示的最大下拉距离，单位同样为 dp/pt。默认与 Header
+高度一致；显式值必须大于或等于 Header 高度。小于阈值、非正数、`NaN` 或无穷值会
+在开发环境输出警告并回退到 Header 高度。只有显式值大于 Header 高度时才启用 `Max`
+状态与 `onMax` 回调。
+
 ## 位移事件
 
 `onChangeOffset` 接收标准原生事件形状：
@@ -96,7 +110,7 @@ const [refreshing, setRefreshing] = useState(false);
 { nativeEvent: { offset: number } }
 ```
 
-`offset` 在 Android 上为 dp，在 iOS 上为 pt。连续位移先由 Fabric 直接交给 Reanimated 在界面线程更新；只有提供 `onChangeOffset` 时，模块才额外把对应值调度到 JavaScript。
+`offset` 在 Android 上为 dp，在 iOS 上为 pt，并且已经经过 `maxDistance` 限制。连续位移先由 Fabric 直接交给 Reanimated 在界面线程更新；只有提供 `onChangeOffset` 时，模块才额外把对应值调度到 JavaScript。
 
 ## 支持范围
 

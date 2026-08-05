@@ -7,7 +7,7 @@ import type {
 } from 'react-native';
 
 /**
- * 与上游组件一致的四阶段刷新状态。
+ * 与上游组件一致的四阶段刷新状态，以及显式配置二级阈值后启用的 Max 状态。
  *
  * 数值保持稳定，调用方可以直接用于 switch、日志或轻量状态存储。内部 Nitro
  * 七阶段不会从公共入口泄漏。
@@ -21,6 +21,8 @@ export const RefreshState = {
   Refreshing: 2,
   /** 刷新已经结束，内容正在回弹。 */
   End: 3,
+  /** 已达到显式配置的最大下拉距离，可用于展示或打开二级内容。 */
+  Max: 4,
 } as const;
 
 /** `RefreshState` 运行时对象中所有值组成的数值字面量联合。 */
@@ -34,7 +36,7 @@ export interface RefreshOffsetNativeEvent {
 /** 与 React Native 原生事件形状一致的刷新位移事件。 */
 export type RefreshOffsetEvent = NativeSyntheticEvent<RefreshOffsetNativeEvent>;
 
-/** 四阶段回调的统一签名。 */
+/** 刷新状态回调的统一签名。 */
 export type RefreshStateCallback = (state: RefreshState) => void;
 
 /** `RefreshHeader` 的公开属性。 */
@@ -58,15 +60,27 @@ export interface RefreshLayoutProps extends Omit<ViewProps, 'children'> {
   refreshing: boolean;
   /** 自定义刷新头。必须是一个 `RefreshHeader` 元素。 */
   header: ReactElement<RefreshHeaderProps>;
+  /**
+   * 刷新头允许展示的最大下拉距离，单位为 dp/pt。默认与刷新头高度（即触发阈值）
+   * 一致；必须是大于或等于刷新头高度的有限数值。
+   */
+  maxDistance?: number;
   /** 未达到阈值或回弹完成并进入 Idle 时调用。 */
   onIdle?: RefreshStateCallback;
   /** 达到阈值并进入 Pulling 时调用。 */
   onPulling?: RefreshStateCallback;
+  /**
+   * 达到显式配置的 maxDistance 并进入 Max 时调用；未传 maxDistance 时永不调用。
+   */
+  onMax?: RefreshStateCallback;
   /** 用户松手或程序化启动并进入 Refreshing 时调用。 */
   onRefreshing?: RefreshStateCallback;
   /** 受控 refreshing 结束并进入回弹阶段时调用。 */
   onEnd?: RefreshStateCallback;
-  /** 高频位移事件；仅提供此回调时才从界面线程调度到 JavaScript。 */
+  /**
+   * 高频位移事件，offset 为经过 maxDistance 限制后的实际可见距离；仅提供此回调时
+   * 才从界面线程调度到 JavaScript。
+   */
   onChangeOffset?: (event: RefreshOffsetEvent) => void;
   /** Android 由 React Native 自动注入的纵向滚动组件。 */
   children?: ReactElement | null;

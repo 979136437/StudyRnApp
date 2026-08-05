@@ -5,6 +5,7 @@ import { RefreshState, type RefreshStateCallback } from '../types';
 export interface RefreshStateCallbacks {
   onIdle?: RefreshStateCallback;
   onPulling?: RefreshStateCallback;
+  onMax?: RefreshStateCallback;
   onRefreshing?: RefreshStateCallback;
   onEnd?: RefreshStateCallback;
 }
@@ -22,7 +23,10 @@ export function reduceRefreshState(
 ): RefreshState {
   switch (phase) {
     case 'ready':
-      return RefreshState.Pulling;
+      // Max 由 Fabric 位移事件派生；晚到的同阶段 Nitro 通知不能把它降回 Pulling。
+      return previousState === RefreshState.Max
+        ? RefreshState.Max
+        : RefreshState.Pulling;
     case 'refreshing':
       return RefreshState.Refreshing;
     case 'settling':
@@ -50,6 +54,8 @@ export function callbackForRefreshState(
       return callbacks.onRefreshing;
     case RefreshState.End:
       return callbacks.onEnd;
+    case RefreshState.Max:
+      return callbacks.onMax;
   }
 }
 
@@ -71,6 +77,11 @@ export class RefreshStateCoordinator {
 
   accept(phase: RefreshPhase): RefreshState | undefined {
     const nextState = reduceRefreshState(this.state, phase);
+    return this.acceptState(nextState);
+  }
+
+  /** 发布由 TypeScript 位移层派生的状态，例如达到或离开二级下拉阈值。 */
+  acceptState(nextState: RefreshState): RefreshState | undefined {
     if (nextState === this.state) {
       return undefined;
     }
@@ -122,6 +133,48 @@ export function resolveRefreshHeaderHeight(
     `[react-native-nitro-refresh] RefreshHeader 的 style.height 必须是大于 0 的固定数值，已回退为 ${DEFAULT_REFRESH_HEADER_HEIGHT}。`,
   );
   return DEFAULT_REFRESH_HEADER_HEIGHT;
+}
+
+/**
+ * 校验刷新头允许展示的最大下拉距离。未提供时默认等于触发阈值；显式配置不能小于
+ * 阈值，否则原生层会在达到刷新条件前先停止位移，造成配置语义不明确。
+ */
+export function resolveRefreshMaxDistance(
+  maxDistance: unknown,
+  threshold: number,
+  warn?: (message: string) => void,
+): number {
+  if (maxDistance === undefined) {
+    return threshold;
+  }
+
+  if (
+    typeof maxDistance === 'number' &&
+    Number.isFinite(maxDistance) &&
+    maxDistance >= threshold
+  ) {
+    return maxDistance;
+  }
+
+  warn?.(
+    `[react-native-nitro-refresh] maxDistance 必须是大于或等于刷新阈值 ${threshold} 的有限数值，已回退为 ${threshold}。`,
+  );
+  return threshold;
+}
+
+/**
+ * 二级状态是显式选择加入的能力。未传 maxDistance 时，即使解析后的原生最大距离与
+ * 第一阈值相同，也不能发布 Max 或调用 onMax。
+ */
+export function isMaxStageEnabled(
+  maxDistance: unknown,
+  threshold: number,
+): maxDistance is number {
+  return (
+    typeof maxDistance === 'number' &&
+    Number.isFinite(maxDistance) &&
+    maxDistance > threshold
+  );
 }
 
 /** 受控刷新在禁用时永远不能进入原生刷新态。 */

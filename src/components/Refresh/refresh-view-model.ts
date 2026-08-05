@@ -9,6 +9,7 @@ const REFRESH_STATE_LABELS = {
   [RefreshState.Pulling]: '松开立即刷新',
   [RefreshState.Refreshing]: '正在刷新...',
   [RefreshState.End]: '刷新完成',
+  [RefreshState.Max]: '已达到二级阈值',
 } as const;
 
 export function labelForRefreshState(state: RefreshStateValue): string {
