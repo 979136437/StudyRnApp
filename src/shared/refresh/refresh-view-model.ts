@@ -1,7 +1,7 @@
 import {
   RefreshState,
   type RefreshState as RefreshStateValue,
-} from '../../../modules/react-native-nitro-refresh/src/types';
+} from 'react-native-nitro-refresh';
 
 /** 普通头和动画头共用的中文状态文案，避免两个组件分别维护魔法字符串。 */
 const REFRESH_STATE_LABELS = {

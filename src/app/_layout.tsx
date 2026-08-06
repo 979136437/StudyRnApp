@@ -15,9 +15,9 @@ import { PopupProvider } from 'react-native-popup-kit';
 import { RequestProvider } from 'react-native-request-kit/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { HeroTransitionProvider } from '@/components/hero/hero-transition';
-import { mediaCacheStrategy } from '@/media-cache';
-import { request } from '@/request';
+import { mediaCacheStrategy } from '@/core/media-cache';
+import { request } from '@/core/request';
+import { HeroTransitionProvider } from '@/shared/hero';
 
 initializeSentry();
 installGlobalErrorHandler();

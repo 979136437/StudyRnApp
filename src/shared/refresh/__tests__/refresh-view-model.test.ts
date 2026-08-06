@@ -1,6 +1,6 @@
+import { RefreshState } from 'react-native-nitro-refresh';
 import { describe, expect, it } from 'vitest';
 
-import { RefreshState } from '../../../../modules/react-native-nitro-refresh/src/types';
 import {
   formatRefreshTime,
   isRefreshIndicatorVisible,
