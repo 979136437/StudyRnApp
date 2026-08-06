@@ -46,6 +46,7 @@
     "react-native-popup-kit": "workspace:*",
     "react-native-nitro-modules": "catalog:",
     "react-native-nitro-refresh": "workspace:*",
+    "react-native-nitro-visibility-observer": "workspace:*",
     "react-native-pager-view": "8.0.2",
     "react-native-popover-view": "^6.1.0",
     "react-native-reanimated": "catalog:",

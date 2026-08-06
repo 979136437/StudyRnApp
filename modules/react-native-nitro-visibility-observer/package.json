@@ -1,0 +1,47 @@
+{
+  "name": "react-native-nitro-visibility-observer",
+  "version": "0.1.0",
+  "description": "A cross-platform visibility observer backed by Nitro Hybrid Views.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "android",
+    "ios",
+    "nitrogen",
+    "nitro.json",
+    "react-native.config.js",
+    "NitroVisibilityObserver.podspec",
+    "README.md"
+  ],
+  "scripts": {
+    "specs": "nitrogen",
+    "test": "vitest run src/__tests__",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "nitrogen": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [
+    "react-native",
+    "nitro",
+    "visibility",
+    "intersection-observer"
+  ],
+  "license": "MIT",
+  "private": true
+}
