@@ -32,6 +32,10 @@ const CACHE_SCREEN_OPTIONS = {
   headerShown: true,
   title: '缓存统计',
 } as const;
+const VISIBILITY_OBSERVER_SCREEN_OPTIONS = {
+  headerShown: true,
+  title: '可见性监听测试',
+} as const;
 
 function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
   return (
@@ -57,6 +61,10 @@ function AppNavigator(): React.JSX.Element {
       <Stack.Screen name="cache" options={CACHE_SCREEN_OPTIONS} />
       <Stack.Screen name="feed/[id]" options={FEED_SCREEN_OPTIONS} />
       <Stack.Screen name="popup-demo" options={POPUP_DEMO_SCREEN_OPTIONS} />
+      <Stack.Screen
+        name="visibility-observer"
+        options={VISIBILITY_OBSERVER_SCREEN_OPTIONS}
+      />
     </Stack>
   );
 }

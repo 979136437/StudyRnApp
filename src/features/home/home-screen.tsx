@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MyImage } from 'react-native-components';
 
@@ -6,14 +6,18 @@ export function HomeScreen(): React.JSX.Element {
   return (
     <View className="flex-1 gap-4 p-4 bg-red-500 pt-safe">
       <Link href="/cache" asChild>
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.cacheButton,
-            pressed && styles.cacheButtonPressed,
-          ]}
-        >
+        <Pressable accessibilityRole="button" style={styles.cacheButton}>
           <Text style={styles.cacheButtonText}>缓存统计</Text>
+        </Pressable>
+      </Link>
+      <Link href="/visibility-observer" asChild>
+        <Pressable accessibilityRole="button" style={styles.cacheButton}>
+          <Text style={styles.cacheButtonText}>可见性监听测试</Text>
+        </Pressable>
+      </Link>
+      <Link href="/diagnostics" asChild>
+        <Pressable accessibilityRole="button" style={styles.cacheButton}>
+          <Text style={styles.cacheButtonText}>诊断信息</Text>
         </Pressable>
       </Link>
       <MyImage
