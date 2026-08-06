@@ -751,7 +751,7 @@ export function HeroSource({
         accessibilityRole="button"
         disabled={context.isBusy}
         onPress={() => context.startHero({ href, id: heroId, overlay })}
-        style={({ pressed }) => pressed && styles.pressed}
+        style={[styles.pressed]}
       >
         {children}
       </Pressable>

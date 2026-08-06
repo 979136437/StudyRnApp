@@ -1,0 +1,58 @@
+{
+  "name": "react-native-components",
+  "version": "0.1.0",
+  "description": "Shared React Native components for the application.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run src/media-cache/__tests__",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "expo-asset": "catalog:",
+    "expo-audio": "catalog:",
+    "expo-file-system": "catalog:",
+    "expo-image": "catalog:",
+    "expo-video": "catalog:",
+    "nativewind": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-reanimated-carousel": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "expo-asset": "catalog:",
+    "expo-audio": "catalog:",
+    "expo-file-system": "catalog:",
+    "expo-image": "catalog:",
+    "expo-video": "catalog:",
+    "nativewind": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-reanimated-carousel": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "components"
+  ],
+  "license": "MIT",
+  "private": true
+}

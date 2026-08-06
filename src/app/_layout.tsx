@@ -1,6 +1,7 @@
 import '@/global.css';
 import { Stack } from 'expo-router/stack';
 import type { PropsWithChildren } from 'react';
+import { MediaCacheProvider } from 'react-native-components';
 import {
   DiagnosticsErrorBoundary,
   DiagnosticsLifecycle,
@@ -15,6 +16,7 @@ import { RequestProvider } from 'react-native-request-kit/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { HeroTransitionProvider } from '@/components/hero/hero-transition';
+import { mediaCacheStrategy } from '@/media-cache';
 import { request } from '@/request';
 
 initializeSentry();
@@ -26,17 +28,23 @@ const POPUP_DEMO_SCREEN_OPTIONS = {
   headerShown: true,
   title: '弹窗示例',
 } as const;
+const CACHE_SCREEN_OPTIONS = {
+  headerShown: true,
+  title: '缓存统计',
+} as const;
 
 function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
   return (
     <GestureHandlerRootView className="flex-1">
       <SafeAreaProvider>
         <DiagnosticsErrorBoundary>
-          <RequestProvider request={request}>
-            <KeyboardProvider>
-              <PopupProvider scope="global">{children}</PopupProvider>
-            </KeyboardProvider>
-          </RequestProvider>
+          <MediaCacheProvider strategy={mediaCacheStrategy} defaultEnabled>
+            <RequestProvider request={request}>
+              <KeyboardProvider>
+                <PopupProvider scope="global">{children}</PopupProvider>
+              </KeyboardProvider>
+            </RequestProvider>
+          </MediaCacheProvider>
         </DiagnosticsErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -46,6 +54,7 @@ function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
 function AppNavigator(): React.JSX.Element {
   return (
     <Stack screenOptions={ROOT_STACK_OPTIONS}>
+      <Stack.Screen name="cache" options={CACHE_SCREEN_OPTIONS} />
       <Stack.Screen name="feed/[id]" options={FEED_SCREEN_OPTIONS} />
       <Stack.Screen name="popup-demo" options={POPUP_DEMO_SCREEN_OPTIONS} />
     </Stack>

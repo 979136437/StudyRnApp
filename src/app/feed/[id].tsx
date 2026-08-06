@@ -53,10 +53,7 @@ export default function FeedDetail(): React.JSX.Element {
             accessibilityRole="button"
             hitSlop={8}
             onPress={goBack}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
+            style={[styles.backButton]}
           >
             <Text style={styles.backIcon}>‹</Text>
           </Pressable>
