@@ -53,7 +53,6 @@ private final class VisibilityProbeView: UIView {
 }
 
 final class HybridVisibilityObserverView:
-  HybridVisibilityObserverViewSpec_base,
   HybridVisibilityObserverViewSpec,
   VisibilityFrameObserver
 {
@@ -205,7 +204,12 @@ final class HybridVisibilityObserverView:
     dispose()
   }
 
-  private func dispose() {
+  // Nitro 可主动释放 HybridObject，此入口与视图卸载共用同一套幂等清理。
+  func dispose() {
+    cleanupViewResources()
+  }
+
+  private func cleanupViewResources() {
     guard !disposed else { return }
     disposed = true
     VisibilityFrameScheduler.shared.remove(self)
@@ -216,6 +220,6 @@ final class HybridVisibilityObserverView:
   }
 
   deinit {
-    dispose()
+    cleanupViewResources()
   }
 }
