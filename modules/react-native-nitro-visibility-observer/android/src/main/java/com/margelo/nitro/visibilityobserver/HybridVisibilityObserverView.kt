@@ -178,14 +178,14 @@ class HybridVisibilityObserverView(
   }
 
   override fun onHostDestroy() {
-    dispose()
+    cleanupViewResources()
   }
 
   override fun onDropView() {
-    dispose()
+    cleanupViewResources()
   }
 
-  private fun dispose() {
+  private fun cleanupViewResources() {
     if (disposed) return
     disposed = true
     VisibilityFrameScheduler.remove(this)
