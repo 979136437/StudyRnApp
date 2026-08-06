@@ -1,25 +1,55 @@
-import { Link, type Href } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MyImage } from 'react-native-components';
+import { Link } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  MyImage,
+  MyVideo,
+  type MyVideoVisibilityChangeEvent,
+} from 'react-native-components';
+
+const HOME_TEST_VIDEO_URL =
+  'https://obs-happyvalley.obs.cn-south-1.myhuaweicloud.com/mp/137b76cb91a229d7f6bce32d3a9eaf8a.mp4';
 
 export function HomeScreen(): React.JSX.Element {
+  const [videoVisibility, setVideoVisibility] =
+    useState<MyVideoVisibilityChangeEvent>();
+  const handleVideoVisibilityChange = useCallback(
+    (event: MyVideoVisibilityChangeEvent) => setVideoVisibility(event),
+    [],
+  );
+
   return (
-    <View className="flex-1 gap-4 p-4 bg-red-500 pt-safe">
-      <Link href="/cache" asChild>
-        <Pressable accessibilityRole="button" style={styles.cacheButton}>
-          <Text style={styles.cacheButtonText}>缓存统计</Text>
-        </Pressable>
-      </Link>
-      <Link href="/visibility-observer" asChild>
-        <Pressable accessibilityRole="button" style={styles.cacheButton}>
-          <Text style={styles.cacheButtonText}>可见性监听测试</Text>
-        </Pressable>
-      </Link>
-      <Link href="/diagnostics" asChild>
-        <Pressable accessibilityRole="button" style={styles.cacheButton}>
-          <Text style={styles.cacheButtonText}>诊断信息</Text>
-        </Pressable>
-      </Link>
+    <ScrollView
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
+      style={styles.screen}
+    >
+      <View style={styles.navigation}>
+        <Link href="/cache" asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>缓存统计</Text>
+          </Pressable>
+        </Link>
+        <Link href="/visibility-observer" asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>可见性监听测试</Text>
+          </Pressable>
+        </Link>
+        <Link href="/diagnostics" asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>诊断信息</Text>
+          </Pressable>
+        </Link>
+      </View>
+      <MyVideo
+        autoplay
+        loop
+        muted
+        onVisibilityChange={handleVideoVisibilityChange}
+        style={styles.video}
+        url={HOME_TEST_VIDEO_URL}
+        visibilityThreshold={0.5}
+      />
       <MyImage
         source={{
           uri: 'https://bjmnapi.happyvalley.link/uploads/20200703/2232b3134bdf5c89df95a20aede339fb.jpg',
@@ -32,26 +62,55 @@ export function HomeScreen(): React.JSX.Element {
         }}
         className="bg-white aspect-square rounded-md"
       />
-    </View>
+      <View style={styles.videoStatus}>
+        <Text style={styles.videoStatusLabel}>视频状态</Text>
+        <Text selectable style={styles.videoStatusValue}>
+          {videoVisibility === undefined
+            ? '等待可见性测量'
+            : `${videoVisibility.isVisible ? '可见' : '不可见'} · ${(
+                videoVisibility.visibleRatio * 100
+              ).toFixed(0)}%`}
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   cacheButton: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     backgroundColor: '#ffffff',
     borderRadius: 6,
+    flexGrow: 1,
     height: 44,
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  cacheButtonPressed: {
-    opacity: 0.7,
+  content: {
+    gap: 16,
+    padding: 16,
+    paddingBottom: 48,
   },
   cacheButtonText: {
     color: '#202124',
     fontSize: 15,
     fontWeight: '600',
   },
+  navigation: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  screen: { backgroundColor: '#ef4444' },
+  video: {
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000000',
+    borderRadius: 6,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  videoStatus: {
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    gap: 4,
+    padding: 16,
+  },
+  videoStatusLabel: { color: '#5f6368', fontSize: 13 },
+  videoStatusValue: { color: '#202124', fontSize: 16, fontWeight: '700' },
 });

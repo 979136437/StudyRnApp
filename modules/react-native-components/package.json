@@ -21,7 +21,11 @@
   ],
   "scripts": {
     "test": "vitest run src/media-cache/__tests__",
+    "test:video": "vitest run src/components/MyVideo/__tests__",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react-native-nitro-visibility-observer": "workspace:*"
   },
   "peerDependencies": {
     "expo-asset": "catalog:",
