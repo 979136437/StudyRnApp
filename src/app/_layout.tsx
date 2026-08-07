@@ -42,7 +42,7 @@ function RootProviders({ children }: PropsWithChildren) {
 
 function AppNavigator(): React.JSX.Element {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: true }}>
       <Stack.Screen
         name="cache"
         options={{

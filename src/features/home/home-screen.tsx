@@ -27,19 +27,9 @@ export function HomeScreen(): React.JSX.Element {
       style={styles.screen}
     >
       <View className="pt-safe" style={styles.navigation}>
-        <Link href="/cache" asChild>
+        <Link href="/webview" asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
-            <Text style={styles.cacheButtonText}>缓存统计</Text>
-          </Pressable>
-        </Link>
-        <Link href="/visibility-observer" asChild>
-          <Pressable accessibilityRole="button" style={styles.cacheButton}>
-            <Text style={styles.cacheButtonText}>可见性监听测试</Text>
-          </Pressable>
-        </Link>
-        <Link href="/diagnostics" asChild>
-          <Pressable accessibilityRole="button" style={styles.cacheButton}>
-            <Text style={styles.cacheButtonText}>诊断信息</Text>
+            <Text style={styles.cacheButtonText}>网页</Text>
           </Pressable>
         </Link>
       </View>
