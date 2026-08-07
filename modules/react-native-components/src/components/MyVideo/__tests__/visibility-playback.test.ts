@@ -6,10 +6,10 @@ import {
 } from '../visibility-playback';
 
 const DEFAULT_CONTEXT: VisibilityPlaybackContext = {
-  autoplay: true,
+  autoplayPending: true,
   pause: false,
   playing: false,
-  resumeWhenVisible: false,
+  resumeWhenAllowed: false,
   visibilityEnabled: true,
   visibilityMeasured: true,
   visible: true,
@@ -38,17 +38,27 @@ describe('resolveVisibilityPlaybackCommand', () => {
   });
 
   it('重新可见时恢复离开前的播放状态', () => {
-    expect(command({ autoplay: false, resumeWhenVisible: true })).toBe('play');
+    expect(command({ autoplayPending: false, resumeWhenAllowed: true })).toBe(
+      'play',
+    );
   });
 
   it('用户原本手动暂停时不自动恢复', () => {
-    expect(command({ autoplay: false, resumeWhenVisible: false })).toBe('none');
+    expect(command({ autoplayPending: false, resumeWhenAllowed: false })).toBe(
+      'none',
+    );
+  });
+
+  it('自动播放已执行后不因重新进入页面再次播放', () => {
+    expect(command({ autoplayPending: false, resumeWhenAllowed: false })).toBe(
+      'none',
+    );
   });
 
   it('外部暂停始终优先于可见性恢复', () => {
-    expect(command({ pause: true, resumeWhenVisible: true })).toBe('none');
+    expect(command({ pause: true, resumeWhenAllowed: true })).toBe('none');
     expect(
-      command({ pause: true, playing: true, resumeWhenVisible: true }),
+      command({ pause: true, playing: true, resumeWhenAllowed: true }),
     ).toBe('pause');
   });
 

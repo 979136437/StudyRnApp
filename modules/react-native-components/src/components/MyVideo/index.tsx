@@ -11,6 +11,7 @@ import {
 } from 'react-native-nitro-visibility-observer';
 
 import { useCachedMedia } from '../../media-cache/use-cached-media';
+import { resolveVideoSource } from './video-source';
 import { resolveVisibilityPlaybackCommand } from './visibility-playback';
 
 export type MyVideoVisibilityChangeEvent = VisibilityChangeEvent;
@@ -55,15 +56,16 @@ export function MyVideo({
   ...props
 }: MyVideoProps) {
   const id = useId();
-  const autoplayRef = useRef(autoplay);
+  const autoplayPendingRef = useRef(autoplay);
   const pauseRef = useRef(pause);
   const visibilityEnabledRef = useRef(visibilityEnabled);
   const visibilityMeasuredRef = useRef(!visibilityEnabled);
   const visibleRef = useRef(!visibilityEnabled);
-  const resumeWhenVisibleRef = useRef(false);
+  const resumeWhenAllowedRef = useRef(false);
+  const playbackBlockedRef = useRef(pause || visibilityEnabled);
+  const previousAutoplayRef = useRef(autoplay);
   const previousVisibilityEnabledRef = useRef(visibilityEnabled);
   const onVisibilityChangeRef = useRef(onVisibilityChange);
-  autoplayRef.current = autoplay;
   pauseRef.current = pause;
   visibilityEnabledRef.current = visibilityEnabled;
   onVisibilityChangeRef.current = onVisibilityChange;
@@ -79,14 +81,14 @@ export function MyVideo({
       uri: url,
     },
   });
+  const previousUriRef = useRef(uri);
   const videoPlayer = useVideoPlayer(
-    uri
-      ? {
-          headers: uri === url ? requestHeaders : undefined,
-          uri,
-          useCaching: false,
-        }
-      : null,
+    resolveVideoSource({
+      cache,
+      requestHeaders,
+      resolvedUri: uri,
+      sourceUri: url,
+    }),
     (player) => {
       player.loop = loop;
       player.muted = muted;
@@ -94,12 +96,27 @@ export function MyVideo({
   );
   const playingRef = useRef(videoPlayer.playing);
 
+  const syncPlaybackBlockState = useCallback(() => {
+    const blocked =
+      pauseRef.current ||
+      (visibilityEnabledRef.current &&
+        (!visibilityMeasuredRef.current || !visibleRef.current));
+
+    if (!playbackBlockedRef.current && blocked) {
+      // 只在首次受到系统策略阻塞时记录状态，避免多个不可见来源相互覆盖。
+      const currentlyPlaying = videoPlayer.playing;
+      playingRef.current = currentlyPlaying;
+      resumeWhenAllowedRef.current = currentlyPlaying;
+    }
+    playbackBlockedRef.current = blocked;
+  }, [videoPlayer]);
+
   const applyPlaybackPolicy = useCallback(() => {
     const command = resolveVisibilityPlaybackCommand({
-      autoplay: autoplayRef.current,
+      autoplayPending: autoplayPendingRef.current,
       pause: pauseRef.current,
       playing: playingRef.current,
-      resumeWhenVisible: resumeWhenVisibleRef.current,
+      resumeWhenAllowed: resumeWhenAllowedRef.current,
       visibilityEnabled: visibilityEnabledRef.current,
       visibilityMeasured: visibilityMeasuredRef.current,
       visible: visibleRef.current,
@@ -108,6 +125,9 @@ export function MyVideo({
     if (command === 'pause') {
       videoPlayer.pause();
     } else if (command === 'play') {
+      // 自动播放只消费一次，后续恢复必须以离开前确实正在播放为依据。
+      autoplayPendingRef.current = false;
+      resumeWhenAllowedRef.current = false;
       videoPlayer.play();
     }
   }, [videoPlayer]);
@@ -115,20 +135,15 @@ export function MyVideo({
   const handleVisibilityChange = useCallback(
     (event: VisibilityChangeEvent): void => {
       if (visibilityEnabledRef.current) {
-        const wasVisible = visibleRef.current;
         visibilityMeasuredRef.current = true;
         visibleRef.current = event.isVisible;
-
-        if (wasVisible && !event.isVisible) {
-          // 仅记住离屏前真实的播放状态，避免恢复用户已经手动暂停的视频。
-          resumeWhenVisibleRef.current = playingRef.current;
-        }
+        syncPlaybackBlockState();
         applyPlaybackPolicy();
       }
 
       onVisibilityChangeRef.current?.(event);
     },
-    [applyPlaybackPolicy],
+    [applyPlaybackPolicy, syncPlaybackBlockState],
   );
 
   useEffect(() => {
@@ -140,12 +155,25 @@ export function MyVideo({
   }, [muted, videoPlayer]);
 
   useEffect(() => {
+    if (previousUriRef.current !== uri) {
+      previousUriRef.current = uri;
+      if (uri) {
+        // 新播放源拥有独立的自动播放周期，不能继承上一条视频的恢复状态。
+        autoplayPendingRef.current = autoplay;
+        resumeWhenAllowedRef.current = false;
+      }
+    }
+
+    if (previousAutoplayRef.current !== autoplay) {
+      previousAutoplayRef.current = autoplay;
+      autoplayPendingRef.current = autoplay;
+    }
+
     const wasEnabled = previousVisibilityEnabledRef.current;
     if (wasEnabled !== visibilityEnabled) {
       previousVisibilityEnabledRef.current = visibilityEnabled;
       if (visibilityEnabled) {
         // 重新启用时先暂停并等待首次原生测量，防止未确认可见便继续播放。
-        resumeWhenVisibleRef.current = playingRef.current;
         visibilityMeasuredRef.current = false;
         visibleRef.current = false;
       } else {
@@ -154,8 +182,16 @@ export function MyVideo({
       }
     }
 
+    syncPlaybackBlockState();
     applyPlaybackPolicy();
-  }, [applyPlaybackPolicy, autoplay, pause, uri, visibilityEnabled]);
+  }, [
+    applyPlaybackPolicy,
+    autoplay,
+    pause,
+    syncPlaybackBlockState,
+    uri,
+    visibilityEnabled,
+  ]);
 
   useEffect(() => {
     const subscription = videoPlayer.addListener(
@@ -170,8 +206,12 @@ export function MyVideo({
         if (isPlaying && blocked) {
           // 原生控制条也不能绕过离屏或外部暂停状态。
           videoPlayer.pause();
-        } else if (!isPlaying && visibleRef.current) {
-          resumeWhenVisibleRef.current = false;
+        } else if (isPlaying) {
+          autoplayPendingRef.current = false;
+        } else if (!blocked) {
+          // 未受系统策略阻塞时停止播放，视为用户操作或自然播放结束。
+          autoplayPendingRef.current = false;
+          resumeWhenAllowedRef.current = false;
         }
       },
     );

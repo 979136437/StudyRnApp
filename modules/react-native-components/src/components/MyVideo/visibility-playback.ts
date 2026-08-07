@@ -1,20 +1,20 @@
 export type VisibilityPlaybackCommand = 'none' | 'pause' | 'play';
 
 export interface VisibilityPlaybackContext {
-  autoplay: boolean;
+  autoplayPending: boolean;
   pause: boolean;
   playing: boolean;
-  resumeWhenVisible: boolean;
+  resumeWhenAllowed: boolean;
   visibilityEnabled: boolean;
   visibilityMeasured: boolean;
   visible: boolean;
 }
 
 export function resolveVisibilityPlaybackCommand({
-  autoplay,
+  autoplayPending,
   pause,
   playing,
-  resumeWhenVisible,
+  resumeWhenAllowed,
   visibilityEnabled,
   visibilityMeasured,
   visible,
@@ -26,7 +26,7 @@ export function resolveVisibilityPlaybackCommand({
     return playing ? 'pause' : 'none';
   }
 
-  if (autoplay || resumeWhenVisible) {
+  if (autoplayPending || resumeWhenAllowed) {
     return playing ? 'none' : 'play';
   }
 

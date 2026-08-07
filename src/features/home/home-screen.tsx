@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useIsFocused } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -11,6 +11,8 @@ const HOME_TEST_VIDEO_URL =
   'https://obs-happyvalley.obs.cn-south-1.myhuaweicloud.com/mp/137b76cb91a229d7f6bce32d3a9eaf8a.mp4';
 
 export function HomeScreen(): React.JSX.Element {
+  // 路由压栈时页面仍挂载，焦点状态用于补足几何监听无法识别的整页遮挡。
+  const isFocused = useIsFocused();
   const [videoVisibility, setVideoVisibility] =
     useState<MyVideoVisibilityChangeEvent>();
   const handleVideoVisibilityChange = useCallback(
@@ -24,7 +26,7 @@ export function HomeScreen(): React.JSX.Element {
       contentInsetAdjustmentBehavior="automatic"
       style={styles.screen}
     >
-      <View style={styles.navigation}>
+      <View className="pt-safe" style={styles.navigation}>
         <Link href="/cache" asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
             <Text style={styles.cacheButtonText}>缓存统计</Text>
@@ -44,8 +46,8 @@ export function HomeScreen(): React.JSX.Element {
       <MyVideo
         autoplay
         loop
-        muted
         onVisibilityChange={handleVideoVisibilityChange}
+        pause={!isFocused}
         style={styles.video}
         url={HOME_TEST_VIDEO_URL}
         visibilityThreshold={0.5}
