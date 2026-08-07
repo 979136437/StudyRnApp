@@ -9,6 +9,7 @@ import type {
   AssetQueryOptions,
   CameraOptions,
   ImagePickerOptions,
+  ImagePickerResult,
   MediaLibraryChangeEvent,
   MediaTypeOption,
   ResolveAssetsOptions,
@@ -44,11 +45,9 @@ async function callNative<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-function normalizeResult(result: NativeImagePickerResult) {
-  return {
-    canceled: result.canceled,
-    assets: result.canceled ? null : (result.assets ?? []),
-  } as const;
+function normalizeResult(result: NativeImagePickerResult): ImagePickerResult {
+  if (result.canceled) return { canceled: true, assets: null };
+  return { canceled: false, assets: result.assets ?? [] };
 }
 
 export const getMediaLibraryPermissionsAsync = (
