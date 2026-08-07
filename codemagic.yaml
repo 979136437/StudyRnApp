@@ -30,7 +30,7 @@ workflows:
           set -e
           # 💡 核心修复：加上 --force 强制抹除 Codemagic 镜像自带的 pnpm，确保我们使用的是 10.33.0 版本
           npm install -g pnpm@10.33.0 --force
-          pnpm install --frozen-lockfile
+          pnpm install --lockfile-only --no-frozen-lockfile
 
       - name: 🏗️ 智能状态防崩溃：动态依赖嗅探与 Expo 引擎驱动
         script: |
