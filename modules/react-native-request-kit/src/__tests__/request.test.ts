@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { invalidateCache, queryCache, setCache } from '../cache/operations';
-import { createRequest } from '../client/createRequest';
-import { isRequestCancelled, RequestError } from '../client/error';
-import { getRuntime } from '../client/runtime';
+import { createRequest } from '../api/create-request';
+import { RequestError, isRequestCancelled } from '../core/request-error';
+import { getRuntime } from '../core/runtime';
 
 afterEach(() => {
   vi.useRealTimers();

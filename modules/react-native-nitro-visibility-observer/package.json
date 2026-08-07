@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "specs": "nitrogen",
-    "test": "vitest run src/__tests__",
+    "test": "vitest run src/core/__tests__ src/components/VisibilityObserver/__tests__",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

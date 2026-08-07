@@ -1,8 +1,8 @@
 import type { Persister } from '@tanstack/react-query-persist-client';
 
 import type { RequestAdapter } from './adapter/types';
-import type { RequestError } from './client/error';
-import type { Method } from './client/Method';
+import type { RequestError } from './core/request-error';
+import type { Method } from './core/method';
 
 export type AnyMethod<TData = unknown> = Method<TData, any, any, any>;
 

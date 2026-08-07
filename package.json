@@ -81,7 +81,7 @@
     "doctor": "pnpm dlx expo-doctor",
     "lint": "oxlint . && oxfmt --check \"src/**/*.{js,jsx,ts,tsx}\" \"plugins/**/*.{js,jsx,ts,tsx}\" \"*.{js,jsx}\"",
     "lint:fix": "oxlint --fix . && oxfmt \"src/**/*.{js,jsx,ts,tsx}\" \"plugins/**/*.{js,jsx,ts,tsx}\" \"*.{js,jsx}\"",
-    "test:diagnostics": "vitest run modules/react-native-diagnostics/src/__tests__",
+    "test:diagnostics": "vitest run modules/react-native-diagnostics/src/core/__tests__",
     "typecheck": "tsc --noEmit",
     "build:android:development": "eas build --profile development --platform android --non-interactive",
     "build:android:production": "eas build --profile production --platform android --non-interactive",

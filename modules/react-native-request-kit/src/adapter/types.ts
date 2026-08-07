@@ -1,4 +1,4 @@
-import type { Method } from '../client/Method';
+import type { Method } from '../core/method';
 import type { HttpMethod } from '../types';
 
 export type ProgressUpdater = (loaded: number, total: number) => void;

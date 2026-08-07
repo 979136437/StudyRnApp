@@ -1,4 +1,4 @@
-import { RequestError } from '../client/error';
+import { RequestError } from '../core/request-error';
 
 export function createAbortError(cause?: unknown): Error {
   const error = new Error('Request was cancelled', { cause });

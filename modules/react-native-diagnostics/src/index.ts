@@ -1,10 +1,10 @@
-export { DiagnosticsErrorBoundary } from './DiagnosticsErrorBoundary';
-export { DiagnosticsLifecycle } from './DiagnosticsLifecycle';
+export { DiagnosticsErrorBoundary } from './react/DiagnosticsErrorBoundary';
+export { DiagnosticsLifecycle } from './react/DiagnosticsLifecycle';
 export {
   DiagnosticsScreen,
   type DiagnosticsScreenProps,
-} from './DiagnosticsScreen';
-export { sanitizeUrl, sanitizeValue } from './sanitizer';
+} from './react/DiagnosticsScreen';
+export { sanitizeUrl, sanitizeValue } from './core/sanitizer';
 export {
   addBreadcrumb,
   captureException,
@@ -14,7 +14,7 @@ export {
   setContext,
   triggerNativeCrash,
   wrapWithSentry,
-} from './sentry';
+} from './api/sentry';
 export {
   clearReports,
   deleteReport,
@@ -24,7 +24,7 @@ export {
   listReports,
   listReportSummaries,
   subscribeToReports,
-} from './storage';
+} from './native/report-storage';
 export type {
   DiagnosticBreadcrumb,
   DiagnosticKind,

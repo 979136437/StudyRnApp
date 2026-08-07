@@ -2,16 +2,16 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createRequest } from '../client/createRequest';
-import { getRuntime } from '../client/runtime';
+import { createRequest } from '../api/create-request';
+import { getRuntime } from '../core/runtime';
 import { createServerTokenAuthentication } from '../strategy/authentication';
-import { useAutoRequest } from '../strategy/autoRequest';
-import { useCaptcha, type CaptchaResult } from '../strategy/captcha';
+import { useAutoRequest } from '../strategy/use-auto-request';
+import { useCaptcha, type CaptchaResult } from '../strategy/use-captcha';
 import {
   useRetriableRequest,
   type RetriableRequestResult,
-} from '../strategy/retriableRequest';
-import { useUploader, type UploaderResult } from '../strategy/uploader';
+} from '../strategy/use-retriable-request';
+import { useUploader, type UploaderResult } from '../strategy/use-uploader';
 import type { UseRequestResult } from '../types';
 
 vi.mock('react-native', () => ({

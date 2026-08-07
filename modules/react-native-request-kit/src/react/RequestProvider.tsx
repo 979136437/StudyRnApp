@@ -3,7 +3,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { getRuntime } from '../client/runtime';
+import { getRuntime } from '../core/runtime';
 import type { RequestProviderProps } from '../types';
 
 export function RequestProvider({

@@ -3,7 +3,7 @@ import {
   DEFAULT_MINIMUM_VISIBLE_DURATION_MS,
   DEFAULT_THRESHOLD,
   MINIMUM_MEASUREMENT_INTERVAL_MS,
-} from '../constants';
+} from './constants';
 
 export type NormalizedVisibilityOptions = Readonly<{
   enabled: boolean;

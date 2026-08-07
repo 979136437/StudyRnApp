@@ -1,4 +1,4 @@
-import { isRequestCancelled, RequestError } from '../client/error';
+import { isRequestCancelled, RequestError } from '../core/request-error';
 import type { HttpMethod } from '../types';
 import {
   createHttpError,

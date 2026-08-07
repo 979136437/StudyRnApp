@@ -1,5 +1,8 @@
-export { MediaCacheProvider, useMediaCache } from './provider';
-export { createFileMediaCacheStrategy } from './strategy';
+export { createFileMediaCacheStrategy } from './core/strategy';
+export {
+  MediaCacheProvider,
+  useMediaCache,
+} from './react/MediaCacheProvider';
 export type {
   FileMediaCacheStrategyOptions,
   MediaCacheContextValue,

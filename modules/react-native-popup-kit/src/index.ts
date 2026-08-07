@@ -10,8 +10,8 @@ export {
   showToast,
 } from './api';
 export { PopupError } from './core/controller';
-export { useLoading, useModal, usePopup, useToast } from './react/hooks';
-export { PopupProvider } from './react/popup-provider';
+export { useLoading, useModal, usePopup, useToast } from './react/use-popup';
+export { PopupProvider } from './react/PopupProvider';
 export type {
   CloseAllPopupsResult,
   ClosePopupResult,

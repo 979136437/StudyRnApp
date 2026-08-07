@@ -1,4 +1,4 @@
-import { getRuntime, keyHash } from '../client/runtime';
+import { getRuntime, keyHash } from '../core/runtime';
 import type { AnyMethod, MethodMatcher, RequestInstance } from '../types';
 
 type CacheTarget = AnyMethod | readonly AnyMethod[] | MethodMatcher;

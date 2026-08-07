@@ -1,9 +1,9 @@
-export { useAutoRequest } from './autoRequest';
+export { useAutoRequest } from './use-auto-request';
 export type {
   AutoRequestConfig,
   AutoRequestSubscriber,
   NetworkSubscriber,
-} from './autoRequest';
+} from './use-auto-request';
 export {
   createClientTokenAuthentication,
   createServerTokenAuthentication,
@@ -17,16 +17,16 @@ export type {
   TokenAuthentication,
   TokenAuthenticationOptions,
 } from './authentication';
-export { useCaptcha } from './captcha';
-export type { CaptchaConfig, CaptchaResult } from './captcha';
-export { useRetriableRequest } from './retriableRequest';
+export { useCaptcha } from './use-captcha';
+export type { CaptchaConfig, CaptchaResult } from './use-captcha';
+export { useRetriableRequest } from './use-retriable-request';
 export type {
   RetriableEvent,
   RetriableRequestConfig,
   RetriableRequestResult,
   RetryBackoff,
-} from './retriableRequest';
-export { useUploader } from './uploader';
+} from './use-retriable-request';
+export { useUploader } from './use-uploader';
 export type {
   FileSelector,
   LocalLinkCreator,
@@ -36,4 +36,4 @@ export type {
   UploaderConfig,
   UploaderEvent,
   UploaderResult,
-} from './uploader';
+} from './use-uploader';

@@ -2,10 +2,10 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createRequest } from '../client/createRequest';
-import { getRuntime } from '../client/runtime';
-import { useRequest } from '../react/hooks';
-import { usePagination } from '../react/pagination';
+import { createRequest } from '../api/create-request';
+import { getRuntime } from '../core/runtime';
+import { usePagination } from '../react/use-pagination';
+import { useRequest } from '../react/use-request';
 import type { PaginationResult, UseRequestResult } from '../types';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;

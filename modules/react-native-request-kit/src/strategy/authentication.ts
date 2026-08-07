@@ -1,5 +1,5 @@
-import { RequestError } from '../client/error';
-import { finalData } from '../client/finalData';
+import { finalData } from '../core/final-data';
+import { RequestError } from '../core/request-error';
 import type {
   AnyMethod,
   CreateRequestOptions,

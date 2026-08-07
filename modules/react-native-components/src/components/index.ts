@@ -1,2 +1,2 @@
 export * from './MyImage';
-export * from './MyVideo';
+export * from './MyVideo/MyVideo';

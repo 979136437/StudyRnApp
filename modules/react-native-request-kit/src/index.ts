@@ -1,12 +1,12 @@
-export { createRequest } from './client/createRequest';
-export { Method } from './client/Method';
-export { RequestError } from './client/error';
-export type { RequestErrorOptions } from './client/error';
+export { createRequest } from './api/create-request';
+export { Method } from './core/method';
+export { RequestError } from './core/request-error';
+export type { RequestErrorOptions } from './core/request-error';
 export {
   isRequestCancelled,
   isRetryableRequestError,
   normalizeRequestError,
-} from './client/error';
+} from './core/request-error';
 export type {
   ProgressUpdater,
   RequestAdapter,

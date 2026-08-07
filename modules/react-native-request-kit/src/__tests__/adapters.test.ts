@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAxiosRequestAdapter } from '../adapter/axios';
 import { createFetchRequestAdapter } from '../adapter/fetch';
 import type { RequestElements } from '../adapter/types';
-import { isRequestCancelled } from '../client/error';
+import { isRequestCancelled } from '../core/request-error';
 
 afterEach(() => {
   vi.useRealTimers();
