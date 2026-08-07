@@ -50,6 +50,14 @@
         }
       ],
       [
+        "react-native-nitro-image-picker",
+        {
+          "photosPermission": "允许 $(PRODUCT_NAME) 访问您选择的照片和视频",
+          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
+          "microphonePermission": "允许 $(PRODUCT_NAME) 在录像时使用麦克风"
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "允许 $(PRODUCT_NAME) 访问照片和视频，以便选择、导入和处理媒体",

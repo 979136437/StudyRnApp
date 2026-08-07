@@ -1,4 +1,4 @@
-import { Link, useIsFocused } from 'expo-router';
+import { Link, useIsFocused, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -27,6 +27,16 @@ export function HomeScreen(): React.JSX.Element {
       style={styles.screen}
     >
       <View className="pt-safe" style={styles.navigation}>
+        <Link href={'/image-picker' as Href} asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>相册模块</Text>
+          </Pressable>
+        </Link>
+        <Link href="/picker-view" asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>滚轮选择器</Text>
+          </Pressable>
+        </Link>
         <Link href="/webview" asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
             <Text style={styles.cacheButtonText}>网页</Text>

@@ -6,6 +6,10 @@ export const DEFAULT_MAGNIFICATION = 1.18;
 export const MINIMUM_MAGNIFICATION = 1;
 export const MAXIMUM_MAGNIFICATION = 1.6;
 
+export const DEFAULT_FONT_SIZE = 14;
+export const MINIMUM_FONT_SIZE = 8;
+export const MAXIMUM_FONT_SIZE = 64;
+
 export const DEFAULT_EDGE_FADE_SIZE = 72;
 export const MINIMUM_EDGE_FADE_SIZE = 0;
 export const MAXIMUM_EDGE_FADE_SIZE = 240;

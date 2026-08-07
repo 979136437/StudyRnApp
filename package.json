@@ -45,6 +45,8 @@
     "react-native-keyboard-controller": "1.21.9",
     "react-native-popup-kit": "workspace:*",
     "react-native-nitro-modules": "catalog:",
+    "react-native-nitro-image-picker": "workspace:*",
+    "react-native-nitro-picker-view": "workspace:*",
     "react-native-nitro-refresh": "workspace:*",
     "react-native-nitro-visibility-observer": "workspace:*",
     "react-native-pager-view": "8.0.2",

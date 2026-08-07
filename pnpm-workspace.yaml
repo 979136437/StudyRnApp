@@ -8,6 +8,7 @@ allowBuilds:
 catalog:
   '@react-native-async-storage/async-storage': 2.2.0
   '@sentry/react-native': ~7.11.0
+  '@shopify/flash-list': 2.0.2
   '@types/react': ~19.2.2
   '@types/react-test-renderer': 19.1.0
   expo-application: ~57.0.2

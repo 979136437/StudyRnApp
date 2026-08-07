@@ -66,6 +66,16 @@ namespace margelo::nitro::pickerview::views {
         throw std::runtime_error(std::string("PickerView.itemHeight: ") + exc.what());
       }
     }()),
+    fontSize([&]() -> CachedProp<double> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("fontSize", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.fontSize;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<double>::fromRawValue(*runtime, value, sourceProps.fontSize);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("PickerView.fontSize: ") + exc.what());
+      }
+    }()),
     magnification([&]() -> CachedProp<double> {
       try {
         const react::RawValue* rawValue = rawProps.at("magnification", nullptr, nullptr);
@@ -74,6 +84,26 @@ namespace margelo::nitro::pickerview::views {
         return CachedProp<double>::fromRawValue(*runtime, value, sourceProps.magnification);
       } catch (const std::exception& exc) {
         throw std::runtime_error(std::string("PickerView.magnification: ") + exc.what());
+      }
+    }()),
+    textColor([&]() -> CachedProp<std::string> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("textColor", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.textColor;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::string>::fromRawValue(*runtime, value, sourceProps.textColor);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("PickerView.textColor: ") + exc.what());
+      }
+    }()),
+    selectedTextColor([&]() -> CachedProp<std::string> {
+      try {
+        const react::RawValue* rawValue = rawProps.at("selectedTextColor", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.selectedTextColor;
+        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
+        return CachedProp<std::string>::fromRawValue(*runtime, value, sourceProps.selectedTextColor);
+      } catch (const std::exception& exc) {
+        throw std::runtime_error(std::string("PickerView.selectedTextColor: ") + exc.what());
       }
     }()),
     edgeFadeColor([&]() -> CachedProp<std::string> {
@@ -153,7 +183,10 @@ namespace margelo::nitro::pickerview::views {
       case hashString("value"): return true;
       case hashString("disabled"): return true;
       case hashString("itemHeight"): return true;
+      case hashString("fontSize"): return true;
       case hashString("magnification"): return true;
+      case hashString("textColor"): return true;
+      case hashString("selectedTextColor"): return true;
       case hashString("edgeFadeColor"): return true;
       case hashString("edgeFadeSize"): return true;
       case hashString("edgeFadeIntensity"): return true;

@@ -220,10 +220,10 @@ class HybridImagePicker : HybridImagePickerSpec() {
       assetIds.map { id -> copyToCache(Uri.parse(id)).also { created += File(Uri.parse(it.uri).path!!) } }
         .toTypedArray()
     } catch (error: FileNotFoundException) {
-      destination.delete()
+      created.forEach(File::delete)
       throw pickerError("E_ASSET_NOT_FOUND", "资源不存在或当前权限不可访问")
     } catch (error: SecurityException) {
-      destination.delete()
+      created.forEach(File::delete)
       throw pickerError("E_PERMISSION_DENIED", "没有读取该媒体资源的权限")
     } catch (error: Throwable) {
       created.forEach(File::delete)
@@ -514,6 +514,12 @@ class HybridImagePicker : HybridImagePickerSpec() {
         dimensions.second.toDouble(),
         if (type == MediaType.VIDEO) dimensions.third?.toDouble() else null,
       )
+    } catch (error: FileNotFoundException) {
+      destination.delete()
+      throw error
+    } catch (error: SecurityException) {
+      destination.delete()
+      throw error
     } catch (error: Throwable) {
       destination.delete()
       throw pickerError("E_EXPORT_FAILED", error.message ?: "媒体导出失败")

@@ -49,7 +49,10 @@ namespace margelo::nitro::pickerview::views {
     CachedProp<std::vector<double>> value;
     CachedProp<bool> disabled;
     CachedProp<double> itemHeight;
+    CachedProp<double> fontSize;
     CachedProp<double> magnification;
+    CachedProp<std::string> textColor;
+    CachedProp<std::string> selectedTextColor;
     CachedProp<std::string> edgeFadeColor;
     CachedProp<double> edgeFadeSize;
     CachedProp<double> edgeFadeIntensity;

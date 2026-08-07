@@ -9,6 +9,9 @@ private let maximumItemHeight: Double = 120
 private let defaultMagnification: Double = 1.18
 private let minimumMagnification: Double = 1
 private let maximumMagnification: Double = 1.6
+private let defaultFontSize: Double = 14
+private let minimumFontSize: Double = 8
+private let maximumFontSize: Double = 64
 private let defaultFadeSize: Double = 72
 private let maximumFadeSize: Double = 240
 private let defaultFadeIntensity: Double = 0.9
@@ -76,6 +79,37 @@ private func parseColor(_ value: String) -> UIColor? {
   )
 }
 
+private func blendedColor(
+  from startColor: UIColor,
+  to endColor: UIColor,
+  progress: CGFloat,
+  traits: UITraitCollection
+) -> UIColor {
+  let start = startColor.resolvedColor(with: traits)
+  let end = endColor.resolvedColor(with: traits)
+  var startRed: CGFloat = 0
+  var startGreen: CGFloat = 0
+  var startBlue: CGFloat = 0
+  var startAlpha: CGFloat = 0
+  var endRed: CGFloat = 0
+  var endGreen: CGFloat = 0
+  var endBlue: CGFloat = 0
+  var endAlpha: CGFloat = 0
+  guard
+    start.getRed(&startRed, green: &startGreen, blue: &startBlue, alpha: &startAlpha),
+    end.getRed(&endRed, green: &endGreen, blue: &endBlue, alpha: &endAlpha)
+  else {
+    return progress < 0.5 ? start : end
+  }
+  let fraction = clamped(progress, minimum: 0, maximum: 1)
+  return UIColor(
+    red: startRed + (endRed - startRed) * fraction,
+    green: startGreen + (endGreen - startGreen) * fraction,
+    blue: startBlue + (endBlue - startBlue) * fraction,
+    alpha: startAlpha + (endAlpha - startAlpha) * fraction
+  )
+}
+
 private final class PickerRowCell: UITableViewCell {
   static let reuseIdentifier = "NitroPickerRow"
 
@@ -91,7 +125,7 @@ private final class PickerRowCell: UITableViewCell {
     pickerLabel.minimumScaleFactor = 0.75
     pickerLabel.textAlignment = .center
     pickerLabel.numberOfLines = 1
-    pickerLabel.font = .systemFont(ofSize: 16)
+    pickerLabel.font = .systemFont(ofSize: CGFloat(defaultFontSize))
     contentView.addSubview(pickerLabel)
   }
 
@@ -124,7 +158,10 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
 
   private(set) var items: [String] = []
   private var itemHeight: CGFloat = CGFloat(defaultItemHeight)
+  private var fontSize: CGFloat = CGFloat(defaultFontSize)
   private var magnification: CGFloat = CGFloat(defaultMagnification)
+  private var textColor = UIColor.label
+  private var selectedTextColor = UIColor.label
   private var selectedIndex = 0
   private var viewportHeight: CGFloat = -1
   private var interactionActive = false
@@ -152,10 +189,19 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     tableView.reloadData()
   }
 
-  func updateVisuals(itemHeight: CGFloat, magnification: CGFloat) {
+  func updateVisuals(
+    itemHeight: CGFloat,
+    fontSize: CGFloat,
+    magnification: CGFloat,
+    textColor: UIColor,
+    selectedTextColor: UIColor
+  ) {
     let heightChanged = self.itemHeight != itemHeight
     self.itemHeight = itemHeight
+    self.fontSize = fontSize
     self.magnification = magnification
+    self.textColor = textColor
+    self.selectedTextColor = selectedTextColor
     if heightChanged {
       tableView.reloadData()
       updateInsets()
@@ -196,6 +242,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
       for: indexPath
     ) as! PickerRowCell
     cell.pickerLabel.text = items[indexPath.row]
+    cell.pickerLabel.font = .systemFont(ofSize: fontSize)
     cell.accessibilityLabel = items[indexPath.row]
     return cell
   }
@@ -224,7 +271,10 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   }
 
   func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-    if snapping { finishInteraction(nearestIndex()) }
+    guard snapping else { return }
+    // 动画完成后重新核对真实偏移，避免系统动画舍入后停在两行之间。
+    snapping = false
+    snapToNearest()
   }
 
   private func updateInsets() {
@@ -283,8 +333,18 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
       let scale = 1 + (magnification - 1) * eased
       cell.pickerLabel.transform = CGAffineTransform(scaleX: scale, y: scale)
       cell.pickerLabel.alpha = 0.45 + 0.55 * eased
-      cell.pickerLabel.textColor = .label
+      cell.pickerLabel.font = .systemFont(ofSize: fontSize)
+      cell.pickerLabel.textColor = blendedColor(
+        from: textColor,
+        to: selectedTextColor,
+        progress: eased,
+        traits: tableView.traitCollection
+      )
     }
+  }
+
+  func refreshVisibleRows() {
+    updateVisibleRows()
   }
 
   func dispose() {
@@ -307,6 +367,7 @@ private final class PickerRootView: UIView, PickerColumnListener {
   private var fadeSize: CGFloat = CGFloat(defaultFadeSize)
   private var fadeIntensity: CGFloat = CGFloat(defaultFadeIntensity)
   private var lastPropValue: [Int] = []
+  private weak var ancestorScrollView: UIScrollView?
 
   var onStart: ((Int) -> Void)?
   var onSettled: ((Int, Int) -> Void)?
@@ -339,9 +400,20 @@ private final class PickerRootView: UIView, PickerColumnListener {
     columnControllers.forEach { $0.updateViewport() }
   }
 
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    configureNestedScrolling()
+  }
+
+  override func didMoveToSuperview() {
+    super.didMoveToSuperview()
+    configureNestedScrolling()
+  }
+
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
     super.traitCollectionDidChange(previousTraitCollection)
     updateGradientColors()
+    columnControllers.forEach { $0.refreshVisibleRows() }
   }
 
   func update(
@@ -349,17 +421,28 @@ private final class PickerRootView: UIView, PickerColumnListener {
     value: [Int],
     disabled: Bool,
     itemHeight: CGFloat,
+    fontSize: CGFloat,
     magnification: CGFloat,
+    textColor: String,
+    selectedTextColor: String,
     edgeFadeColor: String,
     edgeFadeSize: CGFloat,
     edgeFadeIntensity: CGFloat
   ) {
     ensureColumnCount(columns.count)
+    let resolvedTextColor = parseColor(textColor) ?? .label
+    let resolvedSelectedTextColor = parseColor(selectedTextColor) ?? resolvedTextColor
     for (index, items) in columns.enumerated() {
       let controller = columnControllers[index]
       let itemsChanged = controller.items != items
       controller.updateItems(items)
-      controller.updateVisuals(itemHeight: itemHeight, magnification: magnification)
+      controller.updateVisuals(
+        itemHeight: itemHeight,
+        fontSize: fontSize,
+        magnification: magnification,
+        textColor: resolvedTextColor,
+        selectedTextColor: resolvedSelectedTextColor
+      )
       controller.setDisabled(disabled)
       let nextValue = value.indices.contains(index) ? value[index] : 0
       if itemsChanged || !lastPropValue.indices.contains(index) || lastPropValue[index] != nextValue {
@@ -389,8 +472,29 @@ private final class PickerRootView: UIView, PickerColumnListener {
       columnControllers.append(controller)
       stackView.addArrangedSubview(controller.tableView)
     }
+    configureNestedScrolling()
     if lastPropValue.count != count {
       lastPropValue = Array(lastPropValue.prefix(count))
+    }
+  }
+
+  private func configureNestedScrolling() {
+    var candidate = superview
+    var resolvedAncestor: UIScrollView?
+    while let current = candidate {
+      if let scrollView = current as? UIScrollView {
+        resolvedAncestor = scrollView
+        break
+      }
+      candidate = current.superview
+    }
+    guard let resolvedAncestor else { return }
+    ancestorScrollView = resolvedAncestor
+    // 外层页面先等待命中的滚轮列判定，避免惯性手势被 React Native ScrollView 抢走。
+    columnControllers.forEach {
+      resolvedAncestor.panGestureRecognizer.require(
+        toFail: $0.tableView.panGestureRecognizer
+      )
     }
   }
 
@@ -418,6 +522,7 @@ private final class PickerRootView: UIView, PickerColumnListener {
     columnControllers.forEach { $0.dispose() }
     columnControllers.removeAll()
     lastPropValue.removeAll()
+    ancestorScrollView = nil
     stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
     topFadeLayer.removeFromSuperlayer()
     bottomFadeLayer.removeFromSuperlayer()
@@ -434,7 +539,10 @@ final class HybridPickerView: HybridPickerViewSpec {
   var value: [Double] = []
   var disabled = false
   var itemHeight = defaultItemHeight
+  var fontSize = defaultFontSize
   var magnification = defaultMagnification
+  var textColor = ""
+  var selectedTextColor = ""
   var edgeFadeColor = ""
   var edgeFadeSize = defaultFadeSize
   var edgeFadeIntensity = defaultFadeIntensity
@@ -468,6 +576,11 @@ final class HybridPickerView: HybridPickerViewSpec {
       minimum: minimumItemHeight,
       maximum: maximumItemHeight
     )
+    let safeFontSize = clamped(
+      fontSize.finite(or: defaultFontSize),
+      minimum: minimumFontSize,
+      maximum: maximumFontSize
+    )
     let safeMagnification = clamped(
       magnification.finite(or: defaultMagnification),
       minimum: minimumMagnification,
@@ -488,7 +601,10 @@ final class HybridPickerView: HybridPickerViewSpec {
       value: normalizedValue,
       disabled: disabled,
       itemHeight: CGFloat(safeItemHeight),
+      fontSize: CGFloat(safeFontSize),
       magnification: CGFloat(safeMagnification),
+      textColor: textColor,
+      selectedTextColor: selectedTextColor,
       edgeFadeColor: edgeFadeColor,
       edgeFadeSize: CGFloat(safeFadeSize),
       edgeFadeIntensity: CGFloat(safeFadeIntensity)

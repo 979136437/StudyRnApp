@@ -2,10 +2,6 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
-# Native Builds
-
-Do not build the iOS or Android native projects unless the user explicitly requests a native build. Use targeted tests, type checks, formatting checks, and static validation by default.
-
 # React Native Module Source Organization
 
 The rules in this section apply only to `modules/react-native-*/src/**`. They do not apply to application source, `android/`, `ios/`, or generated files under `nitrogen/generated/`.

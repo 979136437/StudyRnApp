@@ -53,9 +53,21 @@ void JHybridPickerViewStateUpdater::updateViewProps(jni::alias_ref<jni::JClass> 
     hybridView->setItemHeight(props->itemHeight.value);
     props->itemHeight.isDirty = false;
   }
+  if (props->fontSize.isDirty) {
+    hybridView->setFontSize(props->fontSize.value);
+    props->fontSize.isDirty = false;
+  }
   if (props->magnification.isDirty) {
     hybridView->setMagnification(props->magnification.value);
     props->magnification.isDirty = false;
+  }
+  if (props->textColor.isDirty) {
+    hybridView->setTextColor(props->textColor.value);
+    props->textColor.isDirty = false;
+  }
+  if (props->selectedTextColor.isDirty) {
+    hybridView->setSelectedTextColor(props->selectedTextColor.value);
+    props->selectedTextColor.isDirty = false;
   }
   if (props->edgeFadeColor.isDirty) {
     hybridView->setEdgeFadeColor(props->edgeFadeColor.value);

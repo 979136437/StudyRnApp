@@ -1,5 +1,5 @@
-export { PickerView } from './PickerView';
-export { PickerViewColumn } from './PickerViewColumn';
+export { PickerView } from './components/PickerView';
+export { PickerViewColumn } from './components/PickerViewColumn';
 export type {
   PickerTextItem,
   PickerViewColumnProps,

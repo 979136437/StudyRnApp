@@ -59,8 +59,14 @@ namespace margelo::nitro::pickerview {
       virtual void setDisabled(bool disabled) = 0;
       virtual double getItemHeight() = 0;
       virtual void setItemHeight(double itemHeight) = 0;
+      virtual double getFontSize() = 0;
+      virtual void setFontSize(double fontSize) = 0;
       virtual double getMagnification() = 0;
       virtual void setMagnification(double magnification) = 0;
+      virtual std::string getTextColor() = 0;
+      virtual void setTextColor(const std::string& textColor) = 0;
+      virtual std::string getSelectedTextColor() = 0;
+      virtual void setSelectedTextColor(const std::string& selectedTextColor) = 0;
       virtual std::string getEdgeFadeColor() = 0;
       virtual void setEdgeFadeColor(const std::string& edgeFadeColor) = 0;
       virtual double getEdgeFadeSize() = 0;

@@ -99,10 +99,25 @@ using namespace margelo::nitro::pickerview::views;
     swiftPart.setItemHeight(newViewProps.itemHeight.value);
     newViewProps.itemHeight.isDirty = false;
   }
+  // fontSize: number
+  if (newViewProps.fontSize.isDirty) {
+    swiftPart.setFontSize(newViewProps.fontSize.value);
+    newViewProps.fontSize.isDirty = false;
+  }
   // magnification: number
   if (newViewProps.magnification.isDirty) {
     swiftPart.setMagnification(newViewProps.magnification.value);
     newViewProps.magnification.isDirty = false;
+  }
+  // textColor: string
+  if (newViewProps.textColor.isDirty) {
+    swiftPart.setTextColor(newViewProps.textColor.value);
+    newViewProps.textColor.isDirty = false;
+  }
+  // selectedTextColor: string
+  if (newViewProps.selectedTextColor.isDirty) {
+    swiftPart.setSelectedTextColor(newViewProps.selectedTextColor.value);
+    newViewProps.selectedTextColor.isDirty = false;
   }
   // edgeFadeColor: string
   if (newViewProps.edgeFadeColor.isDirty) {

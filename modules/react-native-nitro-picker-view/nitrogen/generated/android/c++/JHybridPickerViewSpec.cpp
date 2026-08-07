@@ -116,6 +116,15 @@ namespace margelo::nitro::pickerview {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* itemHeight */)>("setItemHeight");
     method(_javaPart, itemHeight);
   }
+  double JHybridPickerViewSpec::getFontSize() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getFontSize");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  void JHybridPickerViewSpec::setFontSize(double fontSize) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* fontSize */)>("setFontSize");
+    method(_javaPart, fontSize);
+  }
   double JHybridPickerViewSpec::getMagnification() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getMagnification");
     auto __result = method(_javaPart);
@@ -124,6 +133,24 @@ namespace margelo::nitro::pickerview {
   void JHybridPickerViewSpec::setMagnification(double magnification) {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* magnification */)>("setMagnification");
     method(_javaPart, magnification);
+  }
+  std::string JHybridPickerViewSpec::getTextColor() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getTextColor");
+    auto __result = method(_javaPart);
+    return __result->toStdString();
+  }
+  void JHybridPickerViewSpec::setTextColor(const std::string& textColor) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* textColor */)>("setTextColor");
+    method(_javaPart, jni::make_jstring(textColor));
+  }
+  std::string JHybridPickerViewSpec::getSelectedTextColor() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getSelectedTextColor");
+    auto __result = method(_javaPart);
+    return __result->toStdString();
+  }
+  void JHybridPickerViewSpec::setSelectedTextColor(const std::string& selectedTextColor) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* selectedTextColor */)>("setSelectedTextColor");
+    method(_javaPart, jni::make_jstring(selectedTextColor));
   }
   std::string JHybridPickerViewSpec::getEdgeFadeColor() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getEdgeFadeColor");

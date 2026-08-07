@@ -22,8 +22,14 @@ namespace margelo::nitro::pickerview {
       prototype.registerHybridSetter("disabled", &HybridPickerViewSpec::setDisabled);
       prototype.registerHybridGetter("itemHeight", &HybridPickerViewSpec::getItemHeight);
       prototype.registerHybridSetter("itemHeight", &HybridPickerViewSpec::setItemHeight);
+      prototype.registerHybridGetter("fontSize", &HybridPickerViewSpec::getFontSize);
+      prototype.registerHybridSetter("fontSize", &HybridPickerViewSpec::setFontSize);
       prototype.registerHybridGetter("magnification", &HybridPickerViewSpec::getMagnification);
       prototype.registerHybridSetter("magnification", &HybridPickerViewSpec::setMagnification);
+      prototype.registerHybridGetter("textColor", &HybridPickerViewSpec::getTextColor);
+      prototype.registerHybridSetter("textColor", &HybridPickerViewSpec::setTextColor);
+      prototype.registerHybridGetter("selectedTextColor", &HybridPickerViewSpec::getSelectedTextColor);
+      prototype.registerHybridSetter("selectedTextColor", &HybridPickerViewSpec::setSelectedTextColor);
       prototype.registerHybridGetter("edgeFadeColor", &HybridPickerViewSpec::getEdgeFadeColor);
       prototype.registerHybridSetter("edgeFadeColor", &HybridPickerViewSpec::setEdgeFadeColor);
       prototype.registerHybridGetter("edgeFadeSize", &HybridPickerViewSpec::getEdgeFadeSize);

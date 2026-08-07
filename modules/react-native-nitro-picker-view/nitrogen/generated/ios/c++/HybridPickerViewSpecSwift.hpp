@@ -95,11 +95,31 @@ namespace margelo::nitro::pickerview {
     inline void setItemHeight(double itemHeight) noexcept override {
       _swiftPart.setItemHeight(std::forward<decltype(itemHeight)>(itemHeight));
     }
+    inline double getFontSize() noexcept override {
+      return _swiftPart.getFontSize();
+    }
+    inline void setFontSize(double fontSize) noexcept override {
+      _swiftPart.setFontSize(std::forward<decltype(fontSize)>(fontSize));
+    }
     inline double getMagnification() noexcept override {
       return _swiftPart.getMagnification();
     }
     inline void setMagnification(double magnification) noexcept override {
       _swiftPart.setMagnification(std::forward<decltype(magnification)>(magnification));
+    }
+    inline std::string getTextColor() noexcept override {
+      auto __result = _swiftPart.getTextColor();
+      return __result;
+    }
+    inline void setTextColor(const std::string& textColor) noexcept override {
+      _swiftPart.setTextColor(textColor);
+    }
+    inline std::string getSelectedTextColor() noexcept override {
+      auto __result = _swiftPart.getSelectedTextColor();
+      return __result;
+    }
+    inline void setSelectedTextColor(const std::string& selectedTextColor) noexcept override {
+      _swiftPart.setSelectedTextColor(selectedTextColor);
     }
     inline std::string getEdgeFadeColor() noexcept override {
       auto __result = _swiftPart.getEdgeFadeColor();

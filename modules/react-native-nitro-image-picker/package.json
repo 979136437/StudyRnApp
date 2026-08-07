@@ -24,12 +24,14 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "@shopify/flash-list": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-nitro-modules": "catalog:",
     "react-native-safe-area-context": "catalog:"
   },
   "devDependencies": {
+    "@shopify/flash-list": "catalog:",
     "@types/react": "catalog:",
     "nitrogen": "catalog:",
     "react": "catalog:",
@@ -39,7 +41,12 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": ["react-native", "nitro", "image-picker", "media-library"],
+  "keywords": [
+    "react-native",
+    "nitro",
+    "image-picker",
+    "media-library"
+  ],
   "license": "MIT",
   "private": true
 }

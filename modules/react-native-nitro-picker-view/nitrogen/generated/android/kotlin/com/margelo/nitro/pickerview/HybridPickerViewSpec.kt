@@ -54,8 +54,26 @@ abstract class HybridPickerViewSpec: HybridView() {
   @get:Keep
   @set:DoNotStrip
   @set:Keep
+  abstract var fontSize: Double
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
   abstract var magnification: Double
   
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var textColor: String
+
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var selectedTextColor: String
+
   @get:DoNotStrip
   @get:Keep
   @set:DoNotStrip

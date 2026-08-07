@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { PickerViewColumn } from '../../PickerViewColumn';
+import { PickerViewColumn } from '../../components/PickerViewColumn';
 import {
   calculateRowAppearance,
   extractColumns,
@@ -16,6 +16,7 @@ describe('picker normalization', () => {
       normalizePickerOptions({
         edgeFadeIntensity: 2,
         edgeFadeSize: -10,
+        fontSize: 100,
         itemHeight: Number.NaN,
         magnification: 9,
       }),
@@ -23,6 +24,7 @@ describe('picker normalization', () => {
       disabled: false,
       edgeFadeIntensity: 1,
       edgeFadeSize: 0,
+      fontSize: 64,
       itemHeight: 44,
       magnification: 1.6,
     });
@@ -32,6 +34,10 @@ describe('picker normalization', () => {
     expect(
       normalizePickerValue([-2, 1.9, 99], [['a'], ['a', 'b'], []]),
     ).toEqual([0, 1, 0]);
+  });
+
+  it('uses the default font size for non-finite values', () => {
+    expect(normalizePickerOptions({ fontSize: Number.NaN }).fontSize).toBe(14);
   });
 });
 

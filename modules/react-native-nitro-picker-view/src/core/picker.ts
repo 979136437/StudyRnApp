@@ -4,14 +4,17 @@ import { Children, isValidElement } from 'react';
 import {
   DEFAULT_EDGE_FADE_INTENSITY,
   DEFAULT_EDGE_FADE_SIZE,
+  DEFAULT_FONT_SIZE,
   DEFAULT_ITEM_HEIGHT,
   DEFAULT_MAGNIFICATION,
   MAXIMUM_EDGE_FADE_INTENSITY,
   MAXIMUM_EDGE_FADE_SIZE,
+  MAXIMUM_FONT_SIZE,
   MAXIMUM_ITEM_HEIGHT,
   MAXIMUM_MAGNIFICATION,
   MINIMUM_EDGE_FADE_INTENSITY,
   MINIMUM_EDGE_FADE_SIZE,
+  MINIMUM_FONT_SIZE,
   MINIMUM_ITEM_HEIGHT,
   MINIMUM_MAGNIFICATION,
 } from '../constants';
@@ -23,6 +26,7 @@ export type NormalizedPickerOptions = Readonly<{
   disabled: boolean;
   edgeFadeIntensity: number;
   edgeFadeSize: number;
+  fontSize: number;
   itemHeight: number;
   magnification: number;
 }>;
@@ -39,6 +43,7 @@ export function normalizePickerOptions(options: {
   disabled?: boolean;
   edgeFadeIntensity?: number;
   edgeFadeSize?: number;
+  fontSize?: number;
   itemHeight?: number;
   magnification?: number;
 }): NormalizedPickerOptions {
@@ -53,6 +58,11 @@ export function normalizePickerOptions(options: {
       finiteOrDefault(options.edgeFadeSize, DEFAULT_EDGE_FADE_SIZE),
       MINIMUM_EDGE_FADE_SIZE,
       MAXIMUM_EDGE_FADE_SIZE,
+    ),
+    fontSize: clamp(
+      finiteOrDefault(options.fontSize, DEFAULT_FONT_SIZE),
+      MINIMUM_FONT_SIZE,
+      MAXIMUM_FONT_SIZE,
     ),
     itemHeight: clamp(
       finiteOrDefault(options.itemHeight, DEFAULT_ITEM_HEIGHT),

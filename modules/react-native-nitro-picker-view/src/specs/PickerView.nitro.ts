@@ -14,7 +14,10 @@ export interface PickerViewNativeProps extends HybridViewProps {
   value: number[];
   disabled: boolean;
   itemHeight: number;
+  fontSize: number;
   magnification: number;
+  textColor: string;
+  selectedTextColor: string;
   edgeFadeColor: string;
   edgeFadeSize: number;
   edgeFadeIntensity: number;

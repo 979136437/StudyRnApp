@@ -14,7 +14,10 @@ public protocol HybridPickerViewSpec_protocol: HybridObject, HybridView {
   var value: [Double] { get set }
   var disabled: Bool { get set }
   var itemHeight: Double { get set }
+  var fontSize: Double { get set }
   var magnification: Double { get set }
+  var textColor: String { get set }
+  var selectedTextColor: String { get set }
   var edgeFadeColor: String { get set }
   var edgeFadeSize: Double { get set }
   var edgeFadeIntensity: Double { get set }

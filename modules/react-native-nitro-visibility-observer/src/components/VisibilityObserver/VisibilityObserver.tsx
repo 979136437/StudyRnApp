@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { callback, getHostComponent } from 'react-native-nitro-modules';
 
@@ -33,9 +33,13 @@ export function VisibilityObserver({
     threshold,
   });
 
-  useEffect(() => {
-    // Nitro 回调保持稳定，仅更新目标函数，避免普通 React 重渲染反复替换原生属性。
+  useLayoutEffect(() => {
+    // 在原生对象释放前切换目标，避免事件命中仍持有旧 SharedObject 的回调。
     callbackRef.current = onVisibilityChange;
+
+    return () => {
+      callbackRef.current = undefined;
+    };
   }, [onVisibilityChange]);
 
   const nativeCallback = useMemo(

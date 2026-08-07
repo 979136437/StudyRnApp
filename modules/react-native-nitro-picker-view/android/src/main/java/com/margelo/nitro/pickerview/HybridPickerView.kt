@@ -1,5 +1,8 @@
 package com.margelo.nitro.pickerview
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -12,8 +15,10 @@ import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
@@ -32,11 +37,19 @@ private const val MAX_ITEM_HEIGHT_DP = 120.0
 private const val DEFAULT_MAGNIFICATION = 1.18
 private const val MIN_MAGNIFICATION = 1.0
 private const val MAX_MAGNIFICATION = 1.6
+private const val DEFAULT_FONT_SIZE_SP = 14.0
+private const val MIN_FONT_SIZE_SP = 8.0
+private const val MAX_FONT_SIZE_SP = 64.0
 private const val DEFAULT_FADE_SIZE_DP = 72.0
 private const val MAX_FADE_SIZE_DP = 240.0
 private const val DEFAULT_FADE_INTENSITY = 0.9
-private const val SNAP_DURATION_MS = 140
+private const val SNAP_DURATION_MS = 220L
+private const val SNAP_DECELERATION_FACTOR = 1.6f
 private const val SNAP_TOLERANCE_PX = 1
+private const val SNAP_VERIFICATION_DELAY_MS = 16L
+private const val SPACER_VIEW_TYPE = 0
+private const val ITEM_VIEW_TYPE = 1
+private const val EDGE_SPACER_COUNT = 2
 
 private fun Double.finiteOr(fallback: Double): Double = if (isFinite()) this else fallback
 
@@ -77,9 +90,23 @@ private fun parseColorOrNull(value: String): Int? {
   }
 }
 
+private fun blendColors(start: Int, end: Int, progress: Float): Int {
+  val fraction = progress.coerceIn(0f, 1f)
+  fun blend(startComponent: Int, endComponent: Int): Int =
+    (startComponent + (endComponent - startComponent) * fraction).roundToInt()
+  return Color.argb(
+    blend(Color.alpha(start), Color.alpha(end)),
+    blend(Color.red(start), Color.red(end)),
+    blend(Color.green(start), Color.green(end)),
+    blend(Color.blue(start), Color.blue(end)),
+  )
+}
+
 private class PickerRowAdapter(
   private val context: Context,
   private val itemHeightPx: () -> Int,
+  private val centerSpacingPx: () -> Int,
+  private val fontSizeSp: () -> Float,
 ) : BaseAdapter() {
   var items: List<String> = emptyList()
     private set
@@ -90,28 +117,57 @@ private class PickerRowAdapter(
     notifyDataSetChanged()
   }
 
-  override fun getCount(): Int = items.size
+  val itemCount: Int
+    get() = items.size
 
-  override fun getItem(position: Int): String = items[position]
+  override fun getCount(): Int = if (items.isEmpty()) 0 else items.size + EDGE_SPACER_COUNT
+
+  override fun getItem(position: Int): String? =
+    dataIndex(position)?.let { items[it] }
 
   override fun getItemId(position: Int): Long = position.toLong()
 
+  override fun getViewTypeCount(): Int = 2
+
+  override fun getItemViewType(position: Int): Int =
+    if (dataIndex(position) == null) SPACER_VIEW_TYPE else ITEM_VIEW_TYPE
+
+  override fun isEnabled(position: Int): Boolean = dataIndex(position) != null
+
   override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+    val index = dataIndex(position)
+    if (index == null) {
+      return (convertView ?: View(context)).apply {
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        layoutParams = AbsListView.LayoutParams(
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          centerSpacingPx(),
+        )
+      }
+    }
     val textView = convertView as? TextView ?: TextView(context).apply {
       gravity = Gravity.CENTER
       isSingleLine = true
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
       setTypeface(typeface, Typeface.NORMAL)
       ellipsize = android.text.TextUtils.TruncateAt.END
       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
     }
-    textView.text = getItem(position)
-    textView.contentDescription = getItem(position)
+    textView.text = items[index]
+    textView.contentDescription = items[index]
+    textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeSp())
     textView.layoutParams = AbsListView.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
       itemHeightPx(),
     )
     return textView
+  }
+
+  fun adapterPosition(index: Int): Int = index + 1
+
+  fun dataIndex(adapterPosition: Int): Int? {
+    if (items.isEmpty()) return null
+    val index = adapterPosition - 1
+    return index.takeIf { it in items.indices }
   }
 }
 
@@ -126,18 +182,28 @@ private class PickerColumnList(
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())
-  private val rowAdapter = PickerRowAdapter(context) { itemHeightPx }
-  private val textColor = resolveThemeColor(context, android.R.attr.textColorPrimary, Color.BLACK)
+  private val themeTextColor = resolveThemeColor(context, android.R.attr.textColorPrimary, Color.BLACK)
+  private val rowAdapter = PickerRowAdapter(
+    context,
+    { itemHeightPx },
+    { centerSpacingPx },
+    { fontSizeSp },
+  )
   private var itemHeightPx = context.dp(DEFAULT_ITEM_HEIGHT_DP)
+  private var centerSpacingPx = 0
+  private var fontSizeSp = DEFAULT_FONT_SIZE_SP.toFloat()
   private var magnification = DEFAULT_MAGNIFICATION
+  private var textColor = themeTextColor
+  private var selectedTextColor = themeTextColor
   private var userInteractionActive = false
   private var snapping = false
   private var disposed = false
   private var selectedIndex = 0
+  private var snapAnimator: ValueAnimator? = null
 
   private val settleRunnable = Runnable {
     if (!disposed && userInteractionActive) {
-      finishInteraction(nearestIndex())
+      verifySnapAlignment()
     }
   }
 
@@ -145,6 +211,9 @@ private class PickerColumnList(
     adapter = rowAdapter
     divider = ColorDrawable(Color.TRANSPARENT)
     dividerHeight = 0
+    // ListView 默认 selector 会在轻触项目时绘制深色反馈，滚轮本身不需要选中态遮罩。
+    selector = ColorDrawable(Color.TRANSPARENT)
+    cacheColorHint = Color.TRANSPARENT
     isVerticalScrollBarEnabled = false
     overScrollMode = View.OVER_SCROLL_NEVER
     clipToPadding = false
@@ -160,13 +229,27 @@ private class PickerColumnList(
     return true
   }
 
-  fun updateVisuals(nextItemHeightPx: Int, nextMagnification: Double) {
+  fun updateVisuals(
+    nextItemHeightPx: Int,
+    nextFontSizeSp: Double,
+    nextMagnification: Double,
+    nextTextColor: String,
+    nextSelectedTextColor: String,
+  ) {
     val heightChanged = itemHeightPx != nextItemHeightPx
+    val fontSizeChanged = fontSizeSp != nextFontSizeSp.toFloat()
     itemHeightPx = nextItemHeightPx
+    fontSizeSp = nextFontSizeSp.toFloat()
     magnification = nextMagnification
+    textColor = parseColorOrNull(nextTextColor) ?: themeTextColor
+    selectedTextColor = parseColorOrNull(nextSelectedTextColor) ?: textColor
     if (heightChanged) {
+      updateCenterSpacing()
+    }
+    if (heightChanged || fontSizeChanged) {
       rowAdapter.notifyDataSetChanged()
-      updateCenterPadding()
+    }
+    if (heightChanged) {
       post { applySelection(selectedIndex) }
     }
     updateVisibleRows()
@@ -174,6 +257,10 @@ private class PickerColumnList(
 
   fun setDisabled(disabled: Boolean) {
     isEnabled = !disabled
+    if (disabled) {
+      cancelSnapAnimation()
+      userInteractionActive = false
+    }
   }
 
   fun applySelection(index: Int) {
@@ -182,26 +269,41 @@ private class PickerColumnList(
       return
     }
     selectedIndex = normalizeIndex(index)
-    setSelectionFromTop(selectedIndex, paddingTop)
+    setSelectionFromTop(rowAdapter.adapterPosition(selectedIndex), centerSpacingPx)
     post { updateVisibleRows() }
   }
 
   override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
     super.onSizeChanged(width, height, oldWidth, oldHeight)
-    updateCenterPadding()
+    if (updateCenterSpacing()) {
+      rowAdapter.notifyDataSetChanged()
+    }
     post { applySelection(selectedIndex) }
   }
 
-  private fun updateCenterPadding() {
-    val verticalPadding = max(0, (height - itemHeightPx) / 2)
-    setPadding(paddingLeft, verticalPadding, paddingRight, verticalPadding)
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    if (isEnabled) {
+      when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN,
+        MotionEvent.ACTION_MOVE -> parent?.requestDisallowInterceptTouchEvent(true)
+        MotionEvent.ACTION_UP,
+        MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
+      }
+    }
+    return super.dispatchTouchEvent(event)
+  }
+
+  private fun updateCenterSpacing(): Boolean {
+    val nextSpacing = max(0, (height - itemHeightPx) / 2)
+    if (centerSpacingPx == nextSpacing) return false
+    centerSpacingPx = nextSpacing
+    return true
   }
 
   override fun onScrollStateChanged(view: AbsListView?, scrollState: Int) {
     when (scrollState) {
       AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL -> {
-        mainHandler.removeCallbacks(settleRunnable)
-        snapping = false
+        cancelSnapAnimation()
         if (!userInteractionActive) {
           userInteractionActive = true
           listener.onInteractionStart(columnIndex)
@@ -227,45 +329,89 @@ private class PickerColumnList(
       finishInteraction(0)
       return
     }
-    val target = nearestIndex()
-    val targetChild = getChildAt(target - firstVisiblePosition)
-    val expectedTop = paddingTop
-    if (targetChild != null && abs(targetChild.top - expectedTop) <= SNAP_TOLERANCE_PX) {
-      finishInteraction(target)
+    val target = nearestSnapTarget()
+    if (abs(target.offsetPx) <= SNAP_TOLERANCE_PX) {
+      finishInteraction(target.index)
       return
     }
-    if (!snapping) {
-      snapping = true
-      smoothScrollToPositionFromTop(target, expectedTop, SNAP_DURATION_MS)
-    }
+    if (snapping) return
+    snapping = true
     mainHandler.removeCallbacks(settleRunnable)
-    mainHandler.postDelayed(settleRunnable, SNAP_DURATION_MS.toLong() + 40L)
+    var previousOffset = 0
+    val animator = ValueAnimator.ofInt(0, target.offsetPx).apply {
+      duration = SNAP_DURATION_MS
+      interpolator = DecelerateInterpolator(SNAP_DECELERATION_FACTOR)
+      addUpdateListener { animation ->
+        val currentOffset = animation.animatedValue as Int
+        val delta = currentOffset - previousOffset
+        if (delta != 0) scrollListBy(delta)
+        previousOffset = currentOffset
+      }
+      addListener(object : AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: Animator) {
+          if (snapAnimator !== animation) return
+          snapAnimator = null
+          mainHandler.post(settleRunnable)
+        }
+      })
+    }
+    snapAnimator = animator
+    animator.start()
+  }
+
+  private fun cancelSnapAnimation() {
+    mainHandler.removeCallbacks(settleRunnable)
+    val animator = snapAnimator
+    snapAnimator = null
+    animator?.cancel()
+    snapping = false
+  }
+
+  private fun verifySnapAlignment() {
+    if (rowAdapter.isEmpty) {
+      finishInteraction(0)
+      return
+    }
+    val target = nearestSnapTarget()
+    if (abs(target.offsetPx) <= SNAP_TOLERANCE_PX) {
+      finishInteraction(target.index)
+      return
+    }
+
+    // 动画结束后按实际可见行再做一次像素纠偏，避免固定延时导致半行停留。
+    scrollListBy(target.offsetPx)
+    mainHandler.postDelayed(settleRunnable, SNAP_VERIFICATION_DELAY_MS)
   }
 
   private fun finishInteraction(index: Int) {
-    mainHandler.removeCallbacks(settleRunnable)
-    snapping = false
+    cancelSnapAnimation()
     selectedIndex = normalizeIndex(index)
     if (!userInteractionActive) return
     userInteractionActive = false
     listener.onInteractionSettled(columnIndex, selectedIndex)
   }
 
-  private fun nearestIndex(): Int {
-    if (rowAdapter.isEmpty || childCount == 0) return 0
+  private fun nearestSnapTarget(): SnapTarget {
+    if (rowAdapter.isEmpty || childCount == 0) return SnapTarget(0, 0)
     val centerY = height / 2f
-    var bestPosition = firstVisiblePosition
+    var bestPosition = selectedIndex
     var bestDistance = Float.MAX_VALUE
+    var bestOffset = 0
     for (childIndex in 0 until childCount) {
+      val itemIndex = rowAdapter.dataIndex(firstVisiblePosition + childIndex) ?: continue
       val child = getChildAt(childIndex)
-      val distance = abs((child.top + child.bottom) / 2f - centerY)
+      val offset = (child.top + child.bottom) / 2f - centerY
+      val distance = abs(offset)
       if (distance < bestDistance) {
         bestDistance = distance
-        bestPosition = firstVisiblePosition + childIndex
+        bestPosition = itemIndex
+        bestOffset = offset.roundToInt()
       }
     }
-    return normalizeIndex(bestPosition)
+    return SnapTarget(normalizeIndex(bestPosition), bestOffset)
   }
+
+  private data class SnapTarget(val index: Int, val offsetPx: Int)
 
   private fun updateVisibleRows() {
     if (height <= 0) return
@@ -273,6 +419,12 @@ private class PickerColumnList(
     val influenceDistance = max(1f, itemHeightPx * 2f)
     for (childIndex in 0 until childCount) {
       val child = getChildAt(childIndex)
+      if (rowAdapter.dataIndex(firstVisiblePosition + childIndex) == null) {
+        child.scaleX = 1f
+        child.scaleY = 1f
+        child.alpha = 0f
+        continue
+      }
       val distance = abs((child.top + child.bottom) / 2f - centerY)
       val progress = (1f - distance / influenceDistance).coerceIn(0f, 1f)
       val eased = progress * progress * (3f - 2f * progress)
@@ -280,16 +432,20 @@ private class PickerColumnList(
       child.scaleX = scale
       child.scaleY = scale
       child.alpha = 0.45f + 0.55f * eased
-      (child as? TextView)?.setTextColor(textColor)
+      (child as? TextView)?.setTextColor(
+        blendColors(textColor, selectedTextColor, eased),
+      )
     }
   }
 
   private fun normalizeIndex(index: Int): Int =
-    if (rowAdapter.isEmpty) 0 else index.coerceIn(0, rowAdapter.count - 1)
+    if (rowAdapter.itemCount == 0) 0 else index.coerceIn(0, rowAdapter.itemCount - 1)
 
   fun dispose() {
     disposed = true
+    cancelSnapAnimation()
     mainHandler.removeCallbacksAndMessages(null)
+    parent?.requestDisallowInterceptTouchEvent(false)
     setOnScrollListener(null)
     userInteractionActive = false
   }
@@ -324,7 +480,10 @@ private class PickerRootLayout(
     value: IntArray,
     disabled: Boolean,
     itemHeightPx: Int,
+    fontSizeSp: Double,
     magnification: Double,
+    textColor: String,
+    selectedTextColor: String,
     edgeFadeColor: String,
     edgeFadeSizePx: Int,
     edgeFadeIntensity: Double,
@@ -333,7 +492,13 @@ private class PickerRootLayout(
     columns.forEachIndexed { index, items ->
       val column = columnViews[index]
       val itemsChanged = column.updateItems(items)
-      column.updateVisuals(itemHeightPx, magnification)
+      column.updateVisuals(
+        itemHeightPx,
+        fontSizeSp,
+        magnification,
+        textColor,
+        selectedTextColor,
+      )
       column.setDisabled(disabled)
       val nextValue = value.getOrElse(index) { 0 }
       if (itemsChanged || lastPropValue.getOrNull(index) != nextValue) {
@@ -420,7 +585,10 @@ class HybridPickerView(
   override var value: DoubleArray = doubleArrayOf()
   override var disabled = false
   override var itemHeight = DEFAULT_ITEM_HEIGHT_DP
+  override var fontSize = DEFAULT_FONT_SIZE_SP
   override var magnification = DEFAULT_MAGNIFICATION
+  override var textColor = ""
+  override var selectedTextColor = ""
   override var edgeFadeColor = ""
   override var edgeFadeSize = DEFAULT_FADE_SIZE_DP
   override var edgeFadeIntensity = DEFAULT_FADE_INTENSITY
@@ -448,6 +616,8 @@ class HybridPickerView(
     }
     val safeItemHeight = itemHeight.finiteOr(DEFAULT_ITEM_HEIGHT_DP)
       .coerceIn(MIN_ITEM_HEIGHT_DP, MAX_ITEM_HEIGHT_DP)
+    val safeFontSize = fontSize.finiteOr(DEFAULT_FONT_SIZE_SP)
+      .coerceIn(MIN_FONT_SIZE_SP, MAX_FONT_SIZE_SP)
     val safeMagnification = magnification.finiteOr(DEFAULT_MAGNIFICATION)
       .coerceIn(MIN_MAGNIFICATION, MAX_MAGNIFICATION)
     val safeFadeSize = edgeFadeSize.finiteOr(DEFAULT_FADE_SIZE_DP)
@@ -460,7 +630,10 @@ class HybridPickerView(
       value = normalizedValue,
       disabled = disabled,
       itemHeightPx = context.dp(safeItemHeight),
+      fontSizeSp = safeFontSize,
       magnification = safeMagnification,
+      textColor = textColor,
+      selectedTextColor = selectedTextColor,
       edgeFadeColor = edgeFadeColor,
       edgeFadeSizePx = context.dp(safeFadeSize),
       edgeFadeIntensity = safeFadeIntensity,
@@ -489,12 +662,13 @@ class HybridPickerView(
     dispose()
   }
 
-  private fun dispose() {
+  override fun dispose() {
     if (disposed) return
     disposed = true
     root.dispose()
     onChange = {}
     onPickStart = {}
     onPickEnd = {}
+    super.dispose()
   }
 }

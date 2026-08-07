@@ -1,5 +1,5 @@
 import '@/global.css';
-import { Stack } from 'expo-router/stack';
+import { Stack } from 'expo-router';
 import { type PropsWithChildren } from 'react';
 import { MediaCacheProvider } from 'react-native-components';
 import {
@@ -44,6 +44,13 @@ function AppNavigator(): React.JSX.Element {
   return (
     <Stack screenOptions={{ headerShown: true }}>
       <Stack.Screen
+        name="index"
+        options={{
+          headerShown: true,
+          title: '首页',
+        }}
+      />
+      <Stack.Screen
         name="cache"
         options={{
           headerShown: true,
@@ -63,6 +70,13 @@ function AppNavigator(): React.JSX.Element {
         options={{
           headerShown: true,
           title: '可见性监听测试',
+        }}
+      />
+      <Stack.Screen
+        name="image-picker"
+        options={{
+          headerShown: true,
+          title: '相册模块测试',
         }}
       />
     </Stack>

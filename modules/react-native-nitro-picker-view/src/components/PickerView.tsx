@@ -2,19 +2,19 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { callback, getHostComponent } from 'react-native-nitro-modules';
 
-import PickerViewConfig from '../nitrogen/generated/shared/json/PickerViewConfig.json';
-import { DEFAULT_INDICATOR_BORDER_COLOR } from './constants';
+import PickerViewConfig from '../../nitrogen/generated/shared/json/PickerViewConfig.json';
+import { DEFAULT_INDICATOR_BORDER_COLOR } from '../constants';
 import {
   extractColumns,
   normalizePickerOptions,
   normalizePickerValue,
-} from './core/picker';
-import { PickerViewColumn } from './PickerViewColumn';
+} from '../core/picker';
 import type {
   NativePickerEvent,
   PickerViewNativeProps,
-} from './specs/PickerView.nitro';
-import type { PickerViewEvent, PickerViewProps } from './types';
+} from '../specs/PickerView.nitro';
+import type { PickerViewEvent, PickerViewProps } from '../types';
+import { PickerViewColumn } from './PickerViewColumn';
 
 const NativePickerView = getHostComponent<
   PickerViewNativeProps,
@@ -27,13 +27,16 @@ export function PickerView({
   edgeFadeColor,
   edgeFadeIntensity,
   edgeFadeSize,
+  fontSize,
   indicatorStyle,
   itemHeight,
   magnification,
   onChange,
   onPickEnd,
   onPickStart,
+  selectedTextColor,
   style,
+  textColor,
   value,
   ...viewProps
 }: PickerViewProps): React.JSX.Element {
@@ -49,6 +52,7 @@ export function PickerView({
     disabled,
     edgeFadeIntensity,
     edgeFadeSize,
+    fontSize,
     itemHeight,
     magnification,
   });
@@ -99,12 +103,15 @@ export function PickerView({
         edgeFadeColor={resolvedFadeColor}
         edgeFadeIntensity={options.edgeFadeIntensity}
         edgeFadeSize={options.edgeFadeSize}
+        fontSize={options.fontSize}
         itemHeight={options.itemHeight}
         magnification={options.magnification}
         onChange={nativeCallbacks.onChange}
         onPickEnd={nativeCallbacks.onPickEnd}
         onPickStart={nativeCallbacks.onPickStart}
+        selectedTextColor={selectedTextColor ?? ''}
         style={StyleSheet.absoluteFill}
+        textColor={textColor ?? ''}
         value={normalizedValue}
       />
       <View

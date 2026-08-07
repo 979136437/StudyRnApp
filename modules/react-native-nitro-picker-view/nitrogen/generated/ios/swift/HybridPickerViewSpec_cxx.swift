@@ -177,6 +177,17 @@ open class HybridPickerViewSpec_cxx {
     }
   }
   
+  public final var fontSize: Double {
+    @inline(__always)
+    get {
+      return self.__implementation.fontSize
+    }
+    @inline(__always)
+    set {
+      self.__implementation.fontSize = newValue
+    }
+  }
+
   public final var magnification: Double {
     @inline(__always)
     get {
@@ -188,6 +199,28 @@ open class HybridPickerViewSpec_cxx {
     }
   }
   
+  public final var textColor: std.string {
+    @inline(__always)
+    get {
+      return std.string(self.__implementation.textColor)
+    }
+    @inline(__always)
+    set {
+      self.__implementation.textColor = String(newValue)
+    }
+  }
+
+  public final var selectedTextColor: std.string {
+    @inline(__always)
+    get {
+      return std.string(self.__implementation.selectedTextColor)
+    }
+    @inline(__always)
+    set {
+      self.__implementation.selectedTextColor = String(newValue)
+    }
+  }
+
   public final var edgeFadeColor: std.string {
     @inline(__always)
     get {
