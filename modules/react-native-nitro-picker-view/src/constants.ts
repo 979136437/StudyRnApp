@@ -1,0 +1,17 @@
+export const DEFAULT_ITEM_HEIGHT = 44;
+export const MINIMUM_ITEM_HEIGHT = 24;
+export const MAXIMUM_ITEM_HEIGHT = 120;
+
+export const DEFAULT_MAGNIFICATION = 1.18;
+export const MINIMUM_MAGNIFICATION = 1;
+export const MAXIMUM_MAGNIFICATION = 1.6;
+
+export const DEFAULT_EDGE_FADE_SIZE = 72;
+export const MINIMUM_EDGE_FADE_SIZE = 0;
+export const MAXIMUM_EDGE_FADE_SIZE = 240;
+
+export const DEFAULT_EDGE_FADE_INTENSITY = 0.9;
+export const MINIMUM_EDGE_FADE_INTENSITY = 0;
+export const MAXIMUM_EDGE_FADE_INTENSITY = 1;
+
+export const DEFAULT_INDICATOR_BORDER_COLOR = 'rgba(127, 127, 127, 0.28)';

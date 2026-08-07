@@ -1,0 +1,20 @@
+{
+  "uiViewClassName": "PickerView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "columns": true,
+    "value": true,
+    "disabled": true,
+    "itemHeight": true,
+    "magnification": true,
+    "edgeFadeColor": true,
+    "edgeFadeSize": true,
+    "edgeFadeIntensity": true,
+    "onChange": true,
+    "onPickStart": true,
+    "onPickEnd": true,
+    "hybridRef": true
+  }
+}
