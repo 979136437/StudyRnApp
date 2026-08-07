@@ -1,6 +1,6 @@
 import '@/global.css';
 import { Stack } from 'expo-router/stack';
-import type { PropsWithChildren } from 'react';
+import { type PropsWithChildren } from 'react';
 import { MediaCacheProvider } from 'react-native-components';
 import {
   DiagnosticsErrorBoundary,
@@ -22,22 +22,7 @@ import { HeroTransitionProvider } from '@/shared/hero';
 initializeSentry();
 installGlobalErrorHandler();
 
-const ROOT_STACK_OPTIONS = { headerShown: false } as const;
-const FEED_SCREEN_OPTIONS = { animation: 'none' } as const;
-const POPUP_DEMO_SCREEN_OPTIONS = {
-  headerShown: true,
-  title: '弹窗示例',
-} as const;
-const CACHE_SCREEN_OPTIONS = {
-  headerShown: true,
-  title: '缓存统计',
-} as const;
-const VISIBILITY_OBSERVER_SCREEN_OPTIONS = {
-  headerShown: true,
-  title: '可见性监听测试',
-} as const;
-
-function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
+function RootProviders({ children }: PropsWithChildren) {
   return (
     <GestureHandlerRootView className="flex-1">
       <SafeAreaProvider>
@@ -57,19 +42,34 @@ function RootProviders({ children }: PropsWithChildren): React.JSX.Element {
 
 function AppNavigator(): React.JSX.Element {
   return (
-    <Stack screenOptions={ROOT_STACK_OPTIONS}>
-      <Stack.Screen name="cache" options={CACHE_SCREEN_OPTIONS} />
-      <Stack.Screen name="feed/[id]" options={FEED_SCREEN_OPTIONS} />
-      <Stack.Screen name="popup-demo" options={POPUP_DEMO_SCREEN_OPTIONS} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="cache"
+        options={{
+          headerShown: true,
+          title: '缓存统计',
+        }}
+      />
+      <Stack.Screen name="feed/[id]" options={{ animation: 'none' }} />
+      <Stack.Screen
+        name="popup-demo"
+        options={{
+          headerShown: true,
+          title: '弹窗示例',
+        }}
+      />
       <Stack.Screen
         name="visibility-observer"
-        options={VISIBILITY_OBSERVER_SCREEN_OPTIONS}
+        options={{
+          headerShown: true,
+          title: '可见性监听测试',
+        }}
       />
     </Stack>
   );
 }
 
-function RootLayout(): React.JSX.Element {
+function RootLayout() {
   return (
     <RootProviders>
       <DiagnosticsLifecycle />

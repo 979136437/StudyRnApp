@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -32,8 +31,13 @@ const KIND_LABELS: Record<DiagnosticReport['kind'], string> = {
   manual: '手动记录',
 };
 
-export function DiagnosticsScreen(): React.JSX.Element {
-  const router = useRouter();
+export interface DiagnosticsScreenProps {
+  onBack: () => void;
+}
+
+export function DiagnosticsScreen({
+  onBack,
+}: DiagnosticsScreenProps): React.JSX.Element {
   const [reports, setReports] = useState<DiagnosticReportSummary[]>([]);
   const [selected, setSelected] = useState<DiagnosticReport | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -130,7 +134,7 @@ export function DiagnosticsScreen(): React.JSX.Element {
           accessibilityLabel="返回首页"
           accessibilityRole="button"
           hitSlop={10}
-          onPress={() => router.back()}
+          onPress={onBack}
           style={styles.backButton}
         >
           <Text style={styles.backIcon}>‹</Text>

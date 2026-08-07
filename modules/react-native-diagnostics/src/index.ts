@@ -1,6 +1,9 @@
 export { DiagnosticsErrorBoundary } from './DiagnosticsErrorBoundary';
 export { DiagnosticsLifecycle } from './DiagnosticsLifecycle';
-export { DiagnosticsScreen } from './DiagnosticsScreen';
+export {
+  DiagnosticsScreen,
+  type DiagnosticsScreenProps,
+} from './DiagnosticsScreen';
 export { sanitizeUrl, sanitizeValue } from './sanitizer';
 export {
   addBreadcrumb,
