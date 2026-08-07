@@ -1,0 +1,45 @@
+{
+  "name": "react-native-nitro-image-picker",
+  "version": "0.1.0",
+  "description": "A Nitro-powered media picker with headless APIs and a customizable default UI.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "android",
+    "ios",
+    "nitrogen",
+    "nitro.json",
+    "react-native.config.js",
+    "NitroImagePicker.podspec",
+    "app.plugin.js",
+    "README.md"
+  ],
+  "scripts": {
+    "specs": "nitrogen",
+    "test": "vitest run src/__tests__",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:",
+    "react-native-safe-area-context": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "nitrogen": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-nitro-modules": "catalog:",
+    "react-native-safe-area-context": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": ["react-native", "nitro", "image-picker", "media-library"],
+  "license": "MIT",
+  "private": true
+}

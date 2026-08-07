@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["imagepicker"],
+  "ios": { "iosModuleName": "NitroImagePicker" },
+  "android": {
+    "androidNamespace": ["imagepicker"],
+    "androidCxxLibName": "NitroImagePicker"
+  },
+  "autolinking": {
+    "ImagePicker": {
+      "ios": { "language": "swift", "implementationClassName": "HybridImagePicker" },
+      "android": { "language": "kotlin", "implementationClassName": "HybridImagePicker" }
+    },
+    "MediaThumbnail": {
+      "ios": { "language": "swift", "implementationClassName": "HybridMediaThumbnail" },
+      "android": { "language": "kotlin", "implementationClassName": "HybridMediaThumbnail" }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}
