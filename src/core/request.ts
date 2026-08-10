@@ -1,9 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import { addBreadcrumb, sanitizeUrl } from 'react-native-diagnostics';
 import { createRequest } from 'react-native-request-kit';
 import { createAsyncStoragePersister } from 'react-native-request-kit/cache';
 import { useAutoRequest } from 'react-native-request-kit/strategy';
+
+import { storage } from './storage';
 
 const requestStartedAt = new WeakMap<object, number>();
 
@@ -43,6 +44,6 @@ export const request = createRequest({
   },
   StoragePersister: createAsyncStoragePersister({
     key: 'MY_APP_REQUEST_CACHE',
-    storage: AsyncStorage,
+    storage,
   }),
 });

@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { createLogger, type LogFields } from 'react-native-nitro-logger';
+import { createLogger, type LogFields } from 'react-native-logger';
 import {
   cancelAnimation,
   useSharedValue,

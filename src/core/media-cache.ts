@@ -1,5 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createFileMediaCacheStrategy } from 'react-native-components';
+
+import { storage } from './storage';
 
 const MEBIBYTE = 1024 * 1024;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -8,10 +9,6 @@ const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 export const mediaCacheStrategy = createFileMediaCacheStrategy({
   defaultMaxAgeMs: 7 * DAY_IN_MILLISECONDS,
   imageMaxSizeBytes: 128 * MEBIBYTE,
-  storage: {
-    getItem: (key) => AsyncStorage.getItem(key),
-    removeItem: (key) => AsyncStorage.removeItem(key),
-    setItem: (key, value) => AsyncStorage.setItem(key, value),
-  },
+  storage,
   videoMaxSizeBytes: 1024 * MEBIBYTE,
 });

@@ -6,10 +6,21 @@ Query with interchangeable Fetch, Axios, ky, or custom transports.
 ## Create a request instance
 
 ```tsx
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createMMKV } from 'react-native-mmkv';
 import { createRequest } from 'react-native-request-kit';
 import { createAsyncStoragePersister } from 'react-native-request-kit/cache';
 import { RequestProvider } from 'react-native-request-kit/react';
+
+const mmkv = createMMKV();
+const storage = {
+  getItem: async (key: string) => mmkv.getString(key) ?? null,
+  removeItem: async (key: string) => {
+    mmkv.remove(key);
+  },
+  setItem: async (key: string, value: string) => {
+    mmkv.set(key, value);
+  },
+};
 
 export const request = createRequest({
   baseUrl: process.env.EXPO_PUBLIC_API_URL,
@@ -26,7 +37,7 @@ export const request = createRequest({
   },
   StoragePersister: createAsyncStoragePersister({
     key: 'MY_APP_REQUEST_CACHE',
-    storage: AsyncStorage,
+    storage,
   }),
 });
 
@@ -35,7 +46,7 @@ export function AppProviders({ children }: React.PropsWithChildren) {
 }
 ```
 
-Omit `StoragePersister` to keep all cached data in memory. AsyncStorage is
+Omit `StoragePersister` to keep all cached data in memory. This MMKV instance is
 unencrypted; never persist tokens, credentials, or other secrets.
 
 Fetch is the default transport. Configure it explicitly when you need standard

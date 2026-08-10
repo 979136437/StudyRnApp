@@ -26,7 +26,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react-native-nitro-logger": "workspace:*",
+    "react-native-logger": "workspace:*",
     "react-native-nitro-visibility-observer": "workspace:*"
   },
   "peerDependencies": {

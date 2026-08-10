@@ -1,7 +1,7 @@
 import { createContext, use } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import type { LogFields } from 'react-native-nitro-logger';
+import type { LogFields } from 'react-native-logger';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { InteractiveListScrollHandle } from '../components/InteractiveList/types';

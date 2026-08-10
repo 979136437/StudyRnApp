@@ -1,0 +1,30 @@
+{
+  "name": "react-native-logger",
+  "version": "0.1.0",
+  "description": "A non-blocking batched JavaScript logger for React Native.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run src/core/__tests__",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [
+    "react-native",
+    "logger",
+    "console",
+    "non-blocking"
+  ],
+  "license": "MIT",
+  "private": true
+}
