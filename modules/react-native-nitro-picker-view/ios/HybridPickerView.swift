@@ -166,6 +166,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   private var viewportHeight: CGFloat = -1
   private var interactionActive = false
   private var snapping = false
+  private var selectionLayoutPending = true
 
   init(columnIndex: Int, listener: PickerColumnListener) {
     self.columnIndex = columnIndex
@@ -178,6 +179,12 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     tableView.showsVerticalScrollIndicator = false
     tableView.alwaysBounceVertical = false
     tableView.contentInsetAdjustmentBehavior = .never
+    // 组件使用固定行高；关闭 UITableView 估算可避免远距离初始定位和动态列刷新时
+    // contentSize 逐步修正，从源头消除累计到半行的偏移。
+    tableView.rowHeight = itemHeight
+    tableView.estimatedRowHeight = 0
+    tableView.estimatedSectionHeaderHeight = 0
+    tableView.estimatedSectionFooterHeight = 0
     tableView.clipsToBounds = true
     tableView.register(PickerRowCell.self, forCellReuseIdentifier: PickerRowCell.reuseIdentifier)
   }
@@ -187,6 +194,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     items = nextItems
     selectedIndex = normalizeIndex(selectedIndex)
     tableView.reloadData()
+    selectionLayoutPending = true
   }
 
   func updateVisuals(
@@ -198,12 +206,14 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   ) {
     let heightChanged = self.itemHeight != itemHeight
     self.itemHeight = itemHeight
+    tableView.rowHeight = itemHeight
     self.fontSize = fontSize
     self.magnification = magnification
     self.textColor = textColor
     self.selectedTextColor = selectedTextColor
     if heightChanged {
       tableView.reloadData()
+      selectionLayoutPending = true
       updateInsets()
       applySelection(selectedIndex)
     }
@@ -216,16 +226,36 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   }
 
   func updateViewport() {
-    guard viewportHeight != tableView.bounds.height else { return }
-    viewportHeight = tableView.bounds.height
-    updateInsets()
-    applySelection(selectedIndex)
+    guard tableView.bounds.height > 0 else { return }
+    if viewportHeight != tableView.bounds.height {
+      viewportHeight = tableView.bounds.height
+      selectionLayoutPending = true
+    }
+    if selectionLayoutPending {
+      applySelection(selectedIndex)
+    } else {
+      updateVisibleRows()
+    }
   }
 
   func applySelection(_ index: Int) {
     selectedIndex = normalizeIndex(index)
-    guard !items.isEmpty, tableView.bounds.height > 0 else { return }
-    tableView.setContentOffset(targetOffset(for: selectedIndex), animated: false)
+    guard tableView.bounds.height > 0 else { return }
+    guard !items.isEmpty else {
+      selectionLayoutPending = false
+      return
+    }
+    // reloadData 和首次 arranged-subview 布局都可能延后 contentSize 更新；先完成布局，
+    // 再设置两次精确偏移，避免 UIKit 使用旧滚动范围把目标夹在两行之间。
+    updateInsets()
+    tableView.layoutIfNeeded()
+    let offset = targetOffset(for: selectedIndex)
+    tableView.setContentOffset(offset, animated: false)
+    tableView.layoutIfNeeded()
+    if abs(tableView.contentOffset.y - offset.y) > snapTolerance {
+      tableView.setContentOffset(offset, animated: false)
+    }
+    selectionLayoutPending = false
     updateVisibleRows()
   }
 
@@ -245,10 +275,6 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     cell.pickerLabel.font = .systemFont(ofSize: fontSize)
     cell.accessibilityLabel = items[indexPath.row]
     return cell
-  }
-
-  func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-    itemHeight
   }
 
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -272,9 +298,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
 
   func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
     guard snapping else { return }
-    // 动画完成后重新核对真实偏移，避免系统动画舍入后停在两行之间。
-    snapping = false
-    snapToNearest()
+    finishInteraction(nearestIndex())
   }
 
   private func updateInsets() {
@@ -302,6 +326,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   private func finishInteraction(_ index: Int) {
     snapping = false
     selectedIndex = normalizeIndex(index)
+    applySelection(selectedIndex)
     guard interactionActive else { return }
     interactionActive = false
     listener?.pickerColumnDidSettle(columnIndex, selectedIndex: selectedIndex)
@@ -389,6 +414,9 @@ private final class PickerRootView: UIView, PickerColumnListener {
   override func layoutSubviews() {
     super.layoutSubviews()
     stackView.frame = bounds
+    // UIStackView 的 arranged subview 会延迟布局；先得到真实列尺寸再计算首帧 inset。
+    stackView.setNeedsLayout()
+    stackView.layoutIfNeeded()
     let size = min(fadeSize, bounds.height / 2)
     topFadeLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: size)
     bottomFadeLayer.frame = CGRect(
