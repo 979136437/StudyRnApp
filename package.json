@@ -41,7 +41,7 @@
     "react-native-components": "workspace:*",
     "react-native-css-interop": "0.2.6",
     "react-native-diagnostics": "workspace:*",
-    "react-native-gesture-handler": "~2.32.0",
+    "react-native-gesture-handler": "catalog:",
     "react-native-keyboard-controller": "1.21.9",
     "react-native-popup-kit": "workspace:*",
     "react-native-nitro-modules": "catalog:",

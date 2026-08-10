@@ -42,6 +42,11 @@ export function HomeScreen(): React.JSX.Element {
             <Text style={styles.cacheButtonText}>网页</Text>
           </Pressable>
         </Link>
+        <Link href={'/interactive-list' as Href} asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>交互列表</Text>
+          </Pressable>
+        </Link>
       </View>
       <MyVideo
         autoplay

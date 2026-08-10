@@ -79,6 +79,13 @@ function AppNavigator(): React.JSX.Element {
           title: '相册模块测试',
         }}
       />
+      <Stack.Screen
+        name="interactive-list"
+        options={{
+          headerShown: true,
+          title: '交互列表测试',
+        }}
+      />
     </Stack>
   );
 }
