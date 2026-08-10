@@ -206,6 +206,12 @@ private class PickerColumnList(
       verifySnapAlignment()
     }
   }
+  private val applySelectionRunnable = Runnable {
+    if (!disposed) applySelection(selectedIndex)
+  }
+  private val updateVisibleRowsRunnable = Runnable {
+    if (!disposed) updateVisibleRows()
+  }
 
   init {
     adapter = rowAdapter
@@ -250,7 +256,7 @@ private class PickerColumnList(
       rowAdapter.notifyDataSetChanged()
     }
     if (heightChanged) {
-      post { applySelection(selectedIndex) }
+      scheduleSelectionApplication()
     }
     updateVisibleRows()
   }
@@ -264,13 +270,27 @@ private class PickerColumnList(
   }
 
   fun applySelection(index: Int) {
-    if (rowAdapter.isEmpty || height == 0) {
-      selectedIndex = 0
-      return
-    }
+    // 尺寸尚未就绪时也要保留受控索引，待挂载或尺寸变化后再完成定位。
     selectedIndex = normalizeIndex(index)
+    if (rowAdapter.isEmpty || height == 0) return
     setSelectionFromTop(rowAdapter.adapterPosition(selectedIndex), centerSpacingPx)
-    post { updateVisibleRows() }
+    removeCallbacks(updateVisibleRowsRunnable)
+    post(updateVisibleRowsRunnable)
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    scheduleSelectionApplication()
+  }
+
+  override fun onDetachedFromWindow() {
+    cancelPendingViewWork()
+    super.onDetachedFromWindow()
+  }
+
+  override fun onCancelPendingInputEvents() {
+    super.onCancelPendingInputEvents()
+    cancelPendingViewWork()
   }
 
   override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
@@ -278,13 +298,16 @@ private class PickerColumnList(
     if (updateCenterSpacing()) {
       rowAdapter.notifyDataSetChanged()
     }
-    post { applySelection(selectedIndex) }
+    scheduleSelectionApplication()
   }
 
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
     if (isEnabled) {
       when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN,
+        MotionEvent.ACTION_DOWN -> {
+          removeCallbacks(applySelectionRunnable)
+          parent?.requestDisallowInterceptTouchEvent(true)
+        }
         MotionEvent.ACTION_MOVE -> parent?.requestDisallowInterceptTouchEvent(true)
         MotionEvent.ACTION_UP,
         MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
@@ -300,9 +323,23 @@ private class PickerColumnList(
     return true
   }
 
+  private fun scheduleSelectionApplication() {
+    removeCallbacks(applySelectionRunnable)
+    post(applySelectionRunnable)
+  }
+
+  private fun cancelPendingViewWork() {
+    removeCallbacks(applySelectionRunnable)
+    removeCallbacks(updateVisibleRowsRunnable)
+    cancelSnapAnimation()
+    userInteractionActive = false
+    parent?.requestDisallowInterceptTouchEvent(false)
+  }
+
   override fun onScrollStateChanged(view: AbsListView?, scrollState: Int) {
     when (scrollState) {
       AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL -> {
+        removeCallbacks(applySelectionRunnable)
         cancelSnapAnimation()
         if (!userInteractionActive) {
           userInteractionActive = true
@@ -443,11 +480,9 @@ private class PickerColumnList(
 
   fun dispose() {
     disposed = true
-    cancelSnapAnimation()
+    cancelPendingViewWork()
     mainHandler.removeCallbacksAndMessages(null)
-    parent?.requestDisallowInterceptTouchEvent(false)
     setOnScrollListener(null)
-    userInteractionActive = false
   }
 }
 

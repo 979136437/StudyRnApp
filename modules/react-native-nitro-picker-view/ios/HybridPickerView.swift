@@ -16,6 +16,7 @@ private let defaultFadeSize: Double = 72
 private let maximumFadeSize: Double = 240
 private let defaultFadeIntensity: Double = 0.9
 private let snapTolerance: CGFloat = 0.5
+private let deferredSelectionAlignmentPassCount: Int = 3
 
 private extension Double {
   func finite(or fallback: Double) -> Double {
@@ -167,6 +168,8 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   private var interactionActive = false
   private var snapping = false
   private var selectionLayoutPending = true
+  private var deferredAlignmentDisplayLink: CADisplayLink?
+  private var remainingDeferredAlignmentPasses = 0
 
   init(columnIndex: Int, listener: PickerColumnListener) {
     self.columnIndex = columnIndex
@@ -238,15 +241,25 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     }
   }
 
+  func invalidateSelectionLayout() {
+    cancelDeferredSelectionAlignment()
+    selectionLayoutPending = true
+  }
+
   func applySelection(_ index: Int) {
+    cancelDeferredSelectionAlignment()
     selectedIndex = normalizeIndex(index)
+    selectionLayoutPending = true
     guard tableView.bounds.height > 0 else { return }
     guard !items.isEmpty else {
       selectionLayoutPending = false
       return
     }
-    // reloadData 和首次 arranged-subview 布局都可能延后 contentSize 更新；先完成布局，
-    // 再设置两次精确偏移，避免 UIKit 使用旧滚动范围把目标夹在两行之间。
+    alignSelection()
+    scheduleDeferredSelectionAlignment()
+  }
+
+  private func alignSelection() {
     updateInsets()
     tableView.layoutIfNeeded()
     let offset = targetOffset(for: selectedIndex)
@@ -257,6 +270,40 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
     }
     selectionLayoutPending = false
     updateVisibleRows()
+  }
+
+  private func scheduleDeferredSelectionAlignment() {
+    guard tableView.window != nil, !interactionActive else { return }
+    remainingDeferredAlignmentPasses = deferredSelectionAlignmentPassCount
+    let displayLink = CADisplayLink(
+      target: self,
+      selector: #selector(handleDeferredSelectionAlignment(_:))
+    )
+    deferredAlignmentDisplayLink = displayLink
+    displayLink.add(to: .main, forMode: .common)
+  }
+
+  @objc private func handleDeferredSelectionAlignment(_ displayLink: CADisplayLink) {
+    guard displayLink === deferredAlignmentDisplayLink else {
+      displayLink.invalidate()
+      return
+    }
+    guard tableView.window != nil, !interactionActive else {
+      cancelDeferredSelectionAlignment()
+      return
+    }
+    // UITableView 进入窗口后仍可能跨布局帧修正 contentSize；有限次复核可消除偶发首帧偏移。
+    alignSelection()
+    remainingDeferredAlignmentPasses -= 1
+    if remainingDeferredAlignmentPasses <= 0 {
+      cancelDeferredSelectionAlignment()
+    }
+  }
+
+  private func cancelDeferredSelectionAlignment() {
+    deferredAlignmentDisplayLink?.invalidate()
+    deferredAlignmentDisplayLink = nil
+    remainingDeferredAlignmentPasses = 0
   }
 
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -278,6 +325,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   }
 
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    cancelDeferredSelectionAlignment()
     snapping = false
     guard !interactionActive else { return }
     interactionActive = true
@@ -373,6 +421,7 @@ private final class PickerColumnController: NSObject, UITableViewDataSource, UIT
   }
 
   func dispose() {
+    cancelDeferredSelectionAlignment()
     interactionActive = false
     snapping = false
     tableView.layer.removeAllAnimations()
@@ -431,6 +480,9 @@ private final class PickerRootView: UIView, PickerColumnListener {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     configureNestedScrolling()
+    guard window != nil else { return }
+    columnControllers.forEach { $0.invalidateSelectionLayout() }
+    setNeedsLayout()
   }
 
   override func didMoveToSuperview() {
