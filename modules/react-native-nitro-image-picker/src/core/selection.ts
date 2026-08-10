@@ -1,4 +1,4 @@
-interface SelectionAsset {
+export interface SelectionAsset {
   assetId?: string;
   uri: string;
   type: 'image' | 'video';

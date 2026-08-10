@@ -11,6 +11,7 @@ interface AlbumPickerRowProps {
   theme: MediaPickerTheme;
   coverAssetId?: string;
   allMediaCountLabel: string;
+  shouldDownloadFromNetwork: boolean;
   onChoose: (album?: MediaAlbum) => void;
 }
 
@@ -21,6 +22,7 @@ export function AlbumPickerRow({
   labels,
   onChoose,
   selected,
+  shouldDownloadFromNetwork,
   theme,
 }: AlbumPickerRowProps): React.JSX.Element {
   const title = `${album?.title ?? labels.allMedia}(${album?.assetCount ?? allMediaCountLabel})`;
@@ -32,14 +34,19 @@ export function AlbumPickerRow({
     <Pressable
       accessibilityLabel={`${title}${selected ? '，当前相册' : ''}`}
       accessibilityRole="button"
+      accessibilityState={{ selected }}
       onPress={choose}
-      style={[styles.row, { borderBottomColor: theme.separator }]}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: theme.separator },
+        pressed ? { backgroundColor: theme.surface } : undefined,
+      ]}
     >
       <View style={[styles.cover, { backgroundColor: theme.surface }]}>
         {coverAssetId ? (
           <MediaThumbnail
             assetId={coverAssetId}
-            shouldDownloadFromNetwork
+            shouldDownloadFromNetwork={shouldDownloadFromNetwork}
             style={StyleSheet.absoluteFill}
           />
         ) : null}
@@ -64,11 +71,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 16,
-    minHeight: 96,
+    minHeight: 92,
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  cover: { height: 68, overflow: 'hidden', width: 68 },
+  cover: { height: 66, overflow: 'hidden', width: 66 },
   copy: { flex: 1 },
   name: { fontSize: 18, fontWeight: '500' },
   selectedBadge: {

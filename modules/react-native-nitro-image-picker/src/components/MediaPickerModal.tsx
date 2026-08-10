@@ -13,7 +13,9 @@ export function MediaPickerModal({
   return (
     <Modal
       animationType={animationType}
+      navigationBarTranslucent
       onRequestClose={onRequestClose ?? pickerProps.onCancel}
+      statusBarTranslucent
       visible={visible}
     >
       <SafeAreaProvider>

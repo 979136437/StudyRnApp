@@ -102,6 +102,10 @@ export interface MediaPickerLabels {
   closePreview: string;
   selectionLimitReached: string;
   unavailable: string;
+  select?: string;
+  selected?: string;
+  video?: string;
+  dismissMessage?: string;
 }
 
 export interface MediaPickerRenderContext {

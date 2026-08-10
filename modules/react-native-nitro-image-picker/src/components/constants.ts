@@ -1,6 +1,8 @@
 import type { MediaPickerLabels, MediaPickerTheme } from '../types';
 
-export const DEFAULT_LABELS: MediaPickerLabels = {
+export type ResolvedMediaPickerLabels = Required<MediaPickerLabels>;
+
+export const DEFAULT_LABELS: ResolvedMediaPickerLabels = {
   title: '选择照片和视频',
   cancel: '取消',
   done: '完成',
@@ -19,6 +21,10 @@ export const DEFAULT_LABELS: MediaPickerLabels = {
   closePreview: '关闭',
   selectionLimitReached: '已达到选择上限',
   unavailable: '当前平台不支持相册访问',
+  select: '选择',
+  selected: '已选择',
+  video: '视频',
+  dismissMessage: '关闭提示',
 };
 
 export const LIGHT_THEME: MediaPickerTheme = {

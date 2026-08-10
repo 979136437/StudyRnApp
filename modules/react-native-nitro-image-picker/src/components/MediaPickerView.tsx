@@ -14,6 +14,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -36,6 +37,10 @@ import {
 import { normalizeMediaTypes } from '../api/normalize-options';
 import { DEFAULT_PAGE_SIZE } from '../core/constants';
 import {
+  createSelectedPreviewItems,
+  type PreviewMode,
+} from '../core/preview';
+import {
   createSelectionState,
   getSelectionIndex,
   mergeResolvedSelection,
@@ -47,13 +52,18 @@ import type {
   MediaAsset,
   MediaPermissionResponse,
   MediaPickerAssetRenderContext,
-  MediaPickerLabels,
   MediaPickerTheme,
   MediaPickerViewProps,
 } from '../types';
 import { AlbumPickerRow } from './AlbumPickerRow';
-import { DARK_THEME, DEFAULT_LABELS, LIGHT_THEME } from './constants';
+import {
+  DARK_THEME,
+  DEFAULT_LABELS,
+  LIGHT_THEME,
+  type ResolvedMediaPickerLabels,
+} from './constants';
 import { MediaThumbnail } from './MediaThumbnail';
+import { MediaPreviewModal } from './MediaPreviewModal';
 import { normalizePickerUiOptions } from './normalize-picker-options';
 
 const GRID_GAP = 4;
@@ -63,6 +73,11 @@ const ALBUM_SHEET_TOP_OFFSET = 104;
 type PickerGridItem =
   | { id: 'camera'; kind: 'camera' }
   | { id: string; kind: 'asset'; asset: MediaAsset };
+
+interface PreviewSession {
+  mode: PreviewMode;
+  initialAssetId: string;
+}
 
 function formatDuration(duration?: number): string {
   if (!duration || duration <= 0) return '';
@@ -100,6 +115,7 @@ export function MediaPickerView({
   theme: themeOverrides,
 }: MediaPickerViewProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const normalizedUi = normalizePickerUiOptions({ columns, selectionLimit });
   const mediaTypesKey = requestedMediaTypes?.join('|') ?? '';
   const mediaTypes = useMemo(
@@ -115,7 +131,7 @@ export function MediaPickerView({
     }),
     [themeOverrides],
   );
-  const labels = useMemo<MediaPickerLabels>(
+  const labels = useMemo<ResolvedMediaPickerLabels>(
     () => ({ ...DEFAULT_LABELS, ...labelOverrides }),
     [labelOverrides],
   );
@@ -128,6 +144,9 @@ export function MediaPickerView({
   const [albums, setAlbums] = useState<MediaAlbum[]>([]);
   const [activeAlbum, setActiveAlbum] = useState<MediaAlbum>();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [selectedLibraryAssets, setSelectedLibraryAssets] = useState<
+    Record<string, MediaAsset>
+  >({});
   const [endCursor, setEndCursor] = useState<string>();
   const [hasNextPage, setHasNextPage] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -137,7 +156,7 @@ export function MediaPickerView({
   const [containerWidth, setContainerWidth] = useState(0);
   const [albumsVisible, setAlbumsVisible] = useState(false);
   const [cameraMenuVisible, setCameraMenuVisible] = useState(false);
-  const [previewAsset, setPreviewAsset] = useState<MediaAsset>();
+  const [previewSession, setPreviewSession] = useState<PreviewSession>();
   const [selection, dispatchSelection] = useReducer(
     selectionReducer,
     initialSelectedAssetIds,
@@ -299,10 +318,19 @@ export function MediaPickerView({
         labels={labels}
         onChoose={chooseAlbum}
         selected={item ? activeAlbum?.id === item.id : !activeAlbum}
+        shouldDownloadFromNetwork={shouldDownloadFromNetwork}
         theme={albumTheme}
       />
     ),
-    [activeAlbum, albumTheme, assets, chooseAlbum, hasNextPage, labels],
+    [
+      activeAlbum,
+      albumTheme,
+      assets,
+      chooseAlbum,
+      hasNextPage,
+      labels,
+      shouldDownloadFromNetwork,
+    ],
   );
 
   const capture = useCallback(
@@ -425,10 +453,58 @@ export function MediaPickerView({
     [allowCamera, assets],
   );
 
-  const previewableSelection = useMemo(() => {
-    const lastSelectedId = selection.selectedIds.at(-1);
-    return assets.find((asset) => asset.assetId === lastSelectedId);
+  const selectedPreviewItems = useMemo(
+    () =>
+      createSelectedPreviewItems(
+        Object.values(selectedLibraryAssets),
+        selection.selectedIds,
+        selection.capturedAssets,
+      ),
+    [selectedLibraryAssets, selection.capturedAssets, selection.selectedIds],
+  );
+  const selectedPreviewInitialId = selectedPreviewItems.at(-1)?.id;
+
+  useEffect(() => {
+    setSelectedLibraryAssets((current) => {
+      const selectedIds = new Set(selection.selectedIds);
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([assetId]) => selectedIds.has(assetId)),
+      );
+      for (const asset of assets) {
+        if (selectedIds.has(asset.assetId)) next[asset.assetId] = asset;
+      }
+      const currentKeys = Object.keys(current);
+      const nextKeys = Object.keys(next);
+      const changed =
+        currentKeys.length !== nextKeys.length ||
+        nextKeys.some((assetId) => current[assetId] !== next[assetId]);
+      return changed ? next : current;
+    });
   }, [assets, selection.selectedIds]);
+
+  const toggleAssetSelection = useCallback(
+    (assetId: string) => {
+      const selected = selection.selectedIds.includes(assetId);
+      if (
+        !selected &&
+        selection.selectedIds.length >= normalizedUi.selectionLimit
+      ) {
+        setMessage(labels.selectionLimitReached);
+        return;
+      }
+      setMessage(undefined);
+      dispatchSelection({
+        type: 'toggle',
+        assetId,
+        limit: normalizedUi.selectionLimit,
+      });
+    },
+    [
+      labels.selectionLimitReached,
+      normalizedUi.selectionLimit,
+      selection.selectedIds,
+    ],
+  );
 
   const renderGridItem = useCallback(
     ({ item }: ListRenderItemInfo<PickerGridItem>) => {
@@ -445,7 +521,7 @@ export function MediaPickerView({
             accessibilityRole="button"
             disabled={busy}
             onPress={openCamera}
-            style={[
+            style={({ pressed }) => [
               styles.gridCell,
               styles.cameraTile,
               {
@@ -453,6 +529,7 @@ export function MediaPickerView({
                 height: cellSize,
                 width: cellSize,
               },
+              pressed ? styles.gridCellPressed : undefined,
             ]}
           >
             <View style={styles.cameraIcon}>
@@ -468,34 +545,28 @@ export function MediaPickerView({
 
       const asset = item.asset;
       const selectedIndex = getSelectionIndex(selection, asset.assetId);
-      const toggleSelection = () => {
-        if (
-          !selectedIndex &&
-          selection.selectedIds.length >= normalizedUi.selectionLimit
-        ) {
-          setMessage(labels.selectionLimitReached);
-          return;
-        }
-        setMessage(undefined);
-        dispatchSelection({
-          type: 'toggle',
-          assetId: asset.assetId,
-          limit: normalizedUi.selectionLimit,
-        });
-      };
+      const toggleSelection = () => toggleAssetSelection(asset.assetId);
       const overlayContext: MediaPickerAssetRenderContext = {
         ...renderContext,
         asset,
         selectedIndex,
         toggleSelection,
-        openPreview: () => setPreviewAsset(asset),
+        openPreview: () =>
+          setPreviewSession({
+            mode: 'album',
+            initialAssetId: asset.assetId,
+          }),
       };
       return (
         <Pressable
           accessibilityLabel={`${labels.preview} ${asset.fileName ?? ''}`.trim()}
-          onLongPress={() => setPreviewAsset(asset)}
-          onPress={toggleSelection}
-          style={[styles.gridCell, { height: cellSize, width: cellSize }]}
+          accessibilityRole="button"
+          onPress={overlayContext.openPreview}
+          style={({ pressed }) => [
+            styles.gridCell,
+            { height: cellSize, width: cellSize },
+            pressed ? styles.gridCellPressed : undefined,
+          ]}
         >
           <MediaThumbnail
             assetId={asset.assetId}
@@ -512,18 +583,23 @@ export function MediaPickerView({
           ) : (
             <Pressable
               accessibilityLabel={
-                selectedIndex ? `已选择 ${selectedIndex}` : '选择'
+                selectedIndex
+                  ? `${labels.selected} ${selectedIndex}`
+                  : labels.select
               }
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: Boolean(selectedIndex) }}
               onPress={(event) => {
                 event.stopPropagation();
                 toggleSelection();
               }}
-              style={[
+              style={({ pressed }) => [
                 styles.selectionBadge,
                 {
                   backgroundColor: selectedIndex ? theme.accent : theme.overlay,
                   borderColor: '#ffffff',
                 },
+                pressed ? styles.pressed : undefined,
               ]}
             >
               <Text style={styles.selectionText}>{selectedIndex || ''}</Text>
@@ -545,6 +621,7 @@ export function MediaPickerView({
       renderAssetOverlay,
       renderContext,
       selection,
+      toggleAssetSelection,
       theme.accent,
       theme.overlay,
       theme.surface,
@@ -554,17 +631,34 @@ export function MediaPickerView({
 
   const defaultHeader = (
     <View style={[styles.header, { borderBottomColor: theme.separator }]}>
+      {onCancel ? (
+        <Pressable
+          accessibilityLabel={labels.cancel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          hitSlop={8}
+          onPress={onCancel}
+          style={({ pressed }) => [
+            styles.closeButton,
+            pressed ? styles.pressed : undefined,
+            busy ? styles.disabled : undefined,
+          ]}
+        >
+          <Text style={[styles.closeIcon, { color: theme.text }]}>×</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.headerSpacer} />
+      )}
       <Pressable
-        accessibilityLabel={labels.cancel}
-        disabled={busy}
-        onPress={onCancel}
-        style={styles.closeButton}
-      >
-        <Text style={[styles.closeIcon, { color: theme.text }]}>×</Text>
-      </Pressable>
-      <Pressable
+        accessibilityLabel={`${labels.albums}，${activeAlbum?.title ?? labels.allMedia}`}
+        accessibilityRole="button"
         onPress={() => setAlbumsVisible(true)}
-        style={[styles.albumButton, { backgroundColor: theme.surface }]}
+        style={({ pressed }) => [
+          styles.albumButton,
+          { backgroundColor: theme.surface },
+          pressed ? styles.pressed : undefined,
+        ]}
       >
         <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
           {activeAlbum?.title ?? labels.allMedia}
@@ -594,17 +688,28 @@ export function MediaPickerView({
           {labels.grantAccessDescription}
         </Text>
         <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={
             permission.canAskAgain
               ? () => void requestAccess()
               : () => void Linking.openSettings()
           }
-          style={[styles.primaryButton, { backgroundColor: theme.accent }]}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: theme.accent },
+            pressed ? styles.pressed : undefined,
+            busy ? styles.disabled : undefined,
+          ]}
         >
-          <Text style={styles.doneText}>
-            {permission.canAskAgain ? labels.grantAccess : labels.openSettings}
-          </Text>
+          {busy ? (
+            <ActivityIndicator color="#ffffff" size="small" />
+          ) : (
+            <Text style={styles.doneText}>
+              {permission.canAskAgain ? labels.grantAccess : labels.openSettings}
+            </Text>
+          )}
         </Pressable>
       </View>
     );
@@ -617,10 +722,21 @@ export function MediaPickerView({
       {renderHeader ? renderHeader(renderContext) : defaultHeader}
       {message ? (
         <Pressable
+          accessibilityLabel={`${labels.dismissMessage}：${message}`}
+          accessibilityRole="button"
           onPress={() => setMessage(undefined)}
-          style={styles.messageRow}
+          style={[
+            styles.messageRow,
+            {
+              backgroundColor: theme.surface,
+              borderLeftColor: theme.danger,
+            },
+          ]}
         >
-          <Text selectable style={{ color: theme.danger }}>
+          <Text
+            selectable
+            style={[styles.messageText, { color: theme.danger }]}
+          >
             {message}
           </Text>
         </Pressable>
@@ -637,11 +753,15 @@ export function MediaPickerView({
           >
             {permission.accessPrivileges === 'limited' ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
                 disabled={busy}
                 onPress={() => void manageLimitedAccess()}
-                style={[
+                style={({ pressed }) => [
                   styles.limitedButton,
                   { backgroundColor: theme.surface },
+                  pressed ? styles.pressed : undefined,
+                  busy ? styles.disabled : undefined,
                 ]}
               >
                 <Text style={{ color: theme.accent }}>
@@ -673,7 +793,9 @@ export function MediaPickerView({
                 }
                 ListFooterComponent={
                   loadingMore ? (
-                    <ActivityIndicator color={theme.accent as string} />
+                    <View style={styles.loadingFooter}>
+                      <ActivityIndicator color={theme.accent as string} />
+                    </View>
                   ) : null
                 }
                 numColumns={normalizedUi.columns}
@@ -694,13 +816,28 @@ export function MediaPickerView({
             ]}
           >
             <Pressable
-              disabled={!previewableSelection || busy}
-              onPress={() => setPreviewAsset(previewableSelection)}
-              style={styles.previewButton}
+              accessibilityRole="button"
+              accessibilityState={{
+                disabled: !selectedPreviewInitialId || busy,
+              }}
+              disabled={!selectedPreviewInitialId || busy}
+              onPress={() =>
+                selectedPreviewInitialId
+                  ? setPreviewSession({
+                      mode: 'selected',
+                      initialAssetId: selectedPreviewInitialId,
+                    })
+                  : undefined
+              }
+              style={({ pressed }) => [
+                styles.previewButton,
+                pressed ? styles.pressed : undefined,
+                !selectedPreviewInitialId || busy ? styles.disabled : undefined,
+              ]}
             >
               <Text
                 style={{
-                  color: previewableSelection
+                  color: selectedPreviewInitialId
                     ? theme.text
                     : theme.secondaryText,
                 }}
@@ -709,14 +846,25 @@ export function MediaPickerView({
               </Text>
             </Pressable>
             <Text
-              style={[styles.selectionSummary, { color: theme.secondaryText }]}
+              style={[
+                styles.selectionSummary,
+                {
+                  color: selection.selectedIds.length
+                    ? theme.accent
+                    : theme.secondaryText,
+                },
+              ]}
             >
               {selection.selectedIds.length}/{normalizedUi.selectionLimit}
             </Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                disabled: busy || selection.selectedIds.length === 0,
+              }}
               disabled={busy || selection.selectedIds.length === 0}
               onPress={() => void confirm()}
-              style={[
+              style={({ pressed }) => [
                 styles.doneButton,
                 {
                   backgroundColor:
@@ -724,6 +872,10 @@ export function MediaPickerView({
                       ? theme.accent
                       : theme.surface,
                 },
+                pressed ? styles.pressed : undefined,
+                busy || selection.selectedIds.length === 0
+                  ? styles.disabled
+                  : undefined,
               ]}
             >
               {busy ? (
@@ -762,16 +914,21 @@ export function MediaPickerView({
         <View style={styles.albumModalBackdrop}>
           <Pressable
             accessibilityLabel={labels.cancel}
+            accessibilityRole="button"
             onPress={() => setAlbumsVisible(false)}
             style={StyleSheet.absoluteFill}
           />
           <SafeAreaView
+            accessibilityViewIsModal
             edges={['bottom']}
             style={[
               styles.albumSheet,
               {
                 backgroundColor: albumTheme.background,
-                marginTop: insets.top + ALBUM_SHEET_TOP_OFFSET,
+                marginTop: Math.min(
+                  insets.top + ALBUM_SHEET_TOP_OFFSET,
+                  windowHeight * 0.28,
+                ),
               },
             ]}
           >
@@ -809,13 +966,17 @@ export function MediaPickerView({
           >
             <View style={styles.cameraSheetHandle} />
             <Pressable
+              accessibilityLabel={labels.takePhoto}
               accessibilityRole="button"
+              accessibilityState={{ disabled: busy }}
               disabled={busy}
               onPress={() => void capture('image')}
-              style={[
+              style={({ pressed }) => [
                 styles.menuCommand,
                 styles.menuCommandSeparated,
                 { borderBottomColor: albumTheme.separator },
+                pressed ? { backgroundColor: albumTheme.surface } : undefined,
+                busy ? styles.disabled : undefined,
               ]}
             >
               <Text style={[styles.menuText, { color: albumTheme.text }]}>
@@ -823,10 +984,16 @@ export function MediaPickerView({
               </Text>
             </Pressable>
             <Pressable
+              accessibilityLabel={labels.recordVideo}
               accessibilityRole="button"
+              accessibilityState={{ disabled: busy }}
               disabled={busy}
               onPress={() => void capture('video')}
-              style={styles.menuCommand}
+              style={({ pressed }) => [
+                styles.menuCommand,
+                pressed ? { backgroundColor: albumTheme.surface } : undefined,
+                busy ? styles.disabled : undefined,
+              ]}
             >
               <Text style={[styles.menuText, { color: albumTheme.text }]}>
                 {labels.recordVideo}
@@ -836,48 +1003,27 @@ export function MediaPickerView({
         </View>
       </Modal>
 
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setPreviewAsset(undefined)}
-        visible={Boolean(previewAsset)}
-      >
-        <SafeAreaView
-          style={[styles.previewRoot, { backgroundColor: '#000000' }]}
-        >
-          <View style={styles.previewHeader}>
-            <Pressable
-              onPress={() => setPreviewAsset(undefined)}
-              style={styles.commandButton}
-            >
-              <Text style={{ color: '#ffffff' }}>{labels.closePreview}</Text>
-            </Pressable>
-            {previewAsset ? (
-              <Pressable
-                onPress={() =>
-                  dispatchSelection({
-                    type: 'toggle',
-                    assetId: previewAsset.assetId,
-                    limit: normalizedUi.selectionLimit,
-                  })
-                }
-                style={[styles.doneButton, { backgroundColor: theme.accent }]}
-              >
-                <Text style={styles.doneText}>
-                  {getSelectionIndex(selection, previewAsset.assetId) || '选择'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {previewAsset ? (
-            <MediaThumbnail
-              assetId={previewAsset.assetId}
-              resizeMode="contain"
-              shouldDownloadFromNetwork
-              style={styles.previewMedia}
-            />
-          ) : null}
-        </SafeAreaView>
-      </Modal>
+      <MediaPreviewModal
+        assets={assets}
+        busy={busy}
+        capturedAssets={selection.capturedAssets}
+        hasNextPage={hasNextPage}
+        initialAssetId={previewSession?.initialAssetId}
+        labels={labels}
+        message={message}
+        mode={previewSession?.mode ?? 'album'}
+        onClose={() => setPreviewSession(undefined)}
+        onConfirm={() => void confirm()}
+        onEndReached={() => void loadMore()}
+        onDismissMessage={() => setMessage(undefined)}
+        onToggleSelection={toggleAssetSelection}
+        selectedIds={selection.selectedIds}
+        selectedLibraryAssets={Object.values(selectedLibraryAssets)}
+        selectionLimit={normalizedUi.selectionLimit}
+        shouldDownloadFromNetwork={shouldDownloadFromNetwork}
+        theme={theme}
+        visible={Boolean(previewSession)}
+      />
     </SafeAreaView>
   );
 }
@@ -892,7 +1038,6 @@ const styles = StyleSheet.create({
     minHeight: 60,
     paddingHorizontal: 12,
   },
-  commandButton: { justifyContent: 'center', minHeight: 44, minWidth: 52 },
   closeButton: {
     alignItems: 'center',
     height: 52,
@@ -905,13 +1050,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     flexDirection: 'row',
+    flexShrink: 1,
     gap: 9,
     justifyContent: 'center',
-    maxWidth: 220,
+    maxWidth: '62%',
     minHeight: 36,
     paddingHorizontal: 14,
   },
-  title: { fontSize: 16, fontWeight: '600' },
+  title: { flexShrink: 1, fontSize: 16, fontWeight: '600' },
   chevron: {
     borderBottomWidth: 2,
     borderRightWidth: 2,
@@ -928,7 +1074,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   doneText: { color: '#ffffff', fontWeight: '600' },
-  messageRow: { alignItems: 'center', minHeight: 36, paddingHorizontal: 12 },
+  messageRow: {
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  messageText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
   pickerBody: { flex: 1 },
   listContainer: { flex: 1 },
   flexCenter: { alignItems: 'center', flex: 1, justifyContent: 'center' },
@@ -936,10 +1090,12 @@ const styles = StyleSheet.create({
   permissionTitle: { fontSize: 20, fontWeight: '600' },
   permissionDescription: { lineHeight: 21, textAlign: 'center' },
   primaryButton: {
+    alignItems: 'center',
     borderRadius: 6,
+    justifyContent: 'center',
+    minHeight: 44,
     minWidth: 120,
     paddingHorizontal: 18,
-    paddingVertical: 11,
   },
   limitedButton: {
     alignItems: 'center',
@@ -957,6 +1113,7 @@ const styles = StyleSheet.create({
     marginVertical: GRID_GAP / 2,
     overflow: 'hidden',
   },
+  gridCellPressed: { opacity: 0.82 },
   cameraTile: {
     alignItems: 'center',
     gap: 10,
@@ -996,6 +1153,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: GRID_PADDING,
+  },
+  loadingFooter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   selectionBadge: {
     alignItems: 'center',
@@ -1042,8 +1204,11 @@ const styles = StyleSheet.create({
   selectionSummary: {
     flex: 1,
     fontVariant: ['tabular-nums'],
+    fontWeight: '600',
     textAlign: 'center',
   },
+  pressed: { opacity: 0.68 },
+  disabled: { opacity: 0.52 },
   modalBackdrop: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     flex: 1,
@@ -1078,12 +1243,4 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   menuText: { fontSize: 18, fontWeight: '500' },
-  previewRoot: { flex: 1 },
-  previewHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-  },
-  previewMedia: { flex: 1 },
 });
