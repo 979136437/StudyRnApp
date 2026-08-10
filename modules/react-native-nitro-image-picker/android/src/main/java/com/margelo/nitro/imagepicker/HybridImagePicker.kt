@@ -72,6 +72,7 @@ class HybridImagePicker : HybridImagePickerSpec() {
     ?: throw pickerError("E_UNAVAILABLE", "React 上下文不可用")
   private val resolver = context.contentResolver
   @Volatile private var libraryChangeCallback: ((MediaLibraryChangeEvent) -> Unit)? = null
+  @Volatile private var isObservingMediaLibrary = false
   private val cursorSession = UUID.randomUUID().toString()
   private val cursorGeneration = AtomicLong(0)
   private val mediaObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -85,7 +86,6 @@ class HybridImagePicker : HybridImagePickerSpec() {
 
   init {
     PickerActivityBroker.attach(context)
-    resolver.registerContentObserver(mediaCollection(), true, mediaObserver)
   }
 
   override fun getMediaLibraryPermissionsAsync(options: MediaTypeOptions): Promise<MediaPermissionResponse> =
@@ -311,10 +311,18 @@ class HybridImagePicker : HybridImagePickerSpec() {
 
   override fun setOnLibraryChange(callback: (event: MediaLibraryChangeEvent) -> Unit) {
     libraryChangeCallback = callback
+    if (!isObservingMediaLibrary) {
+      resolver.registerContentObserver(mediaCollection(), true, mediaObserver)
+      isObservingMediaLibrary = true
+    }
   }
 
   override fun clearOnLibraryChange() {
     libraryChangeCallback = null
+    if (isObservingMediaLibrary) {
+      resolver.unregisterContentObserver(mediaObserver)
+      isObservingMediaLibrary = false
+    }
   }
 
   private fun permission(permission: String): MediaPermissionResponse {

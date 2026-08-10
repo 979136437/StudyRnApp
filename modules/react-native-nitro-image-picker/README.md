@@ -66,7 +66,7 @@ import { MediaPickerModal } from 'react-native-nitro-image-picker';
 />;
 ```
 
-`MediaPickerView` 可直接嵌入页面。两种组件均支持主题、文案、列数、媒体类型、初始选择、header、资源蒙层、空状态和权限状态覆盖。默认 UI 不会在挂载时主动弹出权限框，用户必须点击授权操作。
+`MediaPickerView` 可直接嵌入页面。两种组件均支持主题、文案、列数、媒体类型、初始选择、header、资源蒙层、空状态和权限状态覆盖。导入模块或渲染不可见的 `MediaPickerModal` 不会创建原生相册对象；打开选择器时只读取当前权限状态，用户点击授权操作后才会请求系统权限。
 
 首版预览图片和视频封面，但不内置视频播放、裁剪、压缩、EXIF、位置数据或 Live Photo 配对导出。
 

@@ -204,15 +204,15 @@ final class HybridImagePicker: HybridImagePickerSpec {
   private let cursorSession = UUID().uuidString
   private let cursorLock = NSLock()
   private var cursorGeneration = 0
+  private var isObservingPhotoLibrary = false
 
   override init() {
     super.init()
     changeObserver.onChange = { [weak self] in self?.advanceCursorGeneration() }
-    PHPhotoLibrary.shared().register(changeObserver)
   }
 
   deinit {
-    PHPhotoLibrary.shared().unregisterChangeObserver(changeObserver)
+    stopObservingPhotoLibrary()
   }
 
   func getMediaLibraryPermissionsAsync(options: MediaTypeOptions) throws -> Promise<MediaPermissionResponse> {
@@ -220,8 +220,9 @@ final class HybridImagePicker: HybridImagePickerSpec {
   }
 
   func requestMediaLibraryPermissionsAsync(options: MediaTypeOptions) throws -> Promise<MediaPermissionResponse> {
-    Promise.async {
+    Promise.async { [weak self] in
       let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+      self?.updatePhotoLibraryObservation(for: status)
       return permissionResponse(status)
     }
   }
@@ -404,10 +405,30 @@ final class HybridImagePicker: HybridImagePickerSpec {
 
   func setOnLibraryChange(callback: @escaping (MediaLibraryChangeEvent) -> Void) throws {
     changeObserver.listener = callback
+    updatePhotoLibraryObservation(
+      for: PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    )
   }
 
   func clearOnLibraryChange() throws {
     changeObserver.listener = nil
+    stopObservingPhotoLibrary()
+  }
+
+  private func updatePhotoLibraryObservation(for status: PHAuthorizationStatus) {
+    guard changeObserver.listener != nil, permissionResponse(status).granted else {
+      stopObservingPhotoLibrary()
+      return
+    }
+    guard !isObservingPhotoLibrary else { return }
+    PHPhotoLibrary.shared().register(changeObserver)
+    isObservingPhotoLibrary = true
+  }
+
+  private func stopObservingPhotoLibrary() {
+    guard isObservingPhotoLibrary else { return }
+    PHPhotoLibrary.shared().unregisterChangeObserver(changeObserver)
+    isObservingPhotoLibrary = false
   }
 
   private func cacheDirectory() throws -> URL {

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { callback, getHostComponent } from 'react-native-nitro-modules';
 
 import MediaThumbnailConfig from '../../nitrogen/generated/shared/json/MediaThumbnailConfig.json';
@@ -14,7 +14,7 @@ const NativeMediaThumbnail = getHostComponent<
   Record<string, never>
 >('MediaThumbnail', () => MediaThumbnailConfig);
 
-export function MediaThumbnail({
+export const MediaThumbnail = memo(function MediaThumbnail({
   assetId,
   onError,
   onLoad,
@@ -55,4 +55,4 @@ export function MediaThumbnail({
       style={style}
     />
   );
-}
+});

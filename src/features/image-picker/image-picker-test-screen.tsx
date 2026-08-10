@@ -180,6 +180,31 @@ export function ImagePickerTestScreen(): React.JSX.Element {
     });
   }, [runAction]);
 
+  const closeDefaultPicker = useCallback(() => setPickerVisible(false), []);
+  const closeCustomPicker = useCallback(
+    () => setCustomPickerVisible(false),
+    [],
+  );
+  const handleDefaultPickerComplete = useCallback(
+    (nextResult: ImagePickerResult) => {
+      setPickerVisible(false);
+      storeResult(nextResult, '默认选择器');
+    },
+    [storeResult],
+  );
+  const handleCustomPickerComplete = useCallback(
+    (nextResult: ImagePickerResult) => {
+      setCustomPickerVisible(false);
+      storeResult(nextResult, '自定义 UI');
+    },
+    [storeResult],
+  );
+  const handleDefaultPickerError = useCallback(
+    (error: NitroImagePickerError) =>
+      setMessage(`${error.code}: ${error.message}`),
+    [],
+  );
+
   return (
     <>
       <ScrollView
@@ -330,21 +355,15 @@ export function ImagePickerTestScreen(): React.JSX.Element {
 
       <MediaPickerModal
         mediaTypes={['images', 'videos']}
-        onCancel={() => setPickerVisible(false)}
-        onComplete={(nextResult) => {
-          setPickerVisible(false);
-          storeResult(nextResult, '默认选择器');
-        }}
-        onError={(error) => setMessage(`${error.code}: ${error.message}`)}
+        onCancel={closeDefaultPicker}
+        onComplete={handleDefaultPickerComplete}
+        onError={handleDefaultPickerError}
         selectionLimit={9}
         visible={pickerVisible}
       />
       <CustomMediaPickerModal
-        onCancel={() => setCustomPickerVisible(false)}
-        onComplete={(nextResult) => {
-          setCustomPickerVisible(false);
-          storeResult(nextResult, '自定义 UI');
-        }}
+        onCancel={closeCustomPicker}
+        onComplete={handleCustomPickerComplete}
         onError={setMessage}
         visible={customPickerVisible}
       />

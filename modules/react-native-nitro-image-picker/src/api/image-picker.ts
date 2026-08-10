@@ -1,4 +1,4 @@
-import { nativeImagePicker } from '../native/native-module';
+import { getNativeImagePicker } from '../native/native-module';
 import type {
   ImagePickerErrorResult,
   ImagePickerResult as NativeImagePickerResult,
@@ -54,7 +54,7 @@ export const getMediaLibraryPermissionsAsync = (
   mediaTypes?: MediaTypeOption[],
 ) =>
   callNative(() =>
-    nativeImagePicker.getMediaLibraryPermissionsAsync(
+    getNativeImagePicker().getMediaLibraryPermissionsAsync(
       normalizeMediaTypeOptions(mediaTypes),
     ),
   );
@@ -63,37 +63,37 @@ export const requestMediaLibraryPermissionsAsync = (
   mediaTypes?: MediaTypeOption[],
 ) =>
   callNative(() =>
-    nativeImagePicker.requestMediaLibraryPermissionsAsync(
+    getNativeImagePicker().requestMediaLibraryPermissionsAsync(
       normalizeMediaTypeOptions(mediaTypes),
     ),
   );
 
 export const getCameraPermissionsAsync = () =>
-  callNative(() => nativeImagePicker.getCameraPermissionsAsync());
+  callNative(() => getNativeImagePicker().getCameraPermissionsAsync());
 export const requestCameraPermissionsAsync = () =>
-  callNative(() => nativeImagePicker.requestCameraPermissionsAsync());
+  callNative(() => getNativeImagePicker().requestCameraPermissionsAsync());
 export const getMicrophonePermissionsAsync = () =>
-  callNative(() => nativeImagePicker.getMicrophonePermissionsAsync());
+  callNative(() => getNativeImagePicker().getMicrophonePermissionsAsync());
 export const requestMicrophonePermissionsAsync = () =>
-  callNative(() => nativeImagePicker.requestMicrophonePermissionsAsync());
+  callNative(() => getNativeImagePicker().requestMicrophonePermissionsAsync());
 
 export const presentLimitedLibraryPickerAsync = (
   mediaTypes?: MediaTypeOption[],
 ) =>
   callNative(() =>
-    nativeImagePicker.presentLimitedLibraryPickerAsync(
+    getNativeImagePicker().presentLimitedLibraryPickerAsync(
       normalizeMediaTypeOptions(mediaTypes),
     ),
   );
 
 export const getAlbumsAsync = (options: AlbumQueryOptions = {}) =>
   callNative(() =>
-    nativeImagePicker.getAlbumsAsync(normalizeAlbumOptions(options)),
+    getNativeImagePicker().getAlbumsAsync(normalizeAlbumOptions(options)),
   );
 
 export const getAssetsAsync = (options: AssetQueryOptions = {}) =>
   callNative(() =>
-    nativeImagePicker.getAssetsAsync(normalizeAssetOptions(options)),
+    getNativeImagePicker().getAssetsAsync(normalizeAssetOptions(options)),
   );
 
 export const resolveAssetsAsync = (
@@ -103,7 +103,7 @@ export const resolveAssetsAsync = (
   const uniqueIds = [...new Set(assetIds.filter(Boolean))];
   if (uniqueIds.length === 0) return Promise.resolve([]);
   return callNative(() =>
-    nativeImagePicker.resolveAssetsAsync(
+    getNativeImagePicker().resolveAssetsAsync(
       uniqueIds,
       normalizeResolveOptions(options),
     ),
@@ -115,7 +115,7 @@ export const launchImageLibraryAsync = async (
 ) =>
   normalizeResult(
     await callNative(() =>
-      nativeImagePicker.launchImageLibraryAsync(
+      getNativeImagePicker().launchImageLibraryAsync(
         normalizeImagePickerOptions(options),
       ),
     ),
@@ -124,13 +124,13 @@ export const launchImageLibraryAsync = async (
 export const launchCameraAsync = async (options: CameraOptions = {}) =>
   normalizeResult(
     await callNative(() =>
-      nativeImagePicker.launchCameraAsync(normalizeCameraOptions(options)),
+      getNativeImagePicker().launchCameraAsync(normalizeCameraOptions(options)),
     ),
   );
 
 export const getPendingResultAsync = async () => {
   const result = await callNative(() =>
-    nativeImagePicker.getPendingResultAsync(),
+    getNativeImagePicker().getPendingResultAsync(),
   );
   if (!result) return null;
   if ('code' in result) return result as ImagePickerErrorResult;
@@ -138,7 +138,7 @@ export const getPendingResultAsync = async () => {
 };
 
 export const clearCacheAsync = () =>
-  callNative(() => nativeImagePicker.clearCacheAsync());
+  callNative(() => getNativeImagePicker().clearCacheAsync());
 
 const libraryChangeListeners = new Set<
   (event: MediaLibraryChangeEvent) => void
@@ -149,7 +149,7 @@ export function addMediaLibraryChangeListener(
 ): { remove: () => void } {
   if (libraryChangeListeners.size === 0) {
     try {
-      nativeImagePicker.setOnLibraryChange((event) => {
+      getNativeImagePicker().setOnLibraryChange((event) => {
         libraryChangeListeners.forEach((currentListener) =>
           currentListener(event),
         );
@@ -167,7 +167,7 @@ export function addMediaLibraryChangeListener(
       libraryChangeListeners.delete(listener);
       if (libraryChangeListeners.size === 0) {
         try {
-          nativeImagePicker.clearOnLibraryChange();
+          getNativeImagePicker().clearOnLibraryChange();
         } catch (error) {
           throw normalizeError(error);
         }

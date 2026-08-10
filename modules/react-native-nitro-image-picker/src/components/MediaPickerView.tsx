@@ -37,6 +37,10 @@ import {
 import { normalizeMediaTypes } from '../api/normalize-options';
 import { DEFAULT_PAGE_SIZE } from '../core/constants';
 import {
+  calculateGridCellSize,
+  normalizeMeasuredWidth,
+} from '../core/grid-layout';
+import {
   createSelectedPreviewItems,
   type PreviewMode,
 } from '../core/preview';
@@ -46,6 +50,8 @@ import {
   mergeResolvedSelection,
   selectionReducer,
 } from '../core/selection';
+import { reconcileOrderedItems } from '../core/reconcile-items';
+import { useLatestRef } from '../react/use-latest-ref';
 import { NitroImagePickerError } from '../types';
 import type {
   MediaAlbum,
@@ -69,6 +75,7 @@ import { normalizePickerUiOptions } from './normalize-picker-options';
 const GRID_GAP = 4;
 const GRID_PADDING = 4;
 const ALBUM_SHEET_TOP_OFFSET = 104;
+const LIBRARY_CHANGE_DEBOUNCE_MS = 120;
 
 type PickerGridItem =
   | { id: 'camera'; kind: 'camera' }
@@ -163,6 +170,9 @@ export function MediaPickerView({
     createSelectionState,
   );
   const requestSerial = useRef(0);
+  const onCancelRef = useLatestRef(onCancel);
+  const onCompleteRef = useLatestRef(onComplete);
+  const onErrorRef = useLatestRef(onError);
 
   const reportError = useCallback(
     (error: unknown) => {
@@ -173,16 +183,18 @@ export function MediaPickerView({
               cause: error,
             });
       setMessage(normalized.message);
-      onError?.(normalized);
+      onErrorRef.current?.(normalized);
     },
-    [onError],
+    [onErrorRef],
   );
 
   const loadLibrary = useCallback(
-    async (album?: MediaAlbum) => {
+    async (album?: MediaAlbum, showLoading = true) => {
       const serial = ++requestSerial.current;
-      setLoading(true);
-      setMessage(undefined);
+      if (showLoading) {
+        setLoading(true);
+        setMessage(undefined);
+      }
       try {
         const [nextAlbums, page] = await Promise.all([
           getAlbumsAsync({ mediaTypes, includeSmartAlbums: true }),
@@ -193,8 +205,12 @@ export function MediaPickerView({
           }),
         ]);
         if (requestSerial.current !== serial) return;
-        setAlbums(nextAlbums);
-        setAssets(page.assets);
+        setAlbums((current) =>
+          reconcileOrderedItems(current, nextAlbums, (item) => item.id),
+        );
+        setAssets((current) =>
+          reconcileOrderedItems(current, page.assets, (item) => item.assetId),
+        );
         setEndCursor(page.endCursor);
         setHasNextPage(page.hasNextPage);
       } catch (error) {
@@ -227,9 +243,35 @@ export function MediaPickerView({
 
   useEffect(() => {
     if (!permission?.granted) return;
-    return addMediaLibraryChangeListener(() => {
-      void loadLibrary(activeAlbum);
-    }).remove;
+    let active = true;
+    let inFlight = false;
+    let pending = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const drainRefresh = async () => {
+      if (inFlight) {
+        pending = true;
+        return;
+      }
+      inFlight = true;
+      do {
+        pending = false;
+        await loadLibrary(activeAlbum, false);
+      } while (active && pending);
+      inFlight = false;
+    };
+    const subscription = addMediaLibraryChangeListener(() => {
+      pending = true;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (active) void drainRefresh();
+      }, LIBRARY_CHANGE_DEBOUNCE_MS);
+    });
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      subscription.remove();
+    };
   }, [activeAlbum, loadLibrary, permission?.granted]);
 
   const requestAccess = useCallback(async () => {
@@ -369,7 +411,7 @@ export function MediaPickerView({
               limit: normalizedUi.selectionLimit,
             });
           }
-          await loadLibrary(activeAlbum);
+          await loadLibrary(activeAlbum, false);
         }
       } catch (error) {
         reportError(error);
@@ -415,13 +457,13 @@ export function MediaPickerView({
           '部分资源已不可用，请刷新后重试',
         );
       }
-      onComplete({ canceled: false, assets: completedAssets });
+      onCompleteRef.current({ canceled: false, assets: completedAssets });
     } catch (error) {
       reportError(error);
     } finally {
       setBusy(false);
     }
-  }, [busy, onComplete, reportError, selection, shouldDownloadFromNetwork]);
+  }, [busy, onCompleteRef, reportError, selection, shouldDownloadFromNetwork]);
 
   const renderContext = useMemo(
     () => ({
@@ -432,12 +474,28 @@ export function MediaPickerView({
     [busy, normalizedUi.selectionLimit, selection.selectedIds.length],
   );
 
-  const cellSize = Math.max(
-    1,
-    Math.floor(
-      (containerWidth - GRID_PADDING * 2) / normalizedUi.columns - GRID_GAP,
-    ),
+  const measuredCellSize = calculateGridCellSize(
+    containerWidth || undefined,
+    normalizedUi.columns,
+    GRID_PADDING,
+    GRID_GAP,
   );
+  const cellSize = measuredCellSize ?? 1;
+
+  const handleContainerLayout = useCallback((width: number) => {
+    const measuredWidth = normalizeMeasuredWidth(width);
+    if (!measuredWidth) return;
+    setContainerWidth((current) =>
+      current === measuredWidth ? current : measuredWidth,
+    );
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    onCancelRef.current?.();
+  }, [onCancelRef]);
+
+  const closePreview = useCallback(() => setPreviewSession(undefined), []);
+  const dismissMessage = useCallback(() => setMessage(undefined), []);
 
   const gridItems = useMemo<PickerGridItem[]>(
     () => [
@@ -638,7 +696,7 @@ export function MediaPickerView({
           accessibilityState={{ disabled: busy }}
           disabled={busy}
           hitSlop={8}
-          onPress={onCancel}
+          onPress={handleCancel}
           style={({ pressed }) => [
             styles.closeButton,
             pressed ? styles.pressed : undefined,
@@ -724,7 +782,7 @@ export function MediaPickerView({
         <Pressable
           accessibilityLabel={`${labels.dismissMessage}：${message}`}
           accessibilityRole="button"
-          onPress={() => setMessage(undefined)}
+          onPress={dismissMessage}
           style={[
             styles.messageRow,
             {
@@ -747,7 +805,7 @@ export function MediaPickerView({
         <View style={styles.pickerBody}>
           <View
             onLayout={(event) =>
-              setContainerWidth(event.nativeEvent.layout.width)
+              handleContainerLayout(event.nativeEvent.layout.width)
             }
             style={styles.listContainer}
           >
@@ -769,7 +827,7 @@ export function MediaPickerView({
                 </Text>
               </Pressable>
             ) : null}
-            {loading ? (
+            {loading || !measuredCellSize ? (
               <View style={styles.flexCenter}>
                 <ActivityIndicator color={theme.accent as string} />
               </View>
@@ -780,7 +838,7 @@ export function MediaPickerView({
                 }
                 data={gridItems}
                 extraData={selection.selectedIds}
-                key={normalizedUi.columns}
+                key={`${normalizedUi.columns}:${measuredCellSize}`}
                 keyExtractor={(item) => item.id}
                 ListEmptyComponent={
                   renderEmpty ? (
@@ -1012,10 +1070,10 @@ export function MediaPickerView({
         labels={labels}
         message={message}
         mode={previewSession?.mode ?? 'album'}
-        onClose={() => setPreviewSession(undefined)}
+        onClose={closePreview}
         onConfirm={() => void confirm()}
         onEndReached={() => void loadMore()}
-        onDismissMessage={() => setMessage(undefined)}
+        onDismissMessage={dismissMessage}
         onToggleSelection={toggleAssetSelection}
         selectedIds={selection.selectedIds}
         selectedLibraryAssets={Object.values(selectedLibraryAssets)}

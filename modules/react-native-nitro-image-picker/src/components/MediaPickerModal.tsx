@@ -18,9 +18,11 @@ export function MediaPickerModal({
       statusBarTranslucent
       visible={visible}
     >
-      <SafeAreaProvider>
-        <MediaPickerView {...pickerProps} />
-      </SafeAreaProvider>
+      {visible ? (
+        <SafeAreaProvider>
+          <MediaPickerView {...pickerProps} />
+        </SafeAreaProvider>
+      ) : null}
     </Modal>
   );
 }
