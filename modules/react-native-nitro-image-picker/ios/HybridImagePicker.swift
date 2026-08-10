@@ -494,7 +494,8 @@ final class HybridImagePicker: HybridImagePickerSpec {
   private func write(resource: PHAssetResource, to destination: URL, allowNetwork: Bool) async throws {
     let options = PHAssetResourceRequestOptions()
     options.isNetworkAccessAllowed = allowNetwork
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<Void, Error>) in
       PHAssetResourceManager.default().writeData(for: resource, toFile: destination, options: options) {
         if let error = $0 { continuation.resume(throwing: error) }
         else { continuation.resume() }
