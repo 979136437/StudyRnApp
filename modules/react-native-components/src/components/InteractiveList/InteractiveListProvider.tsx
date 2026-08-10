@@ -7,13 +7,22 @@ import {
   View,
 } from 'react-native';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { useSharedValue } from 'react-native-reanimated';
+import { createLogger, type LogFields } from 'react-native-nitro-logger';
+import {
+  cancelAnimation,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   buildItemLayouts,
-  findReorderTarget,
+  findReorderTargetWithHysteresis,
   getAutoScrollSpeed,
+  getExchangeAnimationIndex,
   getReorderOffsets,
+  haveSameKeyOrder,
+  type InteractiveListItemLayout,
   reorderItems,
 } from '../../core/interactive-list-layout';
 import {
@@ -30,12 +39,33 @@ const DEFAULT_ESTIMATED_ITEM_SIZE = 72;
 const DEFAULT_HORIZONTAL_TOLERANCE = 12;
 const DEFAULT_LONG_PRESS_DURATION = 280;
 const DEFAULT_MAX_AUTO_SCROLL_SPEED = 14;
+const EXCHANGE_HYSTERESIS = 8;
 const ITEM_SIZE_EPSILON = 0.5;
+const DROP_SPRING = {
+  damping: 24,
+  mass: 0.85,
+  overshootClamping: true,
+  stiffness: 260,
+} as const;
+
+type DragPhase = 'dragging' | 'settling';
 
 interface ActiveDrag {
   index: number;
   key: string;
+  keys: string[];
+  layouts: InteractiveListItemLayout[];
+  phase: DragPhase;
+  sessionId: number;
   targetIndex: number;
+}
+
+interface PendingCommit<T> {
+  fromIndex: number;
+  key: string;
+  nextData: T[];
+  sessionId: number;
+  toIndex: number;
 }
 
 export function InteractiveListProvider<T>({
@@ -43,6 +73,7 @@ export function InteractiveListProvider<T>({
   autoScrollMaxSpeed = DEFAULT_MAX_AUTO_SCROLL_SPEED,
   children,
   data,
+  debug = false,
   estimatedItemSize = DEFAULT_ESTIMATED_ITEM_SIZE,
   horizontalGestureTolerance = DEFAULT_HORIZONTAL_TOLERANCE,
   keyExtractor,
@@ -52,15 +83,15 @@ export function InteractiveListProvider<T>({
 }: InteractiveListProviderProps<T>): React.JSX.Element {
   const [displayData, setDisplayData] = useState<T[]>(() => [...data]);
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
+  const [animatedOffsetKey, setAnimatedOffsetKey] = useState<string>();
   const [commitRevision, setCommitRevision] = useState(0);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, number>>({});
   const dataRef = useRef(displayData);
   const activeDragRef = useRef<ActiveDrag | null>(null);
+  const dragSessionRef = useRef(0);
   const measuredLengthsRef = useRef(new Map<string, number>());
-  const layoutsRef = useRef(
-    buildItemLayouts([], measuredLengthsRef.current, estimatedItemSize),
-  );
+  const pendingLayoutRevisionRef = useRef(false);
   const listHandleRef = useRef<InteractiveListScrollHandle | null>(null);
   const openKeyRef = useRef<string | null>(null);
   const swipeableRefs = useRef(new Map<string, SwipeableMethods>());
@@ -71,12 +102,26 @@ export function InteractiveListProvider<T>({
   const scrollOffsetRef = useRef(0);
   const autoScrollSpeedRef = useRef(0);
   const autoScrollFrameRef = useRef<number | null>(null);
+  const commitFrameRef = useRef<number | null>(null);
+  const pendingCommitRef = useRef<PendingCommit<T> | null>(null);
   const scrollOffset = useSharedValue(0);
   const activeTranslation = useSharedValue(0);
   const activeTargetOffset = useSharedValue(0);
-
-  dataRef.current = displayData;
-  activeDragRef.current = activeDrag;
+  const logger = useMemo(
+    () => createLogger('InteractiveList', { enabled: debug }),
+    [debug],
+  );
+  const logEvent = useCallback(
+    (
+      level: 'debug' | 'info' | 'warn' | 'error',
+      event: string,
+      fields?: LogFields,
+    ): void => {
+      const session = activeDragRef.current?.sessionId ?? 'none';
+      logger[level](event, { session, ...fields });
+    },
+    [logger],
+  );
 
   const getKeys = useCallback(
     (items: readonly T[]): string[] =>
@@ -93,21 +138,14 @@ export function InteractiveListProvider<T>({
     [estimatedItemSize, getKeys],
   );
 
-  useEffect(() => {
-    if (activeDragRef.current === null) {
-      const nextData = [...data];
-      dataRef.current = nextData;
-      setDisplayData(nextData);
-    }
-  }, [data]);
-
   const closeOpenRow = useCallback((): void => {
     const openKey = openKeyRef.current;
     if (openKey !== null) {
+      logEvent('debug', 'swipe.close_open_row', { key: openKey });
       swipeableRefs.current.get(openKey)?.close();
       openKeyRef.current = null;
     }
-  }, []);
+  }, [logEvent]);
 
   useEffect(() => {
     const validKeys = new Set(getKeys(data));
@@ -125,30 +163,33 @@ export function InteractiveListProvider<T>({
   }, [data, getKeys]);
 
   const stopAutoScroll = useCallback((): void => {
+    const wasRunning =
+      autoScrollSpeedRef.current !== 0 || autoScrollFrameRef.current !== null;
+    if (wasRunning) {
+      logEvent('info', 'auto_scroll.stop', {
+        offset: scrollOffsetRef.current,
+        speed: autoScrollSpeedRef.current,
+      });
+    }
     autoScrollSpeedRef.current = 0;
     if (autoScrollFrameRef.current !== null) {
       cancelAnimationFrame(autoScrollFrameRef.current);
       autoScrollFrameRef.current = null;
     }
-  }, []);
+  }, [logEvent]);
 
   const updateTarget = useCallback(
     (key: string, activeCenter: number): void => {
       const active = activeDragRef.current;
-      if (!active || active.key !== key) {
+      if (!active || active.key !== key || active.phase !== 'dragging') {
         return;
       }
-      const items = dataRef.current;
-      const keys = getKeys(items);
-      const layouts = getLayouts(items);
-      contentLengthRef.current = layouts.reduce(
-        (total, layout) => total + layout.length,
-        0,
-      );
-      const targetIndex = findReorderTarget(
-        layouts,
+      const targetIndex = findReorderTargetWithHysteresis(
+        active.layouts,
         active.index,
+        active.targetIndex,
         activeCenter,
+        EXCHANGE_HYSTERESIS,
       );
       if (targetIndex === active.targetIndex) {
         return;
@@ -157,25 +198,42 @@ export function InteractiveListProvider<T>({
       activeDragRef.current = nextActive;
       setActiveDrag(nextActive);
       const calculatedOffsets = getReorderOffsets(
-        layouts,
+        active.layouts,
         active.index,
         targetIndex,
       );
       const nextOffsets: Record<string, number> = {};
-      keys.forEach((itemKey, index) => {
+      active.keys.forEach((itemKey, index) => {
         nextOffsets[itemKey] = calculatedOffsets[index];
       });
       activeTargetOffset.value = calculatedOffsets[active.index] ?? 0;
+      const animatedIndex = getExchangeAnimationIndex(
+        active.index,
+        active.targetIndex,
+        targetIndex,
+      );
+      setAnimatedOffsetKey(
+        animatedIndex === undefined ? undefined : active.keys[animatedIndex],
+      );
+      logEvent('info', 'target.change', {
+        animatedKey:
+          animatedIndex === undefined ? null : active.keys[animatedIndex],
+        center: activeCenter,
+        from: active.targetIndex,
+        key,
+        targetOffset: activeTargetOffset.value,
+        to: targetIndex,
+      });
       setOffsets(nextOffsets);
     },
-    [activeTargetOffset, getKeys, getLayouts],
+    [activeTargetOffset, logEvent],
   );
 
   const runAutoScroll = useCallback((): void => {
     autoScrollFrameRef.current = requestAnimationFrame(() => {
       const speed = autoScrollSpeedRef.current;
       const active = activeDragRef.current;
-      if (speed === 0 || !active) {
+      if (speed === 0 || !active || active.phase !== 'dragging') {
         autoScrollFrameRef.current = null;
         return;
       }
@@ -196,7 +254,7 @@ export function InteractiveListProvider<T>({
           animated: false,
           offset: nextOffset,
         });
-        const activeLayout = getLayouts(dataRef.current)[active.index];
+        const activeLayout = active.layouts[active.index];
         if (activeLayout) {
           updateTarget(
             active.key,
@@ -208,26 +266,86 @@ export function InteractiveListProvider<T>({
       }
       runAutoScroll();
     });
-  }, [activeTranslation, getLayouts, scrollOffset, updateTarget]);
+  }, [activeTranslation, scrollOffset, updateTarget]);
 
-  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+  useEffect(
+    () => () => {
+      logEvent('info', 'provider.unmount');
+      stopAutoScroll();
+      cancelAnimation(activeTranslation);
+      if (commitFrameRef.current !== null) {
+        cancelAnimationFrame(commitFrameRef.current);
+        commitFrameRef.current = null;
+      }
+      pendingCommitRef.current = null;
+    },
+    [activeTranslation, logEvent, stopAutoScroll],
+  );
 
   const handleDragStart = useCallback(
     (key: string, index: number): void => {
+      logEvent('info', 'drag.start_request', { index, key });
+      const items = dataRef.current;
+      const keys = getKeys(items);
+      if (keys[index] !== key) {
+        logEvent('warn', 'drag.start_rejected', {
+          actualKey: keys[index] ?? null,
+          index,
+          key,
+          reason: 'key_mismatch',
+        });
+        return;
+      }
       closeOpenRow();
       stopAutoScroll();
+      cancelAnimation(activeTranslation);
       listHandleRef.current?.prepareForLayoutAnimationRender?.();
-      const nextActive = { index, key, targetIndex: index };
+      const layouts = getLayouts(items);
+      const nextActive: ActiveDrag = {
+        index,
+        key,
+        keys,
+        layouts,
+        phase: 'dragging',
+        sessionId: dragSessionRef.current + 1,
+        targetIndex: index,
+      };
+      dragSessionRef.current = nextActive.sessionId;
       activeDragRef.current = nextActive;
+      contentLengthRef.current = layouts.reduce(
+        (total, layout) => total + layout.length,
+        0,
+      );
       activeTargetOffset.value = 0;
+      activeTranslation.value = 0;
+      setAnimatedOffsetKey(undefined);
       setOffsets({});
       setActiveDrag(nextActive);
+      logEvent('info', 'drag.started', {
+        contentLength: contentLengthRef.current,
+        index,
+        itemLength: layouts[index]?.length ?? null,
+        key,
+        layoutCount: layouts.length,
+      });
     },
-    [activeTargetOffset, closeOpenRow, stopAutoScroll],
+    [
+      activeTargetOffset,
+      activeTranslation,
+      closeOpenRow,
+      getKeys,
+      getLayouts,
+      logEvent,
+      stopAutoScroll,
+    ],
   );
 
   const handleDragMove = useCallback(
     (key: string, center: number, absoluteY: number): void => {
+      const active = activeDragRef.current;
+      if (!active || active.key !== key || active.phase !== 'dragging') {
+        return;
+      }
       updateTarget(key, center);
       const bounds = viewportBoundsRef.current;
       const speed = getAutoScrollSpeed({
@@ -237,66 +355,270 @@ export function InteractiveListProvider<T>({
         viewportEnd: bounds.end,
         viewportStart: bounds.start,
       });
+      const previousSpeed = autoScrollSpeedRef.current;
       autoScrollSpeedRef.current = speed;
       if (speed !== 0 && autoScrollFrameRef.current === null) {
+        logEvent('info', 'auto_scroll.start', {
+          absoluteY,
+          direction: speed > 0 ? 'down' : 'up',
+          speed,
+        });
         runAutoScroll();
       } else if (speed === 0 && autoScrollFrameRef.current !== null) {
-        cancelAnimationFrame(autoScrollFrameRef.current);
-        autoScrollFrameRef.current = null;
+        stopAutoScroll();
+      } else if (
+        speed !== 0 &&
+        previousSpeed !== 0 &&
+        Math.sign(speed) !== Math.sign(previousSpeed)
+      ) {
+        logEvent('info', 'auto_scroll.direction_change', {
+          absoluteY,
+          speed,
+        });
       }
     },
-    [autoScrollEdgeSize, autoScrollMaxSpeed, runAutoScroll, updateTarget],
+    [
+      autoScrollEdgeSize,
+      autoScrollMaxSpeed,
+      logEvent,
+      runAutoScroll,
+      stopAutoScroll,
+      updateTarget,
+    ],
   );
 
   const resetDrag = useCallback((): void => {
+    const active = activeDragRef.current;
+    logEvent('info', 'drag.reset', {
+      key: active?.key ?? null,
+      phase: active?.phase ?? 'idle',
+      targetIndex: active?.targetIndex ?? null,
+    });
     stopAutoScroll();
+    cancelAnimation(activeTranslation);
+    if (commitFrameRef.current !== null) {
+      cancelAnimationFrame(commitFrameRef.current);
+      commitFrameRef.current = null;
+    }
+    pendingCommitRef.current = null;
     activeDragRef.current = null;
     activeTargetOffset.value = 0;
     activeTranslation.value = 0;
+    setAnimatedOffsetKey(undefined);
     setOffsets({});
     setActiveDrag(null);
-  }, [activeTargetOffset, activeTranslation, stopAutoScroll]);
+    if (pendingLayoutRevisionRef.current) {
+      pendingLayoutRevisionRef.current = false;
+      setLayoutRevision((current) => current + 1);
+    }
+  }, [activeTargetOffset, activeTranslation, logEvent, stopAutoScroll]);
 
-  const handleDrop = useCallback(
+  const handleItemCommitLayout = useCallback(
     (key: string): void => {
+      logEvent('debug', 'commit.layout_callback', { key });
+      const pendingCommit = pendingCommitRef.current;
       const active = activeDragRef.current;
-      if (!active || active.key !== key) {
+      if (
+        !pendingCommit ||
+        !active ||
+        pendingCommit.key !== key ||
+        pendingCommit.sessionId !== active.sessionId ||
+        active.phase !== 'settling'
+      ) {
+        logEvent('debug', 'commit.layout_ignored', { key });
+        return;
+      }
+
+      const { fromIndex, nextData, toIndex } = pendingCommit;
+      // 新 key 已经进入目标槽位，此时清理 transform 不会暴露 FlashList 的复用中间态。
+      logEvent('info', 'commit.complete', {
+        fromIndex,
+        key,
+        toIndex,
+      });
+      resetDrag();
+      onReorder(nextData, fromIndex, toIndex);
+    },
+    [logEvent, onReorder, resetDrag],
+  );
+
+  const handleSettleComplete = useCallback(
+    (key: string, sessionId: number, finished: boolean): void => {
+      logEvent('debug', 'settle.callback', { finished, key, sessionId });
+      const active = activeDragRef.current;
+      if (
+        !active ||
+        active.key !== key ||
+        active.sessionId !== sessionId ||
+        active.phase !== 'settling'
+      ) {
+        logEvent('debug', 'settle.callback_ignored', {
+          finished,
+          key,
+          sessionId,
+        });
+        return;
+      }
+      if (!finished) {
+        logEvent('warn', 'settle.interrupted', { key });
+        resetDrag();
         return;
       }
       const { index, targetIndex } = active;
       if (index === targetIndex) {
+        logEvent('info', 'settle.no_change', { index, key });
         resetDrag();
         return;
       }
       const nextData = reorderItems(dataRef.current, index, targetIndex);
       listHandleRef.current?.prepareForLayoutAnimationRender?.();
+      pendingCommitRef.current = {
+        fromIndex: index,
+        key,
+        nextData,
+        sessionId,
+        toIndex: targetIndex,
+      };
       dataRef.current = nextData;
       setCommitRevision((current) => current + 1);
       setDisplayData(nextData);
-      resetDrag();
-      onReorder(nextData, index, targetIndex);
+      logEvent('info', 'commit.prepared', {
+        fromIndex: index,
+        key,
+        toIndex: targetIndex,
+      });
+      commitFrameRef.current = requestAnimationFrame(() => {
+        commitFrameRef.current = null;
+        logEvent('debug', 'commit.raf_fallback', { key });
+        handleItemCommitLayout(key);
+      });
     },
-    [onReorder, resetDrag],
+    [handleItemCommitLayout, logEvent, resetDrag],
+  );
+
+  const handleDragRelease = useCallback(
+    (key: string): void => {
+      logEvent('info', 'drag.release_request', { key });
+      const active = activeDragRef.current;
+      if (!active || active.key !== key || active.phase !== 'dragging') {
+        logEvent('debug', 'drag.release_ignored', { key });
+        return;
+      }
+      stopAutoScroll();
+      const settlingDrag: ActiveDrag = { ...active, phase: 'settling' };
+      activeDragRef.current = settlingDrag;
+      setActiveDrag(settlingDrag);
+      logEvent('info', 'settle.started', {
+        key,
+        targetIndex: active.targetIndex,
+        targetOffset: activeTargetOffset.value,
+        translation: activeTranslation.value,
+      });
+      activeTranslation.value = withSpring(
+        activeTargetOffset.value,
+        DROP_SPRING,
+        (finished) => {
+          scheduleOnRN(
+            handleSettleComplete,
+            key,
+            active.sessionId,
+            finished === true,
+          );
+        },
+      );
+    },
+    [
+      activeTargetOffset,
+      activeTranslation,
+      handleSettleComplete,
+      logEvent,
+      stopAutoScroll,
+    ],
+  );
+
+  const handleCancelComplete = useCallback(
+    (key: string, sessionId: number): void => {
+      logEvent('debug', 'cancel.callback', { key, sessionId });
+      const active = activeDragRef.current;
+      if (active?.key === key && active.sessionId === sessionId) {
+        logEvent('info', 'cancel.complete', { key });
+        resetDrag();
+      }
+    },
+    [logEvent, resetDrag],
   );
 
   const handleDragCancel = useCallback(
     (key: string): void => {
-      if (activeDragRef.current?.key === key) {
-        resetDrag();
+      logEvent('info', 'drag.cancel_request', { key });
+      const active = activeDragRef.current;
+      if (!active || active.key !== key || active.phase !== 'dragging') {
+        logEvent('debug', 'drag.cancel_ignored', { key });
+        return;
+      }
+      stopAutoScroll();
+      const settlingDrag: ActiveDrag = { ...active, phase: 'settling' };
+      activeDragRef.current = settlingDrag;
+      setActiveDrag(settlingDrag);
+      activeTargetOffset.value = 0;
+      logEvent('info', 'cancel.settle_started', {
+        key,
+        translation: activeTranslation.value,
+      });
+      activeTranslation.value = withSpring(0, DROP_SPRING, () => {
+        scheduleOnRN(handleCancelComplete, key, active.sessionId);
+      });
+    },
+    [
+      activeTargetOffset,
+      activeTranslation,
+      handleCancelComplete,
+      logEvent,
+      stopAutoScroll,
+    ],
+  );
+
+  useEffect(() => {
+    const nextData = [...data];
+    const nextKeys = getKeys(nextData);
+    const active = activeDragRef.current;
+    if (active && !haveSameKeyOrder(active.keys, nextKeys)) {
+      logEvent('warn', 'data.external_order_change', {
+        currentCount: active.keys.length,
+        nextCount: nextKeys.length,
+      });
+      resetDrag();
+    } else if (active) {
+      logEvent('debug', 'data.external_content_sync', {
+        count: nextKeys.length,
+      });
+    }
+    dataRef.current = nextData;
+    setDisplayData(nextData);
+  }, [data, getKeys, logEvent, resetDrag]);
+
+  const handleItemLayout = useCallback(
+    (key: string, length: number): void => {
+      const previousLength = measuredLengthsRef.current.get(key);
+      if (
+        previousLength === undefined ||
+        Math.abs(previousLength - length) > ITEM_SIZE_EPSILON
+      ) {
+        measuredLengthsRef.current.set(key, length);
+        logEvent('debug', 'item.measure', {
+          key,
+          length,
+          previousLength: previousLength ?? null,
+        });
+        if (activeDragRef.current) {
+          pendingLayoutRevisionRef.current = true;
+        } else {
+          setLayoutRevision((current) => current + 1);
+        }
       }
     },
-    [resetDrag],
+    [logEvent],
   );
-  const handleItemLayout = useCallback((key: string, length: number): void => {
-    const previousLength = measuredLengthsRef.current.get(key);
-    if (
-      previousLength === undefined ||
-      Math.abs(previousLength - length) > ITEM_SIZE_EPSILON
-    ) {
-      measuredLengthsRef.current.set(key, length);
-      setLayoutRevision((current) => current + 1);
-    }
-  }, []);
   const handleRegisterSwipeable = useCallback(
     (key: string, methods: SwipeableMethods | null): void => {
       if (methods) {
@@ -310,18 +632,26 @@ export function InteractiveListProvider<T>({
     },
     [],
   );
-  const handleSwipeableWillOpen = useCallback((key: string): void => {
-    const previousKey = openKeyRef.current;
-    if (previousKey !== null && previousKey !== key) {
-      swipeableRefs.current.get(previousKey)?.close();
-    }
-    openKeyRef.current = key;
-  }, []);
-  const handleSwipeableClose = useCallback((key: string): void => {
-    if (openKeyRef.current === key) {
-      openKeyRef.current = null;
-    }
-  }, []);
+  const handleSwipeableWillOpen = useCallback(
+    (key: string): void => {
+      logEvent('info', 'swipe.will_open', { key });
+      const previousKey = openKeyRef.current;
+      if (previousKey !== null && previousKey !== key) {
+        swipeableRefs.current.get(previousKey)?.close();
+      }
+      openKeyRef.current = key;
+    },
+    [logEvent],
+  );
+  const handleSwipeableClose = useCallback(
+    (key: string): void => {
+      logEvent('info', 'swipe.closed', { key });
+      if (openKeyRef.current === key) {
+        openKeyRef.current = null;
+      }
+    },
+    [logEvent],
+  );
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
       const offset = event.nativeEvent.contentOffset.y;
@@ -348,21 +678,28 @@ export function InteractiveListProvider<T>({
     [],
   );
 
-  const layouts = getLayouts(displayData);
-  layoutsRef.current = layouts;
-  const contentLength = layouts.reduce(
+  const measuredLayouts = useMemo(() => {
+    // 测量修订号让 ref 中的尺寸变化参与布局缓存失效。
+    void layoutRevision;
+    return getLayouts(displayData);
+  }, [displayData, getLayouts, layoutRevision]);
+  const interactionLayouts = activeDrag?.layouts ?? measuredLayouts;
+  const contentLength = interactionLayouts.reduce(
     (total, layout) => total + layout.length,
     0,
   );
-  contentLengthRef.current = contentLength;
   const getItemKey = useCallback(
     (item: unknown, index: number) => keyExtractor(item as T, index),
     [keyExtractor],
   );
+  const getItemLength = useCallback(
+    (index: number) => measuredLayouts[index]?.length ?? estimatedItemSize,
+    [estimatedItemSize, measuredLayouts],
+  );
   const getItemOffset = useCallback(
     (index: number) =>
-      layoutsRef.current[index]?.offset ?? index * estimatedItemSize,
-    [estimatedItemSize],
+      measuredLayouts[index]?.offset ?? index * estimatedItemSize,
+    [estimatedItemSize, measuredLayouts],
   );
   const getItemTargetOffset = useCallback(
     (key: string) => offsets[key] ?? 0,
@@ -371,14 +708,16 @@ export function InteractiveListProvider<T>({
   const contextValue = useMemo<InteractiveListContextValue>(
     () => ({
       activeKey: activeDrag?.key,
-      activeTargetOffset,
       activeTranslation,
+      animatedOffsetKey,
       commitRevision,
       data: displayData,
+      debugEnabled: debug,
       dragRenderDistance: activeDrag
         ? Math.max(contentLength, viewportHeightRef.current)
         : undefined,
       getItemKey,
+      getItemLength,
       getItemOffset,
       getItemTargetOffset,
       horizontalGestureTolerance,
@@ -386,8 +725,10 @@ export function InteractiveListProvider<T>({
       longPressDurationMs,
       onDragCancel: handleDragCancel,
       onDragMove: handleDragMove,
+      onDragRelease: handleDragRelease,
       onDragStart: handleDragStart,
-      onDrop: handleDrop,
+      onDebugEvent: logEvent,
+      onItemCommitLayout: handleItemCommitLayout,
       onItemLayout: handleItemLayout,
       onRegisterSwipeable: handleRegisterSwipeable,
       onScroll: handleScroll,
@@ -400,18 +741,21 @@ export function InteractiveListProvider<T>({
     }),
     [
       activeDrag,
-      activeTargetOffset,
       activeTranslation,
+      animatedOffsetKey,
       commitRevision,
       contentLength,
+      debug,
       displayData,
       getItemKey,
+      getItemLength,
       getItemOffset,
       getItemTargetOffset,
       handleDragCancel,
       handleDragMove,
+      handleDragRelease,
       handleDragStart,
-      handleDrop,
+      handleItemCommitLayout,
       handleItemLayout,
       handleRegisterSwipeable,
       handleScroll,
@@ -420,6 +764,7 @@ export function InteractiveListProvider<T>({
       handleSwipeableWillOpen,
       horizontalGestureTolerance,
       layoutRevision,
+      logEvent,
       longPressDurationMs,
       offsets,
       scrollOffset,

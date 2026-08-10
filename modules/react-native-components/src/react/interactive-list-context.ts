@@ -1,18 +1,21 @@
 import { createContext, use } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import type { LogFields } from 'react-native-nitro-logger';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { InteractiveListScrollHandle } from '../components/InteractiveList/types';
 
 export interface InteractiveListContextValue {
   activeKey?: string;
-  activeTargetOffset: SharedValue<number>;
   activeTranslation: SharedValue<number>;
+  animatedOffsetKey?: string;
   commitRevision: number;
   data: readonly unknown[];
+  debugEnabled: boolean;
   dragRenderDistance?: number;
   getItemKey: (item: unknown, index: number) => string;
+  getItemLength: (index: number) => number;
   getItemOffset: (index: number) => number;
   getItemTargetOffset: (key: string) => number;
   horizontalGestureTolerance: number;
@@ -20,8 +23,14 @@ export interface InteractiveListContextValue {
   longPressDurationMs: number;
   onDragCancel: (key: string) => void;
   onDragMove: (key: string, center: number, absoluteY: number) => void;
+  onDragRelease: (key: string) => void;
   onDragStart: (key: string, index: number) => void;
-  onDrop: (key: string) => void;
+  onDebugEvent: (
+    level: 'debug' | 'info' | 'warn' | 'error',
+    event: string,
+    fields?: LogFields,
+  ) => void;
+  onItemCommitLayout: (key: string) => void;
   onItemLayout: (key: string, length: number) => void;
   onRegisterSwipeable: (key: string, methods: SwipeableMethods | null) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;

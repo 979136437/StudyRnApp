@@ -39,6 +39,7 @@ export interface InteractiveListProviderProps<T> extends PropsWithChildren {
   autoScrollEdgeSize?: number;
   autoScrollMaxSpeed?: number;
   data: readonly T[];
+  debug?: boolean;
   estimatedItemSize?: number;
   horizontalGestureTolerance?: number;
   keyExtractor: (item: T, index: number) => string;

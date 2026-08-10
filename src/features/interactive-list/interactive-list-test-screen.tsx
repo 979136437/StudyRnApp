@@ -302,6 +302,7 @@ export function InteractiveListTestScreen(): React.JSX.Element {
       </View>
       <InteractiveListProvider
         data={items}
+        debug
         estimatedItemSize={88}
         keyExtractor={(item) => item.id}
         onReorder={handleReorder}

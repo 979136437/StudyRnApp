@@ -219,6 +219,9 @@ importers:
       react-native-nitro-image-picker:
         specifier: workspace:*
         version: link:modules/react-native-nitro-image-picker
+      react-native-nitro-logger:
+        specifier: workspace:*
+        version: link:modules/react-native-nitro-logger
       react-native-nitro-modules:
         specifier: 'catalog:'
         version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -301,6 +304,9 @@ importers:
 
   modules/react-native-components:
     dependencies:
+      react-native-nitro-logger:
+        specifier: workspace:*
+        version: link:../react-native-nitro-logger
       react-native-nitro-visibility-observer:
         specifier: workspace:*
         version: link:../react-native-nitro-visibility-observer
@@ -413,6 +419,30 @@ importers:
       react-native-safe-area-context:
         specifier: 'catalog:'
         version: 5.7.0(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(jiti@2.7.0)(lightningcss@1.30.1)(terser@5.49.2)(yaml@2.9.0)
+
+  modules/react-native-nitro-logger:
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      nitrogen:
+        specifier: 'catalog:'
+        version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-native:
+        specifier: 'catalog:'
+        version: 0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
+      react-native-nitro-modules:
+        specifier: 'catalog:'
+        version: 0.36.3(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

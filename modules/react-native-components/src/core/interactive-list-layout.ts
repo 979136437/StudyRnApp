@@ -66,6 +66,51 @@ export function findReorderTarget(
   return targetIndex;
 }
 
+export function findReorderTargetWithHysteresis(
+  layouts: readonly InteractiveListItemLayout[],
+  activeIndex: number,
+  currentTargetIndex: number,
+  activeCenter: number,
+  hysteresis: number,
+): number {
+  if (
+    activeIndex < 0 ||
+    activeIndex >= layouts.length ||
+    currentTargetIndex < 0 ||
+    currentTargetIndex >= layouts.length
+  ) {
+    return activeIndex;
+  }
+
+  const rawTargetIndex = findReorderTarget(layouts, activeIndex, activeCenter);
+  const thresholdPadding = Math.max(0, hysteresis);
+  let targetIndex = currentTargetIndex;
+
+  while (targetIndex < rawTargetIndex) {
+    const crossedIndex =
+      targetIndex < activeIndex ? targetIndex : targetIndex + 1;
+    const crossedLayout = layouts[crossedIndex];
+    const boundary = crossedLayout.offset + crossedLayout.length / 2;
+    if (activeCenter <= boundary + thresholdPadding) {
+      break;
+    }
+    targetIndex += 1;
+  }
+
+  while (targetIndex > rawTargetIndex) {
+    const crossedIndex =
+      targetIndex > activeIndex ? targetIndex : targetIndex - 1;
+    const crossedLayout = layouts[crossedIndex];
+    const boundary = crossedLayout.offset + crossedLayout.length / 2;
+    if (activeCenter >= boundary - thresholdPadding) {
+      break;
+    }
+    targetIndex -= 1;
+  }
+
+  return targetIndex;
+}
+
 export function getReorderOffsets(
   layouts: readonly InteractiveListItemLayout[],
   activeIndex: number,
@@ -96,6 +141,39 @@ export function getReorderOffsets(
   return offsets;
 }
 
+export function getExchangeAnimationIndex(
+  activeIndex: number,
+  currentTargetIndex: number,
+  nextTargetIndex: number,
+): number | undefined {
+  if (
+    activeIndex < 0 ||
+    currentTargetIndex < 0 ||
+    nextTargetIndex < 0 ||
+    currentTargetIndex === nextTargetIndex
+  ) {
+    return undefined;
+  }
+
+  if (currentTargetIndex === activeIndex) {
+    return nextTargetIndex;
+  }
+  if (nextTargetIndex === activeIndex) {
+    return currentTargetIndex;
+  }
+
+  const currentDirection = Math.sign(currentTargetIndex - activeIndex);
+  const nextDirection = Math.sign(nextTargetIndex - activeIndex);
+  if (currentDirection !== nextDirection) {
+    return nextTargetIndex;
+  }
+
+  return Math.abs(nextTargetIndex - activeIndex) >
+    Math.abs(currentTargetIndex - activeIndex)
+    ? nextTargetIndex
+    : currentTargetIndex;
+}
+
 export function reorderItems<T>(
   items: readonly T[],
   fromIndex: number,
@@ -115,6 +193,16 @@ export function reorderItems<T>(
   const [movedItem] = nextItems.splice(fromIndex, 1);
   nextItems.splice(toIndex, 0, movedItem);
   return nextItems;
+}
+
+export function haveSameKeyOrder(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((key, index) => key === right[index])
+  );
 }
 
 export function getAutoScrollSpeed({
