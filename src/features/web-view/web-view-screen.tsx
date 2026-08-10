@@ -5,7 +5,7 @@ import { Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 import { ISIOS } from '@/constant';
-const htmlTemplate = require('./index.html');
+const htmlTemplate = require('./assets/index.html');
 
 function enableInlineVideo(html: string): string {
   return html.replace(/<video\b[^>]*>/gi, (videoTag) => {
