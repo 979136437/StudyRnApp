@@ -27,11 +27,6 @@ export function HomeScreen(): React.JSX.Element {
       style={styles.screen}
     >
       <View className="pt-safe" style={styles.navigation}>
-        <Link href={'/image-picker' as Href} asChild>
-          <Pressable accessibilityRole="button" style={styles.cacheButton}>
-            <Text style={styles.cacheButtonText}>相册模块</Text>
-          </Pressable>
-        </Link>
         <Link href="/picker-view" asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
             <Text style={styles.cacheButtonText}>滚轮选择器</Text>
@@ -45,6 +40,11 @@ export function HomeScreen(): React.JSX.Element {
         <Link href={'/interactive-list' as Href} asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
             <Text style={styles.cacheButtonText}>交互列表</Text>
+          </Pressable>
+        </Link>
+        <Link href={'/popup-page-test' as Href} asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>Popup 页面测试</Text>
           </Pressable>
         </Link>
       </View>

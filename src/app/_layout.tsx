@@ -73,13 +73,6 @@ function AppNavigator(): React.JSX.Element {
         }}
       />
       <Stack.Screen
-        name="image-picker"
-        options={{
-          headerShown: true,
-          title: '相册模块测试',
-        }}
-      />
-      <Stack.Screen
         name="interactive-list"
         options={{
           headerShown: true,

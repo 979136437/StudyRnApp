@@ -11,11 +11,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.study.myapp",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
+        "NSMicrophoneUsageDescription": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音"
       }
     },
     "android": {
       "package": "com.study.myapp",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -33,30 +39,6 @@
       "expo-image",
       "expo-video",
       "expo-font",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
-          "microphonePermission": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音",
-          "recordAudioAndroid": true
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "允许 $(PRODUCT_NAME) 访问照片和视频，以便选择、导入和处理媒体",
-          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
-          "microphonePermission": "允许 $(PRODUCT_NAME) 使用麦克风录制音频和视频声音"
-        }
-      ],
-      [
-        "react-native-nitro-image-picker",
-        {
-          "photosPermission": "允许 $(PRODUCT_NAME) 访问您选择的照片和视频",
-          "cameraPermission": "允许 $(PRODUCT_NAME) 使用相机拍摄照片和视频",
-          "microphonePermission": "允许 $(PRODUCT_NAME) 在录像时使用麦克风"
-        }
-      ],
       [
         "expo-media-library",
         {

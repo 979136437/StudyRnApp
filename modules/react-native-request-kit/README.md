@@ -411,34 +411,3 @@ retriable.onRetry(({ retryTimes, retryDelay }) => {
 `useRetriableRequest` performs one network attempt per round, so Method and
 TanStack retry counts are not multiplied. Call `stop()` to cancel the current
 attempt or a pending backoff.
-
-### Uploading
-
-```tsx
-import * as ImagePicker from 'expo-image-picker';
-import { useUploader } from 'react-native-request-kit/strategy';
-
-useUploader.selectFile = async () => {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    allowsMultipleSelection: true,
-  });
-  return result.canceled
-    ? []
-    : result.assets.map((asset) => ({
-        uri: asset.uri,
-        name: asset.fileName ?? 'image',
-        type: asset.mimeType,
-      }));
-};
-
-const uploader = useUploader(
-  (selected) => request.Post('uploads', buildUploadBody(selected)),
-  { limit: 9, mode: 'each' },
-);
-```
-
-Sources may be native URI objects, URI/data URI strings, base64 descriptors,
-`Blob`, or `ArrayBuffer`. Use `mode: 'batch'` for one Method containing all
-files. Batch mode reports only transport-wide progress; it does not invent
-per-file byte progress when Fetch cannot provide it. `createLocalLink` can be
-injected for non-URI previews.
