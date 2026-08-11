@@ -255,7 +255,7 @@ enum VideoCompressor {
       displaySize: CGSize(width: abs(bounds.width), height: abs(bounds.height)),
       duration: max(0, CMTimeGetSeconds(asset.duration)),
       fps: Double(track.nominalFrameRate),
-      bitrate: track.estimatedDataRate
+      bitrate: Double(track.estimatedDataRate)
     )
   }
 
@@ -267,7 +267,7 @@ enum VideoCompressor {
   }
 
   private static func channelCount(track: AVAssetTrack) -> Int {
-    guard let description = track.formatDescriptions.first as? CMAudioFormatDescription,
+    guard let description = track.formatDescriptions.first,
           let basic = CMAudioFormatDescriptionGetStreamBasicDescription(description) else {
       return 2
     }
