@@ -29,6 +29,7 @@ export type {
   PopupErrorResult,
   PopupId,
   PopupKind,
+  PopupLayerMode,
   PopupPlacement,
   PopupProviderProps,
   PopupRenderContext,

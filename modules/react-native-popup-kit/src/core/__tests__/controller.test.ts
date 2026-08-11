@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeAllPopups, closePopup } from '../../api';
 import { PopupRenderHost } from '../../react/render-host';
 import { PopupController, PopupError } from '../controller';
+import { resolvePopupLayerMode } from '../layer-mode';
 import { registerHost, resetRegistryForTests } from '../registry';
 import { triggerHardwareBack } from './react-native.mock';
 
@@ -31,6 +32,20 @@ function mountController(
 afterEach(() => {
   vi.useRealTimers();
   resetRegistryForTests();
+});
+
+describe('Popup layer mode', () => {
+  it('defaults native platforms to one native host', () => {
+    expect(resolvePopupLayerMode(undefined, 'ios')).toBe('native');
+  });
+
+  it('keeps the explicit inline compatibility mode', () => {
+    expect(resolvePopupLayerMode('inline', 'android')).toBe('inline');
+  });
+
+  it('always degrades web rendering to inline', () => {
+    expect(resolvePopupLayerMode('native', 'web')).toBe('inline');
+  });
 });
 
 describe('PopupController', () => {
@@ -224,6 +239,31 @@ describe('PopupRenderHost', () => {
 
     unregister();
     expect(renderHost.getSnapshot()).toEqual([rootController]);
+    renderHost.dispose();
+  });
+
+  it('聚合根控制器与局部控制器的可见层状态', async () => {
+    const rootController = new PopupController();
+    const localController = new PopupController();
+    rootController.setAnimationDuration(0);
+    localController.setAnimationDuration(0);
+    const renderHost = new PopupRenderHost(rootController);
+    const unregister = renderHost.register(localController);
+    const listener = vi.fn();
+    const unsubscribe = renderHost.subscribeLayers(listener);
+
+    const task = localController.showPopup({ content: '局部内容' });
+    expect(renderHost.getLayerSnapshot()).toBe(true);
+
+    const closing = localController.close(task.id, 'api');
+    localController.completeClose(task.id);
+    await closing;
+    expect(renderHost.getLayerSnapshot()).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    unregister();
+    renderHost.dispose();
   });
 });
 
@@ -272,5 +312,18 @@ describe('跨宿主关闭 API', () => {
     await firstHost.controller.close(first.id, 'api');
     firstHost.unmount();
     secondHost.unmount();
+  });
+
+  it('Popup 可优先消费返回键而不关闭实例', async () => {
+    const host = mountController('global');
+    const onBackPress = vi.fn(() => true);
+    const task = host.controller.showPopup({ content: '预览', onBackPress });
+
+    expect(triggerHardwareBack()).toBe(true);
+    expect(onBackPress).toHaveBeenCalledOnce();
+    expect(host.controller.getSnapshot().visible[0]?.id).toBe(task.id);
+
+    await host.controller.close(task.id, 'api');
+    host.unmount();
   });
 });

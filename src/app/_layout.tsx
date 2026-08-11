@@ -79,6 +79,13 @@ function AppNavigator(): React.JSX.Element {
           title: '交互列表测试',
         }}
       />
+      <Stack.Screen
+        name="media-test"
+        options={{
+          headerShown: true,
+          title: '媒体能力测试',
+        }}
+      />
     </Stack>
   );
 }

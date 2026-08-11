@@ -1,16 +1,17 @@
 import { use, useLayoutEffect, useState } from 'react';
 import { View } from 'react-native';
 
+import { PopupLayers } from '../components/PopupLayers';
+import { styles } from '../components/styles';
 import { PopupController } from '../core/controller';
 import { registerHost } from '../core/registry';
 import type { PopupProviderProps } from '../types';
 import { PopupContext, PopupRenderHostContext } from './context';
-import { PopupLayers } from '../components/PopupLayers';
 import { PopupRenderHost } from './render-host';
-import { styles } from '../components/styles';
 
 export function PopupProvider({
   children,
+  layerMode,
   scope = 'local',
   style,
 }: PopupProviderProps): React.JSX.Element {
@@ -30,9 +31,11 @@ export function PopupProvider({
     return () => {
       unregisterRenderer?.();
       unregister();
+      // 每个 Provider 都创建稳定宿主对象；局部 Provider 未使用的宿主也要释放其订阅。
+      ownedRenderHost.dispose();
       controller.dispose();
     };
-  }, [controller, ownsRenderHost, renderHost, scope]);
+  }, [controller, ownedRenderHost, ownsRenderHost, renderHost, scope]);
 
   return (
     <PopupContext value={controller}>
@@ -45,7 +48,9 @@ export function PopupProvider({
           ]}
         >
           {children}
-          {ownsRenderHost ? <PopupLayers host={ownedRenderHost} /> : null}
+          {ownsRenderHost ? (
+            <PopupLayers host={ownedRenderHost} layerMode={layerMode} />
+          ) : null}
         </View>
       </PopupRenderHostContext>
     </PopupContext>

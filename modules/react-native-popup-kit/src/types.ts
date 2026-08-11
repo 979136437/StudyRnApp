@@ -5,7 +5,15 @@ export type PopupId = string;
 
 export type PopupScope = 'global' | 'local';
 
-export type PopupPlacement = 'center' | 'top' | 'bottom' | 'left' | 'right';
+export type PopupLayerMode = 'native' | 'inline';
+
+export type PopupPlacement =
+  | 'center'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'fullscreen';
 
 export type PopupKind = 'popup' | 'toast' | 'loading' | 'modal';
 
@@ -80,6 +88,8 @@ export interface ShowPopupOptions extends PopupCallbacks<PopupResult> {
   mask?: boolean;
   closeOnMaskPress?: boolean;
   closeOnBackPress?: boolean;
+  /** 返回 true 表示业务已消费本次返回键，不再关闭 Popup。 */
+  onBackPress?: () => boolean;
   useSafeArea?: boolean;
   style?: StyleProp<ViewStyle>;
   component?: ComponentType<PopupComponentProps>;
@@ -143,6 +153,7 @@ export interface ModalComponentProps extends PopupRenderContext {
 export interface PopupProviderProps {
   children: ReactNode;
   scope?: PopupScope;
+  layerMode?: PopupLayerMode;
   style?: StyleProp<ViewStyle>;
 }
 

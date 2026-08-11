@@ -5,6 +5,7 @@ import { DEFAULT_POPUP_APPEARANCE } from './defaults';
 export const styles = StyleSheet.create({
   globalHost: { flex: 1, position: 'relative' },
   localHost: { position: 'relative' },
+  nativeHost: { flex: 1 },
   layer: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   mask: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   placement: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
@@ -15,6 +16,14 @@ export const styles = StyleSheet.create({
     boxShadow: '0 8px 28px rgba(0, 0, 0, 0.18)',
     maxWidth: 360,
     overflow: 'hidden',
+  },
+  fullscreenPopup: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    boxShadow: 'none',
+    height: '100%',
+    maxWidth: '100%',
+    width: '100%',
   },
   toast: {
     alignItems: 'center',

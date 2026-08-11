@@ -22,8 +22,8 @@ import type {
 import { DefaultLoading } from './DefaultLoading';
 import { DefaultModal } from './DefaultModal';
 import { DefaultPopup } from './DefaultPopup';
-import { DefaultToast } from './DefaultToast';
 import { DEFAULT_POPUP_APPEARANCE } from './defaults';
+import { DefaultToast } from './DefaultToast';
 import { styles } from './styles';
 
 interface PopupLayerProps {
@@ -44,6 +44,11 @@ function placementStyle(
     ? insets
     : { top: 0, right: 0, bottom: 0, left: 0 };
   switch (placement) {
+    case 'fullscreen':
+      return {
+        alignItems: 'stretch',
+        justifyContent: 'flex-start',
+      };
     case 'top':
       return {
         alignItems: 'stretch',
@@ -93,6 +98,9 @@ function popupPlacement(instance: ManagedPopup): PopupPlacement {
 }
 
 function animatedContainerStyle(placement: PopupPlacement): ViewStyle {
+  if (placement === 'fullscreen') {
+    return { height: '100%', width: '100%' };
+  }
   if (placement === 'left' || placement === 'right') {
     return { height: '100%', justifyContent: 'center' };
   }
@@ -171,6 +179,7 @@ export function PopupLayer({
     opacity: progress.value,
   }));
   const contentAnimatedStyle = useAnimatedStyle(() => {
+    if (placement === 'fullscreen') return {};
     if (placement === 'left' || placement === 'right') {
       return {
         transform: [

@@ -8,6 +8,7 @@ export function DefaultPopup({
   options,
   close,
 }: PopupComponentProps): React.JSX.Element {
+  const fullscreen = options.placement === 'fullscreen';
   const content =
     typeof options.content === 'function'
       ? options.content({ id, close })
@@ -16,7 +17,11 @@ export function DefaultPopup({
   return (
     <View
       accessibilityViewIsModal={options.mask ?? true}
-      style={[styles.popup, options.style]}
+      style={[
+        styles.popup,
+        fullscreen && styles.fullscreenPopup,
+        options.style,
+      ]}
     >
       {content}
     </View>

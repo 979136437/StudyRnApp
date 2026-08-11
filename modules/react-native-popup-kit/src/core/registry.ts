@@ -13,11 +13,12 @@ let idSequence = 0;
 let orderSequence = 0;
 let backSubscription: NativeEventSubscription | null = null;
 
-function handleHardwareBack(): boolean {
+export function requestPopupBack(): boolean {
   let candidate: {
     controller: PopupController;
     id: PopupId;
     order: number;
+    onBackPress?: () => boolean;
   } | null = null;
 
   // 返回键在注册表统一仲裁，避免每个 Provider 都重复消费同一次事件。
@@ -29,8 +30,17 @@ function handleHardwareBack(): boolean {
   }
 
   if (candidate === null) return false;
+  try {
+    if (candidate.onBackPress?.() === true) return true;
+  } catch {
+    // 业务返回钩子异常时仍执行默认关闭，避免原生 Modal 无法退出。
+  }
   void candidate.controller.close(candidate.id, 'back');
   return true;
+}
+
+function handleHardwareBack(): boolean {
+  return requestPopupBack();
 }
 
 function syncBackSubscription(): void {

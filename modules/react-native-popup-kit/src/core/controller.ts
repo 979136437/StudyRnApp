@@ -585,7 +585,11 @@ export class PopupController implements PopupApi {
     for (const resolve of waiters) resolve(closed);
   }
 
-  getTopBackCandidate(): { id: PopupId; order: number } | null {
+  getTopBackCandidate(): {
+    id: PopupId;
+    order: number;
+    onBackPress?: () => boolean;
+  } | null {
     let candidate: ManagedPopup | null = null;
     for (const instance of this.visible) {
       if (
@@ -596,9 +600,13 @@ export class PopupController implements PopupApi {
         candidate = instance;
       }
     }
-    return candidate === null
-      ? null
-      : { id: candidate.id, order: candidate.order };
+    if (candidate === null) return null;
+    return {
+      id: candidate.id,
+      order: candidate.order,
+      onBackPress:
+        candidate.kind === 'popup' ? candidate.options.onBackPress : undefined,
+    };
   }
 
   getKind(id: PopupId): PopupKind | undefined {
