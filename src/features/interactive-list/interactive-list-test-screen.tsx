@@ -1,8 +1,6 @@
-import { FlashList } from '@shopify/flash-list';
 import { Color, Stack } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,18 +9,24 @@ import {
   View,
   type ColorValue,
 } from 'react-native';
-import {
-  type InteractiveListActionInfo,
-  InteractiveListItem,
-  type InteractiveListItemRenderInfo,
-  InteractiveListProvider,
-  useInteractiveList,
-} from 'react-native-components';
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
+  Extrapolation,
   interpolate,
   type SharedValue,
   useAnimatedStyle,
 } from 'react-native-reanimated';
+import {
+  Sortable,
+  SortableItem,
+  type SortableRenderItemProps,
+} from 'react-native-reanimated-dnd';
+
+const ITEM_HEIGHT = 84;
+const ACTION_WIDTH = 88;
+const SWIPE_THRESHOLD = ACTION_WIDTH / 2;
 
 const COLORS = {
   accent: Platform.select<ColorValue>({
@@ -57,7 +61,7 @@ const COLORS = {
   }),
 };
 
-const STATIC_ACTION_COLORS = {
+const ACTION_COLORS = {
   delete: '#c62828',
   pin: '#1769aa',
 };
@@ -68,16 +72,74 @@ interface TestItem {
   title: string;
 }
 
-const INITIAL_ITEMS: TestItem[] = Array.from({ length: 24 }, (_, index) => ({
+const INITIAL_ITEMS: TestItem[] = Array.from({ length: 18 }, (_, index) => ({
   description:
-    index % 3 === 0
-      ? '包含更长的辅助内容，用于验证不同高度项目交换时的位置计算和让位距离。'
-      : index % 3 === 1
-        ? '中等高度项目。'
-        : '短项目',
+    index % 2 === 0
+      ? '右滑置顶，左滑删除，按住行尾手柄拖拽排序。'
+      : '固定高度项目，用于验证滑动与纵向拖拽的手势边界。',
   id: `interactive-item-${index + 1}`,
   title: `项目 ${String(index + 1).padStart(2, '0')}`,
 }));
+
+const ITEM_TITLE_BY_ID = new Map(
+  INITIAL_ITEMS.map((item) => [item.id, item.title]),
+);
+
+function getItemTitle(id: string): string {
+  return ITEM_TITLE_BY_ID.get(id) ?? id;
+}
+
+function reorderByPositions(
+  items: TestItem[],
+  positions: Record<string, number> | undefined,
+  movedId: string,
+  targetIndex: number,
+): TestItem[] {
+  if (items.length < 2) {
+    return items;
+  }
+
+  if (positions !== undefined) {
+    const ordered = items
+      .map((item) => ({ item, position: positions[item.id] }))
+      .filter(
+        (entry): entry is { item: TestItem; position: number } =>
+          Number.isInteger(entry.position) &&
+          entry.position >= 0 &&
+          entry.position < items.length,
+      )
+      .sort((left, right) => left.position - right.position);
+    const uniquePositions = new Set(ordered.map((entry) => entry.position));
+
+    if (
+      ordered.length === items.length &&
+      uniquePositions.size === items.length
+    ) {
+      return ordered.map((entry) => entry.item);
+    }
+  }
+
+  const sourceIndex = items.findIndex((item) => item.id === movedId);
+  if (sourceIndex < 0 || !Number.isInteger(targetIndex)) {
+    return items;
+  }
+
+  const boundedTargetIndex = Math.min(
+    Math.max(targetIndex, 0),
+    items.length - 1,
+  );
+  if (sourceIndex === boundedTargetIndex) {
+    return items;
+  }
+
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(sourceIndex, 1);
+  if (movedItem === undefined) {
+    return items;
+  }
+  nextItems.splice(boundedTargetIndex, 0, movedItem);
+  return nextItems;
+}
 
 interface SwipeActionProps {
   backgroundColor: string;
@@ -93,9 +155,16 @@ function SwipeAction({
   progress,
 }: SwipeActionProps): React.JSX.Element {
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0.35, 1], 'clamp'),
+    opacity: interpolate(progress.value, [0, 1], [0.4, 1], Extrapolation.CLAMP),
     transform: [
-      { scale: interpolate(progress.value, [0, 1], [0.85, 1], 'clamp') },
+      {
+        scale: interpolate(
+          progress.value,
+          [0, 1],
+          [0.84, 1],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
   }));
 
@@ -115,243 +184,346 @@ function SwipeAction({
   );
 }
 
-interface InteractiveListBodyProps {
-  listType: 'flash-list' | 'flat-list';
-  renderItem: (
-    info: InteractiveListItemRenderInfo<TestItem>,
-  ) => React.ReactElement;
-  renderLeftActions: (
-    info: InteractiveListActionInfo<TestItem>,
-  ) => React.ReactNode;
-  renderRightActions: (
-    info: InteractiveListActionInfo<TestItem>,
-  ) => React.ReactNode;
+interface InteractiveRowProps {
+  onDelete: (id: string) => void;
+  onDragStart: (id: string) => void;
+  onDrop: (
+    id: string,
+    position: number,
+    positions?: Record<string, number>,
+  ) => void;
+  onPin: (id: string) => void;
+  onSwipeableClose: (methods: SwipeableMethods) => void;
+  onSwipeableWillOpen: (methods: SwipeableMethods) => void;
+  sortable: SortableRenderItemProps<TestItem>;
 }
 
-function InteractiveListBody({
-  listType,
-  renderItem,
-  renderLeftActions,
-  renderRightActions,
-}: InteractiveListBodyProps): React.JSX.Element {
-  const interactiveList = useInteractiveList<TestItem>();
-  const renderListItem = useCallback(
-    ({ item, index }: { item: TestItem; index: number }) => (
-      <InteractiveListItem
-        index={index}
-        item={item}
-        renderLeftActions={renderLeftActions}
-        renderRightActions={renderRightActions}
-      >
-        {renderItem}
-      </InteractiveListItem>
+function InteractiveRow({
+  onDelete,
+  onDragStart,
+  onDrop,
+  onPin,
+  onSwipeableClose,
+  onSwipeableWillOpen,
+  sortable,
+}: InteractiveRowProps): React.JSX.Element {
+  const swipeableRef = useRef<SwipeableMethods>(null);
+  const { id, index, item, ...sortableItemProps } = sortable;
+
+  const handleSwipeableWillOpen = useCallback((): void => {
+    if (swipeableRef.current !== null) {
+      onSwipeableWillOpen(swipeableRef.current);
+    }
+  }, [onSwipeableWillOpen]);
+
+  const handleSwipeableClose = useCallback((): void => {
+    if (swipeableRef.current !== null) {
+      onSwipeableClose(swipeableRef.current);
+    }
+  }, [onSwipeableClose]);
+
+  const renderLeftActions = useCallback(
+    (
+      progress: SharedValue<number>,
+      _translation: SharedValue<number>,
+      methods: SwipeableMethods,
+    ) => (
+      <SwipeAction
+        backgroundColor={ACTION_COLORS.pin}
+        label="置顶"
+        onPress={() => {
+          methods.close();
+          onPin(id);
+        }}
+        progress={progress}
+      />
     ),
-    [renderItem, renderLeftActions, renderRightActions],
+    [id, onPin],
   );
 
-  if (listType === 'flash-list') {
-    return (
-      <FlashList
-        contentContainerStyle={styles.listContent}
-        contentInsetAdjustmentBehavior="automatic"
-        data={interactiveList.data}
-        drawDistance={interactiveList.dragRenderDistance}
-        extraData={interactiveList.extraData}
-        keyExtractor={interactiveList.keyExtractor}
-        onScroll={interactiveList.onScroll}
-        onScrollBeginDrag={interactiveList.onScrollBeginDrag}
-        ref={interactiveList.listRef}
-        renderItem={renderListItem}
-        scrollEventThrottle={interactiveList.scrollEventThrottle}
-        showsVerticalScrollIndicator={false}
+  const renderRightActions = useCallback(
+    (
+      progress: SharedValue<number>,
+      _translation: SharedValue<number>,
+      methods: SwipeableMethods,
+    ) => (
+      <SwipeAction
+        backgroundColor={ACTION_COLORS.delete}
+        label="删除"
+        onPress={() => {
+          methods.close();
+          onDelete(id);
+        }}
+        progress={progress}
       />
-    );
-  }
+    ),
+    [id, onDelete],
+  );
 
   return (
-    <FlatList
-      contentContainerStyle={styles.listContent}
-      contentInsetAdjustmentBehavior="automatic"
-      data={interactiveList.data}
-      extraData={interactiveList.extraData}
-      keyExtractor={interactiveList.keyExtractor}
-      maxToRenderPerBatch={
-        interactiveList.isDragging ? interactiveList.data.length : undefined
-      }
-      onScroll={interactiveList.onScroll}
-      onScrollBeginDrag={interactiveList.onScrollBeginDrag}
-      ref={interactiveList.listRef}
-      removeClippedSubviews={interactiveList.isDragging ? false : undefined}
-      renderItem={renderListItem}
-      scrollEventThrottle={interactiveList.scrollEventThrottle}
-      showsVerticalScrollIndicator={false}
-      windowSize={
-        interactiveList.isDragging
-          ? Math.max(interactiveList.data.length, 21)
-          : undefined
-      }
-    />
+    <SortableItem<TestItem>
+      {...sortableItemProps}
+      data={item}
+      id={id}
+      onDragStart={onDragStart}
+      onDrop={onDrop}
+    >
+      <ReanimatedSwipeable
+        childrenContainerStyle={styles.swipeableChildren}
+        containerStyle={styles.swipeable}
+        enableTrackpadTwoFingerGesture
+        friction={1.8}
+        leftThreshold={SWIPE_THRESHOLD}
+        onSwipeableClose={handleSwipeableClose}
+        onSwipeableWillOpen={handleSwipeableWillOpen}
+        overshootFriction={8}
+        overshootLeft={false}
+        overshootRight={false}
+        ref={swipeableRef}
+        renderLeftActions={renderLeftActions}
+        renderRightActions={renderRightActions}
+        rightThreshold={SWIPE_THRESHOLD}
+        testID={`interactive-row-${id}`}
+      >
+        <View style={styles.row}>
+          <View style={styles.orderBadge}>
+            <Text selectable style={styles.orderText}>
+              {index + 1}
+            </Text>
+          </View>
+          <View style={styles.rowCopy}>
+            <Text selectable numberOfLines={1} style={styles.rowTitle}>
+              {item.title}
+            </Text>
+            <Text selectable numberOfLines={2} style={styles.rowDescription}>
+              {item.description}
+            </Text>
+          </View>
+          <SortableItem.Handle style={styles.dragHandle}>
+            <View
+              accessibilityHint="长按后上下拖动以调整顺序"
+              accessibilityLabel={`拖拽排序 ${item.title}`}
+              accessibilityRole="adjustable"
+              accessible
+              style={styles.dragHandleIcon}
+            >
+              <View style={styles.dragHandleBar} />
+              <View style={styles.dragHandleBar} />
+              <View style={styles.dragHandleBar} />
+            </View>
+          </SortableItem.Handle>
+        </View>
+      </ReanimatedSwipeable>
+    </SortableItem>
   );
 }
 
 export function InteractiveListTestScreen(): React.JSX.Element {
   useColorScheme();
   const [items, setItems] = useState(INITIAL_ITEMS);
-  const [listType, setListType] = useState<'flash-list' | 'flat-list'>(
-    'flash-list',
-  );
-  const orderById = useMemo(
-    () => new Map(items.map((item, index) => [item.id, index + 1])),
-    [items],
-  );
+  const [lastAction, setLastAction] = useState('等待操作');
+  const openSwipeableRef = useRef<SwipeableMethods | null>(null);
 
-  const handleReorder = useCallback((nextData: TestItem[]): void => {
-    setItems(nextData);
+  const closeOpenSwipeable = useCallback((): void => {
+    openSwipeableRef.current?.close();
+    openSwipeableRef.current = null;
   }, []);
 
+  const handleSwipeableWillOpen = useCallback(
+    (methods: SwipeableMethods): void => {
+      if (
+        openSwipeableRef.current !== null &&
+        openSwipeableRef.current !== methods
+      ) {
+        openSwipeableRef.current.close();
+      }
+      openSwipeableRef.current = methods;
+    },
+    [],
+  );
+
+  const handleSwipeableClose = useCallback(
+    (methods: SwipeableMethods): void => {
+      if (openSwipeableRef.current === methods) {
+        openSwipeableRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const handlePin = useCallback(
+    (id: string): void => {
+      closeOpenSwipeable();
+      setItems((current) => {
+        const sourceIndex = current.findIndex((item) => item.id === id);
+        if (sourceIndex <= 0) {
+          return current;
+        }
+        const nextItems = [...current];
+        const [selectedItem] = nextItems.splice(sourceIndex, 1);
+        if (selectedItem === undefined) {
+          return current;
+        }
+        nextItems.unshift(selectedItem);
+        return nextItems;
+      });
+      setLastAction(`${getItemTitle(id)} 已置顶`);
+    },
+    [closeOpenSwipeable],
+  );
+
+  const handleDelete = useCallback(
+    (id: string): void => {
+      closeOpenSwipeable();
+      setItems((current) => current.filter((item) => item.id !== id));
+      setLastAction(`${getItemTitle(id)} 已删除`);
+    },
+    [closeOpenSwipeable],
+  );
+
+  const handleDragStart = useCallback(
+    (id: string): void => {
+      closeOpenSwipeable();
+      setLastAction(`正在拖拽 ${getItemTitle(id)}`);
+    },
+    [closeOpenSwipeable],
+  );
+
+  const handleDrop = useCallback(
+    (
+      id: string,
+      position: number,
+      positions?: Record<string, number>,
+    ): void => {
+      setItems((current) =>
+        reorderByPositions(current, positions, id, position),
+      );
+      const displayPosition = Number.isInteger(position)
+        ? Math.max(position, 0) + 1
+        : 1;
+      setLastAction(`${getItemTitle(id)} 已移动到第 ${displayPosition} 位`);
+    },
+    [],
+  );
+
+  const handleReset = useCallback((): void => {
+    closeOpenSwipeable();
+    setItems(INITIAL_ITEMS);
+    setLastAction('列表已重置');
+  }, [closeOpenSwipeable]);
+
   const renderItem = useCallback(
-    ({ isDragging, item }: InteractiveListItemRenderInfo<TestItem>) => (
-      <View style={[styles.row, isDragging && styles.draggingRow]}>
-        <View style={styles.orderBadge}>
-          <Text selectable style={styles.orderText}>
-            {orderById.get(item.id)}
-          </Text>
-        </View>
-        <View style={styles.rowCopy}>
-          <Text selectable style={styles.rowTitle}>
-            {item.title}
-          </Text>
-          <Text selectable style={styles.rowDescription}>
-            {item.description}
-          </Text>
-        </View>
-        <Text accessibilityLabel="拖拽排序" style={styles.dragHandle}>
-          ≡
-        </Text>
-      </View>
-    ),
-    [orderById],
-  );
-
-  const renderLeftActions = useCallback(
-    ({ close, item, progress }: InteractiveListActionInfo<TestItem>) => (
-      <SwipeAction
-        backgroundColor={STATIC_ACTION_COLORS.pin}
-        label="置顶"
-        onPress={() => {
-          close();
-          setItems((current) => {
-            const index = current.findIndex((entry) => entry.id === item.id);
-            if (index <= 0) {
-              return current;
-            }
-            const next = [...current];
-            const [selected] = next.splice(index, 1);
-            next.unshift(selected);
-            return next;
-          });
-        }}
-        progress={progress}
+    (sortable: SortableRenderItemProps<TestItem>) => (
+      <InteractiveRow
+        onDelete={handleDelete}
+        onDragStart={handleDragStart}
+        onDrop={handleDrop}
+        onPin={handlePin}
+        onSwipeableClose={handleSwipeableClose}
+        onSwipeableWillOpen={handleSwipeableWillOpen}
+        sortable={sortable}
       />
     ),
-    [],
-  );
-
-  const renderRightActions = useCallback(
-    ({ close, item, progress }: InteractiveListActionInfo<TestItem>) => (
-      <SwipeAction
-        backgroundColor={STATIC_ACTION_COLORS.delete}
-        label="删除"
-        onPress={() => {
-          close();
-          setItems((current) =>
-            current.filter((entry) => entry.id !== item.id),
-          );
-        }}
-        progress={progress}
-      />
-    ),
-    [],
+    [
+      handleDelete,
+      handleDragStart,
+      handleDrop,
+      handlePin,
+      handleSwipeableClose,
+      handleSwipeableWillOpen,
+    ],
   );
 
   return (
     <View style={styles.screen}>
       <Stack.Title>交互列表测试</Stack.Title>
-      <View style={styles.toolbar}>
-        {(['flash-list', 'flat-list'] as const).map((option) => {
-          const selected = option === listType;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              key={option}
-              onPress={() => setListType(option)}
-              style={[styles.modeButton, selected && styles.modeButtonSelected]}
-            >
-              <Text
-                style={[
-                  styles.modeButtonText,
-                  selected && styles.modeButtonTextSelected,
-                ]}
-              >
-                {option === 'flash-list' ? 'FlashList' : 'FlatList'}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.statusBar}>
+        <View style={styles.statusCopy}>
+          <Text selectable style={styles.statusCount}>
+            {items.length} 个项目
+          </Text>
+          <Text
+            accessibilityLiveRegion="polite"
+            selectable
+            numberOfLines={1}
+            style={styles.statusMessage}
+          >
+            {lastAction}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleReset}
+          style={({ pressed }) => [
+            styles.resetButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.resetButtonText}>重置</Text>
+        </Pressable>
       </View>
-      <InteractiveListProvider
-        data={items}
-        debug
-        estimatedItemSize={88}
-        keyExtractor={(item) => item.id}
-        onReorder={handleReorder}
-      >
-        <InteractiveListBody
-          listType={listType}
+      {items.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text selectable style={styles.emptyTitle}>
+            列表为空
+          </Text>
+          <Text selectable style={styles.emptyDescription}>
+            点击重置恢复测试项目。
+          </Text>
+        </View>
+      ) : (
+        <Sortable
+          contentContainerStyle={styles.listContent}
+          data={items}
+          itemHeight={ITEM_HEIGHT}
+          itemKeyExtractor={(item: TestItem) => item.id}
           renderItem={renderItem}
-          renderLeftActions={renderLeftActions}
-          renderRightActions={renderRightActions}
+          style={styles.list}
         />
-      </InteractiveListProvider>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  action: { width: 88 },
+  action: { height: ITEM_HEIGHT, width: ACTION_WIDTH },
   actionButton: {
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
-    minHeight: 64,
     paddingHorizontal: 12,
   },
   actionText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
-  draggingRow: { boxShadow: '0 8px 20px rgba(0, 0, 0, 0.18)' },
   dragHandle: {
-    color: COLORS.muted,
-    fontSize: 24,
-    height: 36,
-    lineHeight: 30,
-    textAlign: 'center',
-    width: 32,
-  },
-  listContent: { paddingBottom: 32 },
-  modeButton: {
     alignItems: 'center',
-    borderCurve: 'continuous',
-    borderRadius: 5,
-    flex: 1,
-    height: 34,
+    height: 44,
     justifyContent: 'center',
+    width: 44,
   },
-  modeButtonSelected: {
-    backgroundColor: COLORS.surface,
-    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.12)',
+  dragHandleBar: {
+    backgroundColor: COLORS.muted,
+    borderRadius: 1,
+    height: 2,
+    width: 18,
   },
-  modeButtonText: { color: COLORS.muted, fontSize: 13, fontWeight: '600' },
-  modeButtonTextSelected: { color: COLORS.text },
+  dragHandleIcon: {
+    alignItems: 'center',
+    gap: 4,
+    justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 36,
+  },
+  emptyDescription: { color: COLORS.muted, fontSize: 14 },
+  emptyState: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 6,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
+  list: { backgroundColor: COLORS.background, flex: 1 },
+  listContent: { paddingBottom: 32 },
   orderBadge: {
     alignItems: 'center',
     backgroundColor: COLORS.background,
@@ -367,30 +539,50 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
   },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.65 },
+  resetButton: {
+    alignItems: 'center',
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 38,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  resetButtonText: { color: COLORS.accent, fontSize: 14, fontWeight: '700' },
   row: {
     alignItems: 'center',
     backgroundColor: COLORS.surface,
     borderBottomColor: COLORS.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    gap: 12,
-    minHeight: 72,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 10,
+    height: ITEM_HEIGHT,
+    paddingHorizontal: 12,
   },
-  rowCopy: { flex: 1, gap: 4 },
-  rowDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 18 },
+  rowCopy: { flex: 1, gap: 3, minWidth: 0 },
+  rowDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 17 },
   rowTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
   screen: { backgroundColor: COLORS.background, flex: 1 },
-  toolbar: {
-    backgroundColor: COLORS.border,
-    borderCurve: 'continuous',
-    borderRadius: 7,
+  statusBar: {
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderBottomColor: COLORS.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    gap: 2,
-    marginHorizontal: 16,
-    marginVertical: 10,
-    padding: 2,
+    gap: 16,
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
+  statusCopy: { flex: 1, gap: 3, minWidth: 0 },
+  statusCount: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
+  statusMessage: { color: COLORS.muted, fontSize: 13 },
+  swipeable: { height: ITEM_HEIGHT, overflow: 'hidden' },
+  swipeableChildren: { backgroundColor: COLORS.surface },
 });

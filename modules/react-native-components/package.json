@@ -21,12 +21,10 @@
   ],
   "scripts": {
     "test": "vitest run src/media-cache/core/__tests__",
-    "test:list": "vitest run src/core/__tests__/interactive-list-layout.test.ts",
     "test:video": "vitest run src/components/MyVideo/__tests__",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react-native-logger": "workspace:*",
     "react-native-nitro-visibility-observer": "workspace:*"
   },
   "peerDependencies": {
@@ -38,10 +36,7 @@
     "nativewind": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-native-gesture-handler": "catalog:",
-    "react-native-reanimated": "catalog:",
-    "react-native-reanimated-carousel": "catalog:",
-    "react-native-worklets": "catalog:"
+    "react-native-reanimated-carousel": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
@@ -53,10 +48,7 @@
     "nativewind": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-native-gesture-handler": "catalog:",
-    "react-native-reanimated": "catalog:",
     "react-native-reanimated-carousel": "catalog:",
-    "react-native-worklets": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
