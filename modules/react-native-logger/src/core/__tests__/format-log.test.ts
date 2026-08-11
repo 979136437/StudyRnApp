@@ -29,8 +29,8 @@ describe('日志格式化', () => {
   });
 
   it('为 JavaScript 输出补充 Logcat 风格前缀', () => {
-    expect(formatJavaScriptLog('InteractiveList', entry)).toBe(
-      '08-10 16:42:01.123 D/InteractiveList: #0042 +123ms gesture.move key="item 01" session=3 translation=128.457',
+    expect(formatJavaScriptLog('Example', entry)).toBe(
+      '08-10 16:42:01.123 D/Example: #0042 +123ms gesture.move key="item 01" session=3 translation=128.457',
     );
   });
 

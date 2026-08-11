@@ -5,6 +5,6 @@
 ```ts
 import { createLogger } from 'react-native-logger';
 
-const logger = createLogger('InteractiveList');
-logger.info('drag.start', { session: 1, key: 'item-01' });
+const logger = createLogger('Example');
+logger.info('task.start', { session: 1, key: 'item-01' });
 ```

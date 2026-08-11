@@ -8,7 +8,7 @@ import type {
 import { formatJavaScriptLog, normalizeLogToken } from './format-log';
 
 const IDLE_TIMEOUT_MS = 500;
-const MAX_BATCH_SIZE = 50;
+const MAX_BATCH_SIZE = 1;
 const MAX_QUEUE_SIZE = 500;
 const MIN_IDLE_TIME_MS = 2;
 
@@ -73,22 +73,17 @@ export function createLoggerRuntime(
 
   const drain = (deadline: IdleDeadlineLike): void => {
     scheduled = false;
-    const batch: QueuedLogEntry[] = [];
+    let processedCount = 0;
     while (
       queue.length > 0 &&
-      batch.length < MAX_BATCH_SIZE &&
-      (batch.length === 0 || deadline.timeRemaining() >= MIN_IDLE_TIME_MS)
+      processedCount < MAX_BATCH_SIZE &&
+      (processedCount === 0 || deadline.timeRemaining() >= MIN_IDLE_TIME_MS)
     ) {
       const entry = queue.shift();
       if (entry) {
-        batch.push(entry);
+        dependencies.consoleSink(entry.level, formatJavaScriptLog(tag, entry));
+        processedCount += 1;
       }
-    }
-
-    if (batch.length > 0) {
-      batch.forEach((entry) =>
-        dependencies.consoleSink(entry.level, formatJavaScriptLog(tag, entry)),
-      );
     }
     if (queue.length > 0) {
       schedule();
