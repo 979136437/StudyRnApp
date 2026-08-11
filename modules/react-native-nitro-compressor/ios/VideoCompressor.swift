@@ -267,7 +267,12 @@ enum VideoCompressor {
   }
 
   private static func channelCount(track: AVAssetTrack) -> Int {
-    guard let description = track.formatDescriptions.first,
+    guard let rawDescription = track.formatDescriptions.first else {
+      return 2
+    }
+    // AVFoundation 将格式描述桥接为 Any，Core Foundation 类型只能显式转换。
+    let description = rawDescription as! CMAudioFormatDescription
+    guard CMFormatDescriptionGetMediaType(description) == kCMMediaType_Audio,
           let basic = CMAudioFormatDescriptionGetStreamBasicDescription(description) else {
       return 2
     }
