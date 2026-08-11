@@ -12,6 +12,12 @@ private final class ThumbnailImageView: UIImageView {
 }
 
 final class HybridMediaThumbnail: HybridMediaThumbnailSpec, RecyclableView {
+  private static let placeholderCache: NSCache<NSString, UIImage> = {
+    let cache = NSCache<NSString, UIImage>()
+    cache.totalCostLimit = 8 * 1024 * 1024
+    return cache
+  }()
+
   private let imageView = ThumbnailImageView(frame: .zero)
   private let imageManager = PHCachingImageManager()
   private var requestId: PHImageRequestID = PHInvalidImageRequestID
@@ -27,7 +33,7 @@ final class HybridMediaThumbnail: HybridMediaThumbnailSpec, RecyclableView {
   override init() {
     super.init()
     imageView.clipsToBounds = true
-    imageView.backgroundColor = .secondarySystemBackground
+    imageView.backgroundColor = .clear
     imageView.onLayout = { [weak self] in self?.loadIfNeeded() }
   }
 
@@ -60,7 +66,8 @@ final class HybridMediaThumbnail: HybridMediaThumbnailSpec, RecyclableView {
 
     cancelRequest()
     requestedKey = key
-    imageView.image = nil
+    // 全屏请求完成前沿用网格阶段的小图，避免切换到预览时出现空白帧。
+    imageView.image = Self.placeholderCache.object(forKey: assetId as NSString)
     let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
     guard let asset = fetch.firstObject else {
       onError(ThumbnailErrorEvent(assetId: assetId, message: "资源不存在或当前权限不可访问"))
@@ -81,6 +88,7 @@ final class HybridMediaThumbnail: HybridMediaThumbnailSpec, RecyclableView {
     ) { [weak self] image, info in
       guard let self, self.assetId == expectedAssetId else { return }
       if let image {
+        self.cachePlaceholder(image, assetId: expectedAssetId)
         self.imageView.image = image
         let degraded = info?[PHImageResultIsDegradedKey] as? Bool ?? false
         if !degraded {
@@ -101,5 +109,24 @@ final class HybridMediaThumbnail: HybridMediaThumbnailSpec, RecyclableView {
       imageManager.cancelImageRequest(requestId)
       requestId = PHInvalidImageRequestID
     }
+  }
+
+  private func cachePlaceholder(_ image: UIImage, assetId: String) {
+    let key = assetId as NSString
+    let cached = Self.placeholderCache.object(forKey: key)
+    let imageCost = pixelCost(of: image)
+    let cachedCost = cached.map { pixelCost(of: $0) } ?? Int.max
+    if cached == nil || imageCost < cachedCost {
+      Self.placeholderCache.setObject(image, forKey: key, cost: imageCost)
+    }
+  }
+
+  private func pixelCost(of image: UIImage) -> Int {
+    if let cgImage = image.cgImage {
+      return cgImage.bytesPerRow * cgImage.height
+    }
+    let width = Int(image.size.width * image.scale)
+    let height = Int(image.size.height * image.scale)
+    return max(1, width * height * 4)
   }
 }

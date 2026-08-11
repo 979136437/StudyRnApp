@@ -25,65 +25,78 @@ export function AlbumPickerRow({
   shouldDownloadFromNetwork,
   theme,
 }: AlbumPickerRowProps): React.JSX.Element {
-  const title = `${album?.title ?? labels.allMedia}(${album?.assetCount ?? allMediaCountLabel})`;
+  const title = album?.title ?? labels.allMedia;
+  const count = album?.assetCount ?? allMediaCountLabel;
+  const accessibilityTitle = `${title}(${count})`;
   const choose = useCallback(() => {
     onChoose(album ?? undefined);
   }, [album, onChoose]);
 
   return (
-    <Pressable
-      accessibilityLabel={`${title}${selected ? '，当前相册' : ''}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={choose}
-      style={({ pressed }) => [
-        styles.row,
-        { borderBottomColor: theme.separator },
-        pressed ? { backgroundColor: theme.surface } : undefined,
-      ]}
-    >
-      <View style={[styles.cover, { backgroundColor: theme.surface }]}>
-        {coverAssetId ? (
-          <MediaThumbnail
-            assetId={coverAssetId}
-            shouldDownloadFromNetwork={shouldDownloadFromNetwork}
-            style={StyleSheet.absoluteFill}
-          />
+    <View style={[styles.rowFrame, { borderBottomColor: theme.separator }]}>
+      <View style={styles.row}>
+        <View style={[styles.cover, { backgroundColor: theme.surface }]}>
+          {coverAssetId ? (
+            <MediaThumbnail
+              assetId={coverAssetId}
+              shouldDownloadFromNetwork={shouldDownloadFromNetwork}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null}
+        </View>
+        <View style={styles.copy}>
+          <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
+            {title}
+          </Text>
+          <Text style={[styles.count, { color: theme.secondaryText }]}>
+            ({count})
+          </Text>
+        </View>
+        {selected ? (
+          <View style={styles.selectedBadge}>
+            <Text style={[styles.selectedText, { color: theme.accent }]}>✓</Text>
+          </View>
         ) : null}
       </View>
-      <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
-          {title}
-        </Text>
-      </View>
-      {selected ? (
-        <View style={[styles.selectedBadge, { backgroundColor: theme.accent }]}>
-          <Text style={styles.selectedText}>✓</Text>
-        </View>
-      ) : null}
-    </Pressable>
+      <Pressable
+        accessibilityLabel={`${accessibilityTitle}${selected ? '，当前相册' : ''}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        onPress={choose}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // 固定外层高度，避免回收中的原生缩略图参与 FlashList 行高推断。
+  rowFrame: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    height: 82,
+    width: '100%',
+  },
   row: {
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    flex: 1,
     flexDirection: 'row',
-    gap: 16,
-    minHeight: 92,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
   },
-  cover: { height: 66, overflow: 'hidden', width: 66 },
-  copy: { flex: 1 },
-  name: { fontSize: 18, fontWeight: '500' },
+  cover: { height: 82, overflow: 'hidden', width: 82 },
+  copy: {
+    alignItems: 'baseline',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 3,
+    paddingHorizontal: 24,
+  },
+  name: { flexShrink: 1, fontSize: 18, fontWeight: '500' },
+  count: { fontSize: 18 },
   selectedBadge: {
     alignItems: 'center',
-    borderRadius: 14,
-    height: 28,
+    height: 42,
     justifyContent: 'center',
-    width: 28,
+    marginRight: 20,
+    width: 42,
   },
-  selectedText: { color: '#ffffff', fontSize: 17, fontWeight: '800' },
+  selectedText: { fontSize: 28, fontWeight: '400' },
 });

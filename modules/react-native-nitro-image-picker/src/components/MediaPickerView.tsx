@@ -65,16 +65,20 @@ import { AlbumPickerRow } from './AlbumPickerRow';
 import {
   DARK_THEME,
   DEFAULT_LABELS,
-  LIGHT_THEME,
   type ResolvedMediaPickerLabels,
 } from './constants';
 import { MediaThumbnail } from './MediaThumbnail';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { normalizePickerUiOptions } from './normalize-picker-options';
 
-const GRID_GAP = 4;
-const GRID_PADDING = 4;
-const ALBUM_SHEET_TOP_OFFSET = 104;
+const GRID_GAP = 2;
+const GRID_PADDING = 0;
+const PICKER_HEADER_HEIGHT = 56;
+const ALBUM_ROW_HEIGHT = 82;
+const ALBUM_SHEET_BOTTOM_GAP = 72;
+const PICKER_CHROME_COLOR = '#353537';
+const PICKER_PILL_COLOR = '#4a4a4c';
+const PICKER_FOOTER_COLOR = '#1c1c1e';
 const LIBRARY_CHANGE_DEBOUNCE_MS = 120;
 
 type PickerGridItem =
@@ -100,6 +104,20 @@ function errorMessage(error: unknown): string {
 
 function albumKey(album: MediaAlbum | null): string {
   return album?.id ?? '__all_media__';
+}
+
+function albumItemType(album: MediaAlbum | null): string {
+  return album ? 'album' : 'all-media';
+}
+
+function gridItemType(item: PickerGridItem): PickerGridItem['kind'] {
+  return item.kind;
+}
+
+function isInvalidCursorError(error: unknown): boolean {
+  return (
+    error instanceof NitroImagePickerError && error.code === 'E_INVALID_CURSOR'
+  );
 }
 
 export function MediaPickerView({
@@ -143,7 +161,12 @@ export function MediaPickerView({
     [labelOverrides],
   );
   const albumTheme = useMemo<MediaPickerTheme>(
-    () => ({ ...LIGHT_THEME, accent: theme.accent }),
+    () => ({
+      ...DARK_THEME,
+      background: '#2c2c2e',
+      surface: '#3a3a3c',
+      accent: theme.accent,
+    }),
     [theme.accent],
   );
 
@@ -170,6 +193,8 @@ export function MediaPickerView({
     createSelectionState,
   );
   const requestSerial = useRef(0);
+  const libraryGeneration = useRef(0);
+  const loadingMoreRef = useRef(false);
   const onCancelRef = useLatestRef(onCancel);
   const onCompleteRef = useLatestRef(onComplete);
   const onErrorRef = useLatestRef(onError);
@@ -191,6 +216,8 @@ export function MediaPickerView({
   const loadLibrary = useCallback(
     async (album?: MediaAlbum, showLoading = true) => {
       const serial = ++requestSerial.current;
+      const generation = ++libraryGeneration.current;
+      loadingMoreRef.current = false;
       if (showLoading) {
         setLoading(true);
         setMessage(undefined);
@@ -204,7 +231,11 @@ export function MediaPickerView({
             first: DEFAULT_PAGE_SIZE,
           }),
         ]);
-        if (requestSerial.current !== serial) return;
+        if (
+          requestSerial.current !== serial ||
+          libraryGeneration.current !== generation
+        )
+          return;
         setAlbums((current) =>
           reconcileOrderedItems(current, nextAlbums, (item) => item.id),
         );
@@ -260,6 +291,11 @@ export function MediaPickerView({
       inFlight = false;
     };
     const subscription = addMediaLibraryChangeListener(() => {
+      // 变更通知到达后旧游标已经失效，先阻止列表继续触底分页。
+      libraryGeneration.current += 1;
+      loadingMoreRef.current = false;
+      setEndCursor(undefined);
+      setHasNextPage(false);
       pending = true;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -305,7 +341,16 @@ export function MediaPickerView({
   }, [activeAlbum, loadLibrary, mediaTypes, reportError]);
 
   const loadMore = useCallback(async () => {
-    if (!hasNextPage || !endCursor || loadingMore || loading) return;
+    if (
+      !hasNextPage ||
+      !endCursor ||
+      loadingMoreRef.current ||
+      loadingMore ||
+      loading
+    )
+      return;
+    const generation = libraryGeneration.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await getAssetsAsync({
@@ -314,6 +359,7 @@ export function MediaPickerView({
         first: DEFAULT_PAGE_SIZE,
         after: endCursor,
       });
+      if (libraryGeneration.current !== generation) return;
       setAssets((current) => {
         const known = new Set(current.map((asset) => asset.assetId));
         return [
@@ -324,16 +370,23 @@ export function MediaPickerView({
       setEndCursor(page.endCursor);
       setHasNextPage(page.hasNextPage);
     } catch (error) {
-      reportError(error);
+      if (libraryGeneration.current !== generation) return;
+      if (isInvalidCursorError(error)) {
+        await loadLibrary(activeAlbum, false);
+      } else {
+        reportError(error);
+      }
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   }, [
-    activeAlbum?.id,
+    activeAlbum,
     endCursor,
     hasNextPage,
     loading,
     loadingMore,
+    loadLibrary,
     mediaTypes,
     reportError,
   ]);
@@ -568,36 +621,40 @@ export function MediaPickerView({
     ({ item }: ListRenderItemInfo<PickerGridItem>) => {
       if (item.kind === 'camera') {
         return (
-          <Pressable
-            accessibilityLabel={
-              mediaTypes.length > 1
-                ? `${labels.takePhoto} / ${labels.recordVideo}`
-                : mediaTypes[0] === 'videos'
-                  ? labels.recordVideo
-                  : labels.takePhoto
-            }
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={openCamera}
-            style={({ pressed }) => [
-              styles.gridCell,
-              styles.cameraTile,
-              {
-                backgroundColor: theme.surface,
-                height: cellSize,
-                width: cellSize,
-              },
-              pressed ? styles.gridCellPressed : undefined,
-            ]}
-          >
-            <View style={styles.cameraIcon}>
-              <View style={styles.cameraLens} />
-              <View style={styles.cameraTop} />
+          <View style={[styles.gridCellFrame, { height: cellSize + GRID_GAP }]}>
+            <View
+              style={[
+                styles.gridCell,
+                styles.cameraTile,
+                {
+                  backgroundColor: theme.surface,
+                  height: cellSize,
+                  width: cellSize,
+                },
+              ]}
+            >
+              <View style={styles.cameraIcon}>
+                <View style={styles.cameraLens} />
+                <View style={styles.cameraTop} />
+              </View>
+              <Text style={[styles.cameraText, { color: theme.text }]}>
+                {labels.takePhoto}
+              </Text>
             </View>
-            <Text style={[styles.cameraText, { color: theme.text }]}>
-              {labels.takePhoto}
-            </Text>
-          </Pressable>
+            <Pressable
+              accessibilityLabel={
+                mediaTypes.length > 1
+                  ? `${labels.takePhoto} / ${labels.recordVideo}`
+                  : mediaTypes[0] === 'videos'
+                    ? labels.recordVideo
+                    : labels.takePhoto
+              }
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={openCamera}
+              style={styles.gridCellTouchTarget}
+            />
+          </View>
         );
       }
 
@@ -616,20 +673,21 @@ export function MediaPickerView({
           }),
       };
       return (
-        <Pressable
-          accessibilityLabel={`${labels.preview} ${asset.fileName ?? ''}`.trim()}
-          accessibilityRole="button"
-          onPress={overlayContext.openPreview}
-          style={({ pressed }) => [
-            styles.gridCell,
-            { height: cellSize, width: cellSize },
-            pressed ? styles.gridCellPressed : undefined,
-          ]}
-        >
-          <MediaThumbnail
-            assetId={asset.assetId}
-            shouldDownloadFromNetwork
-            style={StyleSheet.absoluteFill}
+        <View style={[styles.gridCellFrame, { height: cellSize + GRID_GAP }]}>
+          <View
+            style={[styles.gridCell, { height: cellSize, width: cellSize }]}
+          >
+            <MediaThumbnail
+              assetId={asset.assetId}
+              shouldDownloadFromNetwork={shouldDownloadFromNetwork}
+              style={{ height: cellSize, width: cellSize }}
+            />
+          </View>
+          <Pressable
+            accessibilityLabel={`${labels.preview} ${asset.fileName ?? ''}`.trim()}
+            accessibilityRole="button"
+            onPress={overlayContext.openPreview}
+            style={styles.gridCellTouchTarget}
           />
           {asset.type === 'video' ? (
             <Text style={[styles.duration, { color: '#ffffff' }]}>
@@ -647,23 +705,21 @@ export function MediaPickerView({
               }
               accessibilityRole="checkbox"
               accessibilityState={{ checked: Boolean(selectedIndex) }}
-              onPress={(event) => {
-                event.stopPropagation();
-                toggleSelection();
-              }}
-              style={({ pressed }) => [
+              onPress={toggleSelection}
+              style={[
                 styles.selectionBadge,
                 {
-                  backgroundColor: selectedIndex ? theme.accent : theme.overlay,
+                  backgroundColor: selectedIndex
+                    ? theme.accent
+                    : theme.overlay,
                   borderColor: '#ffffff',
                 },
-                pressed ? styles.pressed : undefined,
               ]}
             >
               <Text style={styles.selectionText}>{selectedIndex || ''}</Text>
             </Pressable>
           )}
-        </Pressable>
+        </View>
       );
     },
     [
@@ -671,14 +727,15 @@ export function MediaPickerView({
       busy,
       labels.preview,
       labels.recordVideo,
-      labels.selectionLimitReached,
+      labels.select,
+      labels.selected,
       labels.takePhoto,
       mediaTypes,
-      normalizedUi.selectionLimit,
       openCamera,
       renderAssetOverlay,
       renderContext,
       selection,
+      shouldDownloadFromNetwork,
       toggleAssetSelection,
       theme.accent,
       theme.overlay,
@@ -688,7 +745,12 @@ export function MediaPickerView({
   );
 
   const defaultHeader = (
-    <View style={[styles.header, { borderBottomColor: theme.separator }]}>
+    <View
+      style={[
+        styles.header,
+        { backgroundColor: PICKER_CHROME_COLOR },
+      ]}
+    >
       {onCancel ? (
         <Pressable
           accessibilityLabel={labels.cancel}
@@ -697,9 +759,8 @@ export function MediaPickerView({
           disabled={busy}
           hitSlop={8}
           onPress={handleCancel}
-          style={({ pressed }) => [
+          style={[
             styles.closeButton,
-            pressed ? styles.pressed : undefined,
             busy ? styles.disabled : undefined,
           ]}
         >
@@ -712,16 +773,20 @@ export function MediaPickerView({
         accessibilityLabel={`${labels.albums}，${activeAlbum?.title ?? labels.allMedia}`}
         accessibilityRole="button"
         onPress={() => setAlbumsVisible(true)}
-        style={({ pressed }) => [
-          styles.albumButton,
-          { backgroundColor: theme.surface },
-          pressed ? styles.pressed : undefined,
-        ]}
+        style={[styles.albumButton, { backgroundColor: PICKER_PILL_COLOR }]}
       >
         <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
           {activeAlbum?.title ?? labels.allMedia}
         </Text>
-        <View style={[styles.chevron, { borderColor: theme.secondaryText }]} />
+        <View style={styles.chevronCircle}>
+          <View
+            style={[
+              styles.chevron,
+              { borderColor: theme.text },
+              albumsVisible ? styles.chevronExpanded : undefined,
+            ]}
+          />
+        </View>
       </Pressable>
       <View style={styles.headerSpacer} />
     </View>
@@ -754,10 +819,9 @@ export function MediaPickerView({
               ? () => void requestAccess()
               : () => void Linking.openSettings()
           }
-          style={({ pressed }) => [
+          style={[
             styles.primaryButton,
             { backgroundColor: theme.accent },
-            pressed ? styles.pressed : undefined,
             busy ? styles.disabled : undefined,
           ]}
         >
@@ -773,9 +837,19 @@ export function MediaPickerView({
     );
   };
 
+  const albumSheetTop = insets.top + PICKER_HEADER_HEIGHT;
+  const albumSheetHeight = Math.min(
+    albumItems.length * ALBUM_ROW_HEIGHT,
+    Math.max(
+      ALBUM_ROW_HEIGHT,
+      windowHeight - albumSheetTop - ALBUM_SHEET_BOTTOM_GAP,
+    ),
+  );
+
   return (
     <SafeAreaView
-      style={[styles.root, { backgroundColor: theme.background }, style]}
+      edges={['top']}
+      style={[styles.root, { backgroundColor: PICKER_CHROME_COLOR }, style]}
     >
       {renderHeader ? renderHeader(renderContext) : defaultHeader}
       {message ? (
@@ -802,7 +876,7 @@ export function MediaPickerView({
       {!permission?.granted ? (
         <View style={styles.flexCenter}>{renderPermission()}</View>
       ) : (
-        <View style={styles.pickerBody}>
+        <View style={[styles.pickerBody, { backgroundColor: theme.background }]}>
           <View
             onLayout={(event) =>
               handleContainerLayout(event.nativeEvent.layout.width)
@@ -815,10 +889,9 @@ export function MediaPickerView({
                 accessibilityState={{ disabled: busy }}
                 disabled={busy}
                 onPress={() => void manageLimitedAccess()}
-                style={({ pressed }) => [
+                style={[
                   styles.limitedButton,
                   { backgroundColor: theme.surface },
-                  pressed ? styles.pressed : undefined,
                   busy ? styles.disabled : undefined,
                 ]}
               >
@@ -838,6 +911,7 @@ export function MediaPickerView({
                 }
                 data={gridItems}
                 extraData={selection.selectedIds}
+                getItemType={gridItemType}
                 key={`${normalizedUi.columns}:${measuredCellSize}`}
                 keyExtractor={(item) => item.id}
                 ListEmptyComponent={
@@ -868,8 +942,9 @@ export function MediaPickerView({
             style={[
               styles.bottomBar,
               {
-                backgroundColor: theme.background,
+                backgroundColor: PICKER_FOOTER_COLOR,
                 borderTopColor: theme.separator,
+                paddingBottom: Math.max(8, insets.bottom),
               },
             ]}
           >
@@ -887,9 +962,8 @@ export function MediaPickerView({
                     })
                   : undefined
               }
-              style={({ pressed }) => [
+              style={[
                 styles.previewButton,
-                pressed ? styles.pressed : undefined,
                 !selectedPreviewInitialId || busy ? styles.disabled : undefined,
               ]}
             >
@@ -903,18 +977,14 @@ export function MediaPickerView({
                 {labels.preview}
               </Text>
             </Pressable>
-            <Text
-              style={[
-                styles.selectionSummary,
-                {
-                  color: selection.selectedIds.length
-                    ? theme.accent
-                    : theme.secondaryText,
-                },
-              ]}
-            >
-              {selection.selectedIds.length}/{normalizedUi.selectionLimit}
-            </Text>
+            <View accessibilityRole="text" style={styles.originalStatus}>
+              <View
+                style={[styles.originalIndicator, { borderColor: theme.text }]}
+              />
+              <Text style={[styles.originalText, { color: theme.text }]}>
+                {labels.original}
+              </Text>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
@@ -922,7 +992,7 @@ export function MediaPickerView({
               }}
               disabled={busy || selection.selectedIds.length === 0}
               onPress={() => void confirm()}
-              style={({ pressed }) => [
+              style={[
                 styles.doneButton,
                 {
                   backgroundColor:
@@ -930,7 +1000,6 @@ export function MediaPickerView({
                       ? theme.accent
                       : theme.surface,
                 },
-                pressed ? styles.pressed : undefined,
                 busy || selection.selectedIds.length === 0
                   ? styles.disabled
                   : undefined,
@@ -976,28 +1045,75 @@ export function MediaPickerView({
             onPress={() => setAlbumsVisible(false)}
             style={StyleSheet.absoluteFill}
           />
-          <SafeAreaView
+          <View
+            style={[
+              styles.albumModalHeader,
+              {
+                backgroundColor: PICKER_CHROME_COLOR,
+                height: albumSheetTop,
+                paddingTop: insets.top,
+              },
+            ]}
+          >
+            {onCancel ? (
+              <Pressable
+                accessibilityLabel={labels.cancel}
+                accessibilityRole="button"
+                onPress={() => {
+                  setAlbumsVisible(false);
+                  handleCancel();
+                }}
+                style={styles.closeButton}
+              >
+                <Text style={[styles.closeIcon, { color: theme.text }]}>×</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.headerSpacer} />
+            )}
+            <Pressable
+              accessibilityLabel={labels.cancel}
+              accessibilityRole="button"
+              onPress={() => setAlbumsVisible(false)}
+              style={[styles.albumButton, { backgroundColor: PICKER_PILL_COLOR }]}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.title, { color: theme.text }]}
+              >
+                {activeAlbum?.title ?? labels.allMedia}
+              </Text>
+              <View style={styles.chevronCircle}>
+                <View
+                  style={[
+                    styles.chevron,
+                    styles.chevronExpanded,
+                    { borderColor: theme.text },
+                  ]}
+                />
+              </View>
+            </Pressable>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View
             accessibilityViewIsModal
-            edges={['bottom']}
             style={[
               styles.albumSheet,
               {
                 backgroundColor: albumTheme.background,
-                marginTop: Math.min(
-                  insets.top + ALBUM_SHEET_TOP_OFFSET,
-                  windowHeight * 0.28,
-                ),
+                height: albumSheetHeight,
+                top: albumSheetTop,
               },
             ]}
           >
             <FlashList
               contentContainerStyle={styles.albumList}
               data={albumItems}
+              getItemType={albumItemType}
               keyExtractor={albumKey}
               renderItem={renderAlbum}
               showsVerticalScrollIndicator={false}
             />
-          </SafeAreaView>
+          </View>
         </View>
       </Modal>
 
@@ -1029,11 +1145,10 @@ export function MediaPickerView({
               accessibilityState={{ disabled: busy }}
               disabled={busy}
               onPress={() => void capture('image')}
-              style={({ pressed }) => [
+              style={[
                 styles.menuCommand,
                 styles.menuCommandSeparated,
                 { borderBottomColor: albumTheme.separator },
-                pressed ? { backgroundColor: albumTheme.surface } : undefined,
                 busy ? styles.disabled : undefined,
               ]}
             >
@@ -1047,9 +1162,8 @@ export function MediaPickerView({
               accessibilityState={{ disabled: busy }}
               disabled={busy}
               onPress={() => void capture('video')}
-              style={({ pressed }) => [
+              style={[
                 styles.menuCommand,
-                pressed ? { backgroundColor: albumTheme.surface } : undefined,
                 busy ? styles.disabled : undefined,
               ]}
             >
@@ -1061,27 +1175,30 @@ export function MediaPickerView({
         </View>
       </Modal>
 
-      <MediaPreviewModal
-        assets={assets}
-        busy={busy}
-        capturedAssets={selection.capturedAssets}
-        hasNextPage={hasNextPage}
-        initialAssetId={previewSession?.initialAssetId}
-        labels={labels}
-        message={message}
-        mode={previewSession?.mode ?? 'album'}
-        onClose={closePreview}
-        onConfirm={() => void confirm()}
-        onEndReached={() => void loadMore()}
-        onDismissMessage={dismissMessage}
-        onToggleSelection={toggleAssetSelection}
-        selectedIds={selection.selectedIds}
-        selectedLibraryAssets={Object.values(selectedLibraryAssets)}
-        selectionLimit={normalizedUi.selectionLimit}
-        shouldDownloadFromNetwork={shouldDownloadFromNetwork}
-        theme={theme}
-        visible={Boolean(previewSession)}
-      />
+      {previewSession ? (
+        <MediaPreviewModal
+          assets={assets}
+          busy={busy}
+          capturedAssets={selection.capturedAssets}
+          hasNextPage={hasNextPage}
+          initialAssetId={previewSession.initialAssetId}
+          key={`${previewSession.mode}:${previewSession.initialAssetId}`}
+          labels={labels}
+          message={message}
+          mode={previewSession.mode}
+          onClose={closePreview}
+          onConfirm={() => void confirm()}
+          onEndReached={() => void loadMore()}
+          onDismissMessage={dismissMessage}
+          onToggleSelection={toggleAssetSelection}
+          selectedIds={selection.selectedIds}
+          selectedLibraryAssets={Object.values(selectedLibraryAssets)}
+          selectionLimit={normalizedUi.selectionLimit}
+          shouldDownloadFromNetwork={shouldDownloadFromNetwork}
+          theme={theme}
+          visible
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1090,10 +1207,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    minHeight: 60,
+    minHeight: PICKER_HEADER_HEIGHT,
     paddingHorizontal: 12,
   },
   closeButton: {
@@ -1106,22 +1222,36 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 52 },
   albumButton: {
     alignItems: 'center',
-    borderRadius: 18,
+    borderRadius: 22,
     flexDirection: 'row',
     flexShrink: 1,
     gap: 9,
     justifyContent: 'center',
     maxWidth: '62%',
-    minHeight: 36,
-    paddingHorizontal: 14,
+    minHeight: 44,
+    paddingHorizontal: 16,
   },
   title: { flexShrink: 1, fontSize: 16, fontWeight: '600' },
+  chevronCircle: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 12,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
   chevron: {
     borderBottomWidth: 2,
     borderRightWidth: 2,
-    height: 8,
+    height: 7,
+    marginTop: -3,
     transform: [{ rotate: '45deg' }],
-    width: 8,
+    width: 7,
+  },
+  chevronExpanded: {
+    marginBottom: -4,
+    marginTop: 0,
+    transform: [{ rotate: '225deg' }],
   },
   doneButton: {
     alignItems: 'center',
@@ -1166,12 +1296,16 @@ const styles = StyleSheet.create({
     paddingTop: GRID_PADDING,
   },
   gridCell: {
-    aspectRatio: 1,
-    marginHorizontal: GRID_GAP / 2,
-    marginVertical: GRID_GAP / 2,
     overflow: 'hidden',
   },
-  gridCellPressed: { opacity: 0.82 },
+  gridCellFrame: { padding: GRID_GAP / 2, width: '100%' },
+  gridCellTouchTarget: {
+    bottom: GRID_GAP / 2,
+    left: GRID_GAP / 2,
+    position: 'absolute',
+    right: GRID_GAP / 2,
+    top: GRID_GAP / 2,
+  },
   cameraTile: {
     alignItems: 'center',
     gap: 10,
@@ -1250,29 +1384,47 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 12,
-    minHeight: 64,
+    minHeight: 60,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 8,
   },
   previewButton: {
     justifyContent: 'center',
     minHeight: 40,
     minWidth: 54,
   },
-  selectionSummary: {
+  originalStatus: {
+    alignItems: 'center',
     flex: 1,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '600',
-    textAlign: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    justifyContent: 'center',
   },
-  pressed: { opacity: 0.68 },
+  originalIndicator: {
+    borderRadius: 13,
+    borderWidth: 1.5,
+    height: 26,
+    width: 26,
+  },
+  originalText: { fontSize: 16 },
   disabled: { opacity: 0.52 },
   modalBackdrop: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     flex: 1,
     justifyContent: 'flex-end',
   },
-  albumModalBackdrop: { backgroundColor: 'rgba(0,0,0,0.62)', flex: 1 },
+  albumModalBackdrop: { backgroundColor: 'rgba(0,0,0,0.72)', flex: 1 },
+  albumModalHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    left: 0,
+    paddingHorizontal: 12,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 2,
+  },
   cameraSheet: {
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -1280,8 +1432,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   albumSheet: {
-    flex: 1,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    left: 0,
     overflow: 'hidden',
+    position: 'absolute',
+    right: 0,
+    zIndex: 2,
   },
   cameraSheetHandle: {
     alignSelf: 'center',
@@ -1291,7 +1448,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     width: 36,
   },
-  albumList: { paddingBottom: 12 },
+  albumList: { paddingBottom: 0 },
   menuCommand: {
     alignItems: 'center',
     minHeight: 58,

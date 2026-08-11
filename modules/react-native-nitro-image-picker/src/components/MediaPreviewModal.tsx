@@ -1,20 +1,16 @@
-import {
-  FlashList,
-  type FlashListRef,
-  type ListRenderItemInfo,
-} from '@shopify/flash-list';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   createAlbumPreviewItems,
@@ -55,10 +51,6 @@ interface MediaPreviewModalProps {
   onToggleSelection: (assetId: string) => void;
 }
 
-function previewKey(item: PreviewMediaItem): string {
-  return item.id;
-}
-
 export function MediaPreviewModal({
   assets,
   busy,
@@ -81,7 +73,8 @@ export function MediaPreviewModal({
   visible,
 }: MediaPreviewModalProps): React.JSX.Element {
   const { width } = useWindowDimensions();
-  const pagerRef = useRef<FlashListRef<PreviewMediaItem>>(null);
+  const insets = useSafeAreaInsets();
+  const pagerRef = useRef<ScrollView>(null);
   const [currentId, setCurrentId] = useState(initialAssetId);
   const [zoomActive, setZoomActive] = useState(false);
 
@@ -102,13 +95,19 @@ export function MediaPreviewModal({
     ? selectedIds.indexOf(currentItem.id) + 1
     : 0;
   const sessionKey = `${mode}:${initialAssetId ?? ''}`;
-
-  useEffect(() => {
-    if (!visible) return;
-    const initialIndex = findPreviewIndex(items, initialAssetId);
-    setCurrentId(initialIndex >= 0 ? items[initialIndex]?.id : undefined);
-    setZoomActive(false);
-  }, [initialAssetId, sessionKey, visible]);
+  const headerHeight = insets.top + 56;
+  const footerHeight =
+    Math.max(insets.bottom, 8) + 58 + (selectedItems.length ? 60 : 0);
+  const visiblePageWindow = useMemo(() => {
+    const anchorIndex = Math.max(0, currentIndex);
+    const startIndex = Math.max(0, anchorIndex - 1);
+    const endIndex = Math.min(items.length, anchorIndex + 2);
+    return {
+      endIndex,
+      items: items.slice(startIndex, endIndex),
+      startIndex,
+    };
+  }, [currentIndex, items]);
 
   useEffect(() => {
     if (!visible) return;
@@ -122,9 +121,11 @@ export function MediaPreviewModal({
 
   useEffect(() => {
     if (!visible || currentIndex < 0) return;
-    void pagerRef.current
-      ?.scrollToIndex({ animated: false, index: currentIndex })
-      .catch(() => undefined);
+    pagerRef.current?.scrollTo({
+      animated: false,
+      x: currentIndex * width,
+      y: 0,
+    });
   }, [currentIndex, sessionKey, visible, width]);
 
   const toggleCurrent = useCallback(() => {
@@ -148,16 +149,14 @@ export function MediaPreviewModal({
       if (index < 0) return;
       setZoomActive(false);
       setCurrentId(item.id);
-      void pagerRef.current
-        ?.scrollToIndex({ animated: true, index })
-        .catch(() => undefined);
+      pagerRef.current?.scrollTo({ animated: true, x: index * width, y: 0 });
     },
-    [items],
+    [items, width],
   );
 
   const renderPage = useCallback(
-    ({ item }: ListRenderItemInfo<PreviewMediaItem>) => (
-      <View style={[styles.page, { width }]}>
+    (item: PreviewMediaItem) => (
+      <View key={item.id} style={[styles.page, { width }]}>
         <ZoomableMediaPreview
           active={item.id === currentItem?.id}
           item={item}
@@ -171,7 +170,7 @@ export function MediaPreviewModal({
   );
 
   const renderSelectedThumbnail = useCallback(
-    ({ item, index }: ListRenderItemInfo<PreviewMediaItem>) => {
+    (item: PreviewMediaItem, index: number) => {
       const availableInPager = items.some((candidate) => candidate.id === item.id);
       const activeItem = currentItem?.id === item.id;
       return (
@@ -223,35 +222,29 @@ export function MediaPreviewModal({
 
   return (
     <Modal
-      animationType="fade"
+      animationType="none"
       navigationBarTranslucent
       onRequestClose={onClose}
       statusBarTranslucent
       visible={visible}
     >
-      <SafeAreaView
-        accessibilityViewIsModal
-        edges={['top', 'bottom']}
-        style={styles.root}
-      >
-        <View style={styles.header}>
+      <View accessibilityViewIsModal style={styles.root}>
+        <View
+          style={[
+            styles.header,
+            { height: headerHeight, paddingTop: insets.top },
+          ]}
+        >
           <Pressable
             accessibilityLabel={labels.closePreview}
             accessibilityRole="button"
             hitSlop={8}
             onPress={onClose}
-            style={({ pressed }) => [
-              styles.headerButton,
-              pressed ? styles.pressed : undefined,
-            ]}
+            style={styles.headerButton}
           >
             <View style={styles.backIcon} />
           </Pressable>
-          <View style={styles.headerPosition}>
-            <Text style={styles.headerPositionText}>
-              {currentIndex >= 0 ? currentIndex + 1 : 0}/{items.length}
-            </Text>
-          </View>
+          <View style={styles.headerPosition} />
           <Pressable
             accessibilityLabel={
               selectedIndex
@@ -262,18 +255,16 @@ export function MediaPreviewModal({
             accessibilityState={{ disabled: !currentItem || busy }}
             disabled={!currentItem || busy}
             onPress={toggleCurrent}
-            style={({ pressed }) => [
+            style={[
               styles.previewSelection,
               {
-                backgroundColor: selectedIndex ? theme.accent : 'transparent',
-                borderColor: selectedIndex ? theme.accent : '#ffffff',
+                borderColor: '#ffffff',
               },
-              pressed ? styles.pressed : undefined,
               !currentItem || busy ? styles.disabled : undefined,
             ]}
           >
             <Text style={styles.previewSelectionText}>
-              {selectedIndex || ''}
+              {selectedIndex ? '✓' : ''}
             </Text>
           </Pressable>
         </View>
@@ -283,7 +274,7 @@ export function MediaPreviewModal({
             accessibilityLabel={`${labels.dismissMessage}：${message}`}
             accessibilityRole="button"
             onPress={onDismissMessage}
-            style={styles.messageBar}
+            style={[styles.messageBar, { top: headerHeight }]}
           >
             <Text
               selectable
@@ -294,18 +285,19 @@ export function MediaPreviewModal({
           </Pressable>
         ) : null}
 
-        <View style={styles.pager}>
+        <View
+          style={[
+            styles.pager,
+            { marginBottom: footerHeight, marginTop: headerHeight },
+          ]}
+        >
           {items.length ? (
-            <FlashList
-              data={items}
+            <ScrollView
+              contentOffset={{ x: Math.max(0, currentIndex) * width, y: 0 }}
               decelerationRate="fast"
               disableIntervalMomentum
               horizontal
-              initialScrollIndex={Math.max(0, currentIndex)}
               key={sessionKey}
-              keyExtractor={previewKey}
-              onEndReached={mode === 'album' && hasNextPage ? onEndReached : null}
-              onEndReachedThreshold={0.5}
               onMomentumScrollEnd={(event) => {
                 const nextIndex = Math.round(
                   event.nativeEvent.contentOffset.x / Math.max(1, width),
@@ -314,39 +306,68 @@ export function MediaPreviewModal({
                 if (nextItem) {
                   setZoomActive(false);
                   setCurrentId(nextItem.id);
+                  if (
+                    mode === 'album' &&
+                    hasNextPage &&
+                    nextIndex >= items.length - 2
+                  ) {
+                    onEndReached();
+                  }
                 }
               }}
               pagingEnabled
               ref={pagerRef}
-              renderItem={renderPage}
               scrollEnabled={!zoomActive}
               showsHorizontalScrollIndicator={false}
               snapToInterval={width}
-            />
+              style={styles.pagerScroller}
+            >
+              {visiblePageWindow.startIndex > 0 ? (
+                <View
+                  style={{ width: visiblePageWindow.startIndex * width }}
+                />
+              ) : null}
+              {visiblePageWindow.items.map(renderPage)}
+              {visiblePageWindow.endIndex < items.length ? (
+                <View
+                  style={{
+                    width: (items.length - visiblePageWindow.endIndex) * width,
+                  }}
+                />
+              ) : null}
+            </ScrollView>
           ) : null}
         </View>
 
         <View
           style={[
             styles.footer,
+            { paddingBottom: Math.max(insets.bottom, 8) },
             selectedItems.length ? styles.footerWithThumbnails : undefined,
           ]}
         >
           {selectedItems.length ? (
-            <FlashList
+            <ScrollView
               contentContainerStyle={styles.thumbnailList}
-              data={selectedItems}
               horizontal
-              keyExtractor={previewKey}
-              renderItem={renderSelectedThumbnail}
               showsHorizontalScrollIndicator={false}
               style={styles.thumbnailScroller}
-            />
+            >
+              {selectedItems.map((item, index) => (
+                <View key={item.id}>
+                  {renderSelectedThumbnail(item, index)}
+                </View>
+              ))}
+            </ScrollView>
           ) : null}
           <View style={styles.footerCommands}>
             <Text style={styles.selectionSummary}>
               {selectedIds.length}/{selectionLimit}
             </Text>
+            <View accessibilityRole="text" style={styles.originalStatus}>
+              <View style={styles.originalIndicator} />
+              <Text style={styles.originalText}>{labels.original}</Text>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
@@ -354,13 +375,12 @@ export function MediaPreviewModal({
               }}
               disabled={busy || selectedIds.length === 0}
               onPress={onConfirm}
-              style={({ pressed }) => [
+              style={[
                 styles.doneButton,
                 {
                   backgroundColor:
                     selectedIds.length > 0 ? theme.accent : theme.surface,
                 },
-                pressed ? styles.pressed : undefined,
                 busy || selectedIds.length === 0
                   ? styles.disabled
                   : undefined,
@@ -376,7 +396,7 @@ export function MediaPreviewModal({
             </Pressable>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -385,9 +405,14 @@ const styles = StyleSheet.create({
   root: { backgroundColor: '#000000', flex: 1 },
   header: {
     alignItems: 'center',
+    backgroundColor: '#212123',
     flexDirection: 'row',
-    minHeight: 62,
+    left: 0,
     paddingHorizontal: 14,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 10,
   },
   headerButton: {
     alignItems: 'center',
@@ -405,12 +430,6 @@ const styles = StyleSheet.create({
     width: 17,
   },
   headerPosition: { alignItems: 'center', flex: 1, justifyContent: 'center' },
-  headerPositionText: {
-    color: '#aeaeb2',
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '600',
-  },
   previewSelection: {
     alignItems: 'center',
     borderRadius: 19,
@@ -430,24 +449,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 59, 48, 0.16)',
     justifyContent: 'center',
+    left: 0,
     minHeight: 38,
     paddingHorizontal: 16,
+    position: 'absolute',
+    right: 0,
+    zIndex: 11,
   },
   messageText: { fontSize: 13, textAlign: 'center' },
-  page: { backgroundColor: '#000000', flex: 1 },
+  page: { backgroundColor: '#000000', height: '100%' },
+  pagerScroller: { flex: 1 },
   footer: {
     backgroundColor: '#1c1c1e',
+    bottom: 0,
+    left: 0,
     paddingHorizontal: 16,
+    position: 'absolute',
+    right: 0,
+    zIndex: 10,
   },
-  footerWithThumbnails: { minHeight: 142, paddingTop: 12 },
-  thumbnailScroller: { height: 62 },
+  footerWithThumbnails: { paddingTop: 8 },
+  thumbnailScroller: { height: 52 },
   thumbnailList: { gap: 10 },
   thumbnail: {
     borderRadius: 5,
     borderWidth: 2,
-    height: 58,
+    height: 50,
     overflow: 'hidden',
-    width: 58,
+    width: 50,
   },
   thumbnailInactive: { borderColor: 'transparent' },
   videoThumbnail: {
@@ -476,25 +505,38 @@ const styles = StyleSheet.create({
   footerCommands: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 16,
-    justifyContent: 'flex-end',
-    minHeight: 68,
+    gap: 12,
+    minHeight: 58,
   },
   selectionSummary: {
     color: '#aeaeb2',
     flex: 1,
     fontVariant: ['tabular-nums'],
-    textAlign: 'right',
+    textAlign: 'left',
   },
+  originalStatus: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 7,
+    justifyContent: 'center',
+  },
+  originalIndicator: {
+    borderColor: '#ffffff',
+    borderRadius: 13,
+    borderWidth: 1.5,
+    height: 26,
+    width: 26,
+  },
+  originalText: { color: '#ffffff', fontSize: 16 },
   doneButton: {
     alignItems: 'center',
     borderRadius: 6,
     justifyContent: 'center',
     minHeight: 42,
-    minWidth: 104,
+    minWidth: 86,
     paddingHorizontal: 14,
   },
   doneText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  pressed: { opacity: 0.68 },
   disabled: { opacity: 0.52 },
 });

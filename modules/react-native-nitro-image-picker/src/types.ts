@@ -99,6 +99,7 @@ export interface MediaPickerLabels {
   takePhoto: string;
   recordVideo: string;
   preview: string;
+  original?: string;
   closePreview: string;
   selectionLimitReached: string;
   unavailable: string;

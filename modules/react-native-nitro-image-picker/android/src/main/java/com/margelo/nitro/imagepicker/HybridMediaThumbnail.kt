@@ -2,6 +2,7 @@ package com.margelo.nitro.imagepicker
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.os.Build
 import android.os.CancellationSignal
 import android.os.Handler
@@ -9,6 +10,7 @@ import android.os.Looper
 import android.os.OperationCanceledException
 import android.provider.MediaStore
 import android.util.Size
+import android.util.LruCache
 import android.view.View
 import android.widget.ImageView
 import com.facebook.react.uimanager.ThemedReactContext
@@ -20,7 +22,7 @@ class HybridMediaThumbnail(
   private val context: ThemedReactContext,
 ) : HybridMediaThumbnailSpec(), RecyclableView {
   private val imageView = ImageView(context).apply {
-    setBackgroundColor(0xffe5e5ea.toInt())
+    setBackgroundColor(Color.TRANSPARENT)
   }
   private val executor = Executors.newSingleThreadExecutor()
   private val mainHandler = Handler(Looper.getMainLooper())
@@ -55,8 +57,9 @@ class HybridMediaThumbnail(
     if (key == requestedKey) return
     cancelRequest()
     requestedKey = key
-    imageView.setImageDrawable(null)
     val expectedId = assetId
+    // 全屏请求完成前沿用网格阶段的小图，避免切换到预览时出现空白帧。
+    imageView.setImageBitmap(placeholderCache.get(expectedId))
     val requestedWidth = imageView.width
     val requestedHeight = imageView.height
     val signal = CancellationSignal()
@@ -66,6 +69,7 @@ class HybridMediaThumbnail(
         val bitmap = loadBitmap(expectedId, requestedWidth, requestedHeight, signal)
         mainHandler.post {
           if (!disposed && !signal.isCanceled && assetId == expectedId) {
+            cachePlaceholder(expectedId, bitmap)
             imageView.setImageBitmap(bitmap)
             onLoad(ThumbnailLoadEvent(expectedId, bitmap.width.toDouble(), bitmap.height.toDouble()))
           }
@@ -127,6 +131,13 @@ class HybridMediaThumbnail(
     loadTask = null
   }
 
+  private fun cachePlaceholder(id: String, bitmap: Bitmap) {
+    val cached = placeholderCache.get(id)
+    if (cached == null || bitmap.byteCount < cached.byteCount) {
+      placeholderCache.put(id, bitmap)
+    }
+  }
+
   override fun prepareForRecycle() {
     cancelRequest()
     requestedKey = ""
@@ -141,5 +152,12 @@ class HybridMediaThumbnail(
     executor.shutdownNow()
     onLoad = {}
     onError = {}
+  }
+
+  companion object {
+    private const val PLACEHOLDER_CACHE_BYTES = 8 * 1024 * 1024
+    private val placeholderCache = object : LruCache<String, Bitmap>(PLACEHOLDER_CACHE_BYTES) {
+      override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
   }
 }

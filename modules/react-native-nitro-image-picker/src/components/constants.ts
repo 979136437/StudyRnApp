@@ -18,6 +18,7 @@ export const DEFAULT_LABELS: ResolvedMediaPickerLabels = {
   takePhoto: '拍照',
   recordVideo: '录像',
   preview: '预览',
+  original: '原图',
   closePreview: '关闭',
   selectionLimitReached: '已达到选择上限',
   unavailable: '当前平台不支持相册访问',
@@ -40,7 +41,7 @@ export const LIGHT_THEME: MediaPickerTheme = {
 
 export const DARK_THEME: MediaPickerTheme = {
   background: '#000000',
-  surface: '#1c1c1e',
+  surface: '#353537',
   text: '#ffffff',
   secondaryText: '#aeaeb2',
   accent: '#07c160',

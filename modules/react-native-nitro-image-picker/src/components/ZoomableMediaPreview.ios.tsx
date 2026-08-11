@@ -24,9 +24,13 @@ export function ZoomableMediaPreview({
   videoLabel,
 }: ZoomableMediaPreviewProps): React.JSX.Element {
   const scrollRef = useRef<ScrollView>(null);
-  const [viewport, setViewport] = useState({ width: 1, height: 1 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   const resetZoom = useCallback(() => {
+    if (viewport.width <= 0 || viewport.height <= 0) {
+      onZoomActiveChange(false);
+      return;
+    }
     scrollRef.current?.scrollResponderZoomTo({
       x: 0,
       y: 0,
@@ -63,7 +67,16 @@ export function ZoomableMediaPreview({
       minimumZoomScale={MIN_PREVIEW_SCALE}
       onLayout={(event) => {
         const { height, width } = event.nativeEvent.layout;
-        setViewport({ height: Math.max(1, height), width: Math.max(1, width) });
+        const nextViewport = {
+          height: Math.max(1, height),
+          width: Math.max(1, width),
+        };
+        setViewport((current) =>
+          current.height === nextViewport.height &&
+          current.width === nextViewport.width
+            ? current
+            : nextViewport,
+        );
       }}
       onScroll={handleScroll}
       ref={scrollRef}
@@ -72,7 +85,12 @@ export function ZoomableMediaPreview({
       showsVerticalScrollIndicator={false}
       style={styles.root}
     >
-      <View style={viewport}>
+      <View
+        style={[
+          styles.viewport,
+          viewport.width > 0 && viewport.height > 0 ? viewport : undefined,
+        ]}
+      >
         <PreviewMedia
           item={item}
           shouldDownloadFromNetwork={shouldDownloadFromNetwork}
@@ -86,4 +104,5 @@ export function ZoomableMediaPreview({
 const styles = StyleSheet.create({
   root: { backgroundColor: '#000000', flex: 1 },
   content: { flexGrow: 1 },
+  viewport: { height: '100%', width: '100%' },
 });
