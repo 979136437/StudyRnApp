@@ -3,6 +3,10 @@ import type { PopupOptions } from '../types';
 
 let globalController: InternalPopupController | null = null;
 
+export function getGlobalPopupController(): InternalPopupController | null {
+  return globalController;
+}
+
 export function registerGlobalPopupController(
   controller: InternalPopupController,
 ): () => void {

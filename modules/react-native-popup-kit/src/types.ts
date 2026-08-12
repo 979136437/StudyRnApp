@@ -35,4 +35,7 @@ export interface ResolvedPopupOptions extends PopupOptions {
   duration: number;
   closeOnClickOverlay: boolean;
   overlay: boolean;
+  contentPointerEvents?: 'auto' | 'box-none' | 'none' | 'box-only';
+  onRemoved?: () => void;
+  onShown?: () => void;
 }

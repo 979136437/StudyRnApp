@@ -66,6 +66,10 @@ function AppNavigator(): React.JSX.Element {
         }}
       />
       <Stack.Screen
+        name="popup-components"
+        options={{ headerShown: true, title: 'Toast 与 Modal 测试' }}
+      />
+      <Stack.Screen
         name="visibility-observer"
         options={{
           headerShown: true,

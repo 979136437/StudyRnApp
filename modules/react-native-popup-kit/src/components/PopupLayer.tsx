@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -32,9 +32,11 @@ export function PopupLayer({
   const {
     children,
     closeOnClickOverlay,
+    contentPointerEvents,
     duration,
     id,
     mode,
+    onShown,
     overlay,
     overlayContent,
     overlayStyle,
@@ -43,8 +45,19 @@ export function PopupLayer({
   } = popup;
   const completePopup = controller.store.complete;
   const internalProgress = useSharedValue(0);
+  const shownRef = useRef(false);
   const progress = shareValue ?? internalProgress;
   const { height, width } = useWindowDimensions();
+
+  useEffect(() => {
+    if (shownRef.current) return;
+    shownRef.current = true;
+    try {
+      onShown?.();
+    } catch {
+      // Consumer callbacks cannot interrupt popup rendering.
+    }
+  }, [onShown]);
 
   useEffect(() => {
     cancelAnimation(progress);
@@ -109,7 +122,7 @@ export function PopupLayer({
 
   return (
     <View
-      pointerEvents={interactive ? 'auto' : 'none'}
+      pointerEvents={interactive ? (overlay ? 'auto' : 'box-none') : 'none'}
       style={[styles.root, getPopupAlignment(mode)]}
     >
       {overlay ? (
@@ -136,6 +149,7 @@ export function PopupLayer({
         </Animated.View>
       ) : null}
       <Animated.View
+        pointerEvents={contentPointerEvents}
         style={[styles.content, getPopupSize(mode), popupStyle, contentStyle]}
       >
         {children}

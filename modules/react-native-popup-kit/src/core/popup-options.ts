@@ -1,6 +1,12 @@
 import { PopupDisplayMode, PopupMode } from '../constants';
 import type { PopupOptions, ResolvedPopupOptions } from '../types';
 
+export interface InternalPopupOptions extends PopupOptions {
+  contentPointerEvents?: 'auto' | 'box-none' | 'none' | 'box-only';
+  onRemoved?: () => void;
+  onShown?: () => void;
+}
+
 let nextPopupId = 0;
 let nextPopupOrder = 0;
 
@@ -10,7 +16,7 @@ export function createPopupId(): string {
 }
 
 export function resolvePopupOptions(
-  options: PopupOptions,
+  options: InternalPopupOptions,
 ): ResolvedPopupOptions {
   const id = options.id?.trim() || createPopupId();
   const duration = Number.isFinite(options.duration)

@@ -164,4 +164,30 @@ describe('PopupStore', () => {
       }),
     ).toThrow('unmounted');
   });
+
+  it('notifies removal for queued cancellation, completion, and dispose', async () => {
+    const removed: string[] = [];
+    const store = new PopupStore<TestPopup>(
+      (popup) => popup.displayMode,
+      (popup) => () => removed.push(popup.name),
+    );
+    store.add('first', 1, {
+      displayMode: PopupDisplayMode.QUEUE,
+      name: 'first',
+    });
+    store.add('second', 2, {
+      displayMode: PopupDisplayMode.QUEUE,
+      name: 'second',
+    });
+    store.add('stack', 3, {
+      displayMode: PopupDisplayMode.STACK,
+      name: 'stack',
+    });
+    await store.hide('second');
+    const hidden = store.hide('first');
+    store.complete('first');
+    await hidden;
+    store.dispose();
+    expect(removed).toEqual(['second', 'first', 'stack']);
+  });
 });

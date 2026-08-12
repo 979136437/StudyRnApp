@@ -14,6 +14,16 @@
       "react-native": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./toast": {
+      "types": "./src/toast/index.ts",
+      "react-native": "./src/toast/index.ts",
+      "default": "./src/toast/index.ts"
+    },
+    "./modal": {
+      "types": "./src/modal/index.ts",
+      "react-native": "./src/modal/index.ts",
+      "default": "./src/modal/index.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [

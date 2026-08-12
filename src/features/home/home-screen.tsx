@@ -47,6 +47,11 @@ export function HomeScreen(): React.JSX.Element {
             <Text style={styles.cacheButtonText}>Popup 页面测试</Text>
           </Pressable>
         </Link>
+        <Link href={'/popup-components' as Href} asChild>
+          <Pressable accessibilityRole="button" style={styles.cacheButton}>
+            <Text style={styles.cacheButtonText}>Toast 与 Modal 测试</Text>
+          </Pressable>
+        </Link>
         <Link href={'/media-test' as Href} asChild>
           <Pressable accessibilityRole="button" style={styles.cacheButton}>
             <Text style={styles.cacheButtonText}>媒体能力测试</Text>

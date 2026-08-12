@@ -1,3 +1,6 @@
+import { PopupDisplayMode } from '../constants';
+import type { PopupDisplayMode as PopupDisplayModeValue } from '../types';
+
 export interface PopupItem<T> {
   id: string;
   order: number;
@@ -13,6 +16,7 @@ export interface PopupStoreSnapshot<T> {
 
 type Listener = () => void;
 type DisplayModeSelector<T> = (value: T) => PopupDisplayModeValue;
+type RemovedCallbackSelector<T> = (value: T) => (() => void) | undefined;
 
 const EMPTY_IDS: readonly string[] = Object.freeze([]);
 const EMPTY_CLOSING_IDS: ReadonlySet<string> = new Set();
@@ -31,7 +35,10 @@ export class PopupStore<T> {
     stack: [],
   };
 
-  constructor(private readonly getDisplayMode: DisplayModeSelector<T>) {}
+  constructor(
+    private readonly getDisplayMode: DisplayModeSelector<T>,
+    private readonly getRemovedCallback?: RemovedCallbackSelector<T>,
+  ) {}
 
   getSnapshot = (): PopupStoreSnapshot<T> => this.snapshot;
 
@@ -57,8 +64,9 @@ export class PopupStore<T> {
     if (queueIndex < 0 && stackIndex < 0) return Promise.resolve();
 
     if (queueIndex > 0) {
-      this.queue.splice(queueIndex, 1);
+      const [removed] = this.queue.splice(queueIndex, 1);
       this.publish();
+      if (removed !== undefined) this.notifyRemoved(removed.value);
       return Promise.resolve();
     }
 
@@ -76,27 +84,31 @@ export class PopupStore<T> {
   complete = (id: string): void => {
     if (!this.closingIds.has(id)) return;
 
-    if (this.queue[0]?.id === id) this.queue.shift();
+    let removed: PopupItem<T> | undefined;
+    if (this.queue[0]?.id === id) removed = this.queue.shift();
     else {
       const stackIndex = this.stack.findIndex((item) => item.id === id);
-      if (stackIndex >= 0) this.stack.splice(stackIndex, 1);
+      if (stackIndex >= 0) [removed] = this.stack.splice(stackIndex, 1);
     }
     this.closingIds.delete(id);
     const pending = this.pendingHide.get(id) ?? [];
     this.pendingHide.delete(id);
     this.publish();
+    if (removed !== undefined) this.notifyRemoved(removed.value);
     for (const resolve of pending) resolve();
   };
 
   dispose = (): void => {
     if (this.disposed) return;
     this.disposed = true;
+    const removed = [...this.queue, ...this.stack];
     this.queue = [];
     this.stack = [];
     this.closingIds.clear();
     const pending = [...this.pendingHide.values()].flat();
     this.pendingHide.clear();
     this.publish();
+    for (const item of removed) this.notifyRemoved(item.value);
     for (const resolve of pending) resolve();
     this.listeners.clear();
   };
@@ -120,6 +132,12 @@ export class PopupStore<T> {
     };
     for (const listener of this.listeners) listener();
   }
+
+  private notifyRemoved(value: T): void {
+    try {
+      this.getRemovedCallback?.(value)?.();
+    } catch {
+      // Consumer callbacks cannot interrupt queue cleanup.
+    }
+  }
 }
-import { PopupDisplayMode } from '../constants';
-import type { PopupDisplayMode as PopupDisplayModeValue } from '../types';
