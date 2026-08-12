@@ -1,233 +1,303 @@
-import { File } from 'expo-file-system';
+import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
-import { useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import {
-  chooseMedia,
   compressImage,
   compressVideo,
-  previewMedia,
-  type CameraPosition,
-  type ChooseMediaTempFile,
-  type MediaFileType,
-  type MediaSourceType,
-  type VideoQuality,
-} from 'react-native-components';
-import {
-  getImageMetadata,
-  getVideoMetadata,
-} from 'react-native-nitro-compressor';
+  listAlbums,
+  listMediaAssets,
+  prepareMediaAsset,
+  prepareMediaFile,
+  removeTemporaryFiles,
+  requestMediaLibraryPermission,
+  saveToMediaLibrary,
+  shareMedia,
+  type MediaAlbum,
+  type MediaAsset,
+  type MediaFile,
+  type MediaTask,
+  type MediaType,
+} from 'react-native-media-kit';
 
-const MEDIA_TYPES: MediaFileType[] = ['image', 'video'];
-const SOURCE_TYPES: MediaSourceType[] = ['album', 'camera'];
-const VIDEO_QUALITIES: VideoQuality[] = ['low', 'medium', 'high'];
-const parseOptionalNumber = (value: string) =>
-  value.trim() ? Number(value) : undefined;
-const formatBytes = (bytes: number) =>
-  bytes >= 1024 * 1024
-    ? `${(bytes / 1024 / 1024).toFixed(2)} MB`
-    : `${Math.ceil(bytes / 1024)} kB`;
-const summarize = (file: ChooseMediaTempFile) =>
-  `${file.fileType === 'image' ? '图片' : '视频'} · ${file.width}×${file.height} · ${formatBytes(file.size)}${file.duration ? ` · ${file.duration.toFixed(1)} 秒` : ''}`;
+import { MediaCamera } from './media-camera';
 
-function Segments<T extends string>({
-  values,
+const PAGE_SIZE = 24;
+const formatBytes = (value: number) =>
+  value >= 1024 * 1024
+    ? `${(value / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.ceil(value / 1024)} kB`;
+
+function AlbumItem({
+  album,
   active,
   onPress,
 }: {
-  values: T[];
-  active: T[];
-  onPress: (value: T) => void;
+  album: MediaAlbum;
+  active: boolean;
+  onPress: (id: string | null) => void;
 }) {
+  const handlePress = useCallback(() => onPress(album.id), [album.id, onPress]);
   return (
-    <View style={styles.segments}>
-      {values.map((value) => (
-        <Pressable
-          key={value}
-          style={[
-            styles.segment,
-            active.includes(value) && styles.segmentActive,
-          ]}
-          onPress={() => onPress(value)}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              active.includes(value) && styles.segmentTextActive,
-            ]}
-          >
-            {value}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <Pressable
+      onPress={handlePress}
+      style={[styles.album, active && styles.activeAlbum]}
+    >
+      <Text style={styles.albumText}>{album.title}</Text>
+    </Pressable>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChangeText,
+function PreparedItem({
+  file,
+  onPress,
 }: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
+  file: MediaFile;
+  onPress: (file: MediaFile) => void;
 }) {
+  const handlePress = useCallback(() => onPress(file), [file, onPress]);
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType="decimal-pad"
-        placeholder="默认"
+    <Pressable onPress={handlePress} style={styles.file}>
+      <Image
+        source={file.thumbnailUri ?? file.uri}
+        style={styles.fileImage}
+        contentFit="cover"
       />
-    </View>
+      <Text style={styles.fileText}>
+        {file.type} · {formatBytes(file.size)}
+      </Text>
+    </Pressable>
+  );
+}
+
+function AssetItem({
+  asset,
+  active,
+  onToggle,
+}: {
+  asset: MediaAsset;
+  active: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const handlePress = useCallback(
+    () => onToggle(asset.id),
+    [asset.id, onToggle],
+  );
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={[styles.asset, active && styles.activeAsset]}
+    >
+      <Image source={asset.uri} style={styles.thumbnail} contentFit="cover" />
+      <Text style={styles.assetType}>
+        {asset.type === 'video' ? `${asset.duration.toFixed(1)}s` : '图片'}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Preview({ file, onClose }: { file?: MediaFile; onClose: () => void }) {
+  const player = useVideoPlayer(file?.type === 'video' ? file.uri : null);
+  useEffect(() => {
+    if (file?.type === 'video') player.play();
+    return () => player.pause();
+  }, [file, player]);
+  return (
+    <Modal
+      visible={Boolean(file)}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.preview}>
+        {file?.type === 'image' ? (
+          <Image
+            source={file.uri}
+            style={styles.previewMedia}
+            contentFit="contain"
+          />
+        ) : null}
+        {file?.type === 'video' ? (
+          <VideoView
+            player={player}
+            style={styles.previewMedia}
+            nativeControls
+          />
+        ) : null}
+        <Pressable onPress={onClose} style={styles.previewClose}>
+          <Text style={styles.previewCloseText}>关闭</Text>
+        </Pressable>
+      </View>
+    </Modal>
   );
 }
 
 export function MediaTestScreen() {
-  const [count, setCount] = useState('9');
-  const [mediaType, setMediaType] = useState<MediaFileType[]>([
-    'image',
-    'video',
-  ]);
-  const [sourceType, setSourceType] = useState<MediaSourceType[]>([
-    'album',
-    'camera',
-  ]);
-  const [original, setOriginal] = useState(false);
-  const [duration, setDuration] = useState('10');
-  const [camera, setCamera] = useState<CameraPosition>('back');
-  const [imageQuality, setImageQuality] = useState('80');
-  const [imageWidth, setImageWidth] = useState('');
-  const [imageHeight, setImageHeight] = useState('');
-  const [videoQuality, setVideoQuality] = useState<VideoQuality>('medium');
-  const [bitrate, setBitrate] = useState('');
-  const [fps, setFps] = useState('');
-  const [resolution, setResolution] = useState('');
-  const [files, setFiles] = useState<ChooseMediaTempFile[]>([]);
-  const [result, setResult] = useState('等待操作');
+  const [albums, setAlbums] = useState<MediaAlbum[]>([]);
+  const [albumId, setAlbumId] = useState<string | null>(null);
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(0);
+  const [files, setFiles] = useState<MediaFile[]>([]);
+  const [preview, setPreview] = useState<MediaFile>();
+  const [cameraType, setCameraType] = useState<MediaType>();
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState('等待授权');
+  const [activeTask, setActiveTask] = useState<MediaTask<unknown>>();
 
-  const toggle = <T,>(setter: (value: T[]) => void, current: T[], value: T) => {
-    const next = current.includes(value)
-      ? current.filter((item) => item !== value)
-      : [...current, value];
-    if (next.length) setter(next);
-  };
-  const run = async (operation: () => Promise<void>) => {
-    if (busy) return;
+  const selectedIds = useMemo(() => new Set(selected), [selected]);
+  const executeOperation = async (operation: Promise<void>) => {
     setBusy(true);
     try {
-      await operation();
+      await operation;
     } catch (reason) {
       setResult(reason instanceof Error ? reason.message : '操作失败');
     } finally {
       setBusy(false);
+      setActiveTask(undefined);
     }
   };
-  const choose = () =>
-    run(async () => {
-      const response = await chooseMedia({
-        count: Number(count),
-        mediaType,
-        sourceType,
-        maxDuration: Number(duration),
-        sizeType: original ? ['original'] : ['compressed'],
-        camera,
-      });
-      setFiles(response.tempFiles);
-      setResult(response.tempFiles.map(summarize).join('\n'));
-    });
-  const preview = () =>
-    run(async () => {
-      if (!files.length) throw new Error('请先选择媒体');
-      await previewMedia({
-        sources: files.map((file) => ({
-          url: file.tempFilePath,
-          type: file.fileType,
-          poster: file.thumbTempFilePath,
-        })),
-      });
-      setResult('预览已关闭');
-    });
-  const testImageCompression = () =>
-    run(async () => {
-      const selected = await chooseMedia({
-        count: 1,
-        mediaType: ['image'],
-        sourceType,
-        sizeType: ['original'],
-        camera,
-      });
-      const source = selected.tempFiles[0];
-      if (!source) throw new Error('未选择图片');
-      const compressed = await compressImage({
-        src: source.tempFilePath,
-        quality: Number(imageQuality),
-        compressedWidth: parseOptionalNumber(imageWidth),
-        compressedHeight: parseOptionalNumber(imageHeight),
-      });
-      const compressedSize = new File(compressed.tempFilePath).size ?? 0;
-      const metadata = await getImageMetadata(compressed.tempFilePath);
-      setFiles([
-        {
-          ...source,
-          tempFilePath: compressed.tempFilePath,
-          size: compressedSize,
-          width: metadata.width,
-          height: metadata.height,
-        },
-      ]);
-      setResult(
-        `图片压缩：${formatBytes(source.size)} / ${source.width}×${source.height} → ${formatBytes(compressedSize)} / ${metadata.width}×${metadata.height}`,
+  const runTask = async <T,>(task: MediaTask<T>) => {
+    setActiveTask(task as MediaTask<unknown>);
+    return task.result;
+  };
+  const loadAssets = async (reset = false) => {
+    const offset = reset ? 0 : nextOffset;
+    if (offset === null) return;
+    const page = await listMediaAssets({ albumId, offset, limit: PAGE_SIZE });
+    setAssets((current) => (reset ? page.items : [...current, ...page.items]));
+    setNextOffset(page.nextOffset);
+    setResult(
+      `已加载 ${reset ? page.items.length : assets.length + page.items.length} 项`,
+    );
+  };
+  const authorizeLibrary = async () => {
+    const permission = await requestMediaLibraryPermission();
+    if (!permission.granted) throw new Error('未获得相册权限');
+    setAlbums(await listAlbums());
+    setNextOffset(0);
+    const page = await listMediaAssets({ limit: PAGE_SIZE });
+    setAssets(page.items);
+    setNextOffset(page.nextOffset);
+    setResult('相册已就绪');
+  };
+  const chooseAlbum = useCallback(
+    (id: string | null) => {
+      if (busy) return;
+      setAlbumId(id);
+      setAssets([]);
+      setSelected([]);
+      setNextOffset(0);
+      void executeOperation(
+        (async () => {
+          const page = await listMediaAssets({ albumId: id, limit: PAGE_SIZE });
+          setAssets(page.items);
+          setNextOffset(page.nextOffset);
+        })(),
       );
-    });
-  const testVideoCompression = () =>
-    run(async () => {
-      const selected = await chooseMedia({
-        count: 1,
-        mediaType: ['video'],
-        sourceType,
-        sizeType: ['original'],
-        camera,
-        maxDuration: Number(duration),
-      });
-      const source = selected.tempFiles[0];
-      if (!source) throw new Error('未选择视频');
-      const hasPrecise = Boolean(bitrate.trim() || resolution.trim());
-      const compressed = await compressVideo({
-        src: source.tempFilePath,
-        quality: hasPrecise ? undefined : videoQuality,
-        bitrate: parseOptionalNumber(bitrate),
-        fps: parseOptionalNumber(fps),
-        resolution: parseOptionalNumber(resolution),
-      });
-      const metadata = await getVideoMetadata(compressed.tempFilePath);
-      setFiles([
-        {
-          ...source,
-          tempFilePath: compressed.tempFilePath,
-          size: compressed.size * 1024,
-          width: metadata.width,
-          height: metadata.height,
-          duration: metadata.duration,
-        },
-      ]);
-      setResult(
-        `视频压缩：${formatBytes(source.size)} / ${source.width}×${source.height} / ${(source.duration ?? 0).toFixed(1)} 秒 → ${compressed.size} kB / ${metadata.width}×${metadata.height} / ${metadata.duration.toFixed(1)} 秒 / ${metadata.fps.toFixed(1)} fps`,
-      );
-    });
+    },
+    [busy],
+  );
+  const prepareSelectedFiles = async () => {
+    const prepared: MediaFile[] = [];
+    try {
+      // 串行推进可确保取消按钮始终对应当前任务，并简化部分失败回收。
+      for (const id of selected)
+        prepared.push(await runTask(prepareMediaAsset(id)));
+      setFiles((current) => [...current, ...prepared]);
+      setResult(`已准备 ${prepared.length} 个文件`);
+    } catch (error) {
+      await removeTemporaryFiles(prepared);
+      throw error;
+    }
+  };
+  const handleCapture = (uri: string, type: MediaType) => {
+    setCameraType(undefined);
+    if (busy) return;
+    void executeOperation(
+      (async () => {
+        const file = await runTask(prepareMediaFile(uri, type));
+        setFiles((current) => [...current, file]);
+        setResult('拍摄文件已准备');
+      })(),
+    );
+  };
+  const compressFirstFile = async () => {
+    const source = files[0];
+    if (!source) throw new Error('请先准备媒体文件');
+    const file = await runTask(
+      source.type === 'image'
+        ? compressImage(source.uri, { quality: 80 })
+        : compressVideo(source.uri, { quality: 'medium' }),
+    );
+    setFiles((current) => [file, ...current]);
+    setResult(`压缩完成：${formatBytes(file.size)}`);
+  };
+  const saveFirstFile = async () => {
+    if (!files[0]) throw new Error('请先准备媒体文件');
+    await runTask(saveToMediaLibrary(files[0]));
+    setResult('已保存到相册');
+  };
+  const shareFirstFile = async () => {
+    if (!files[0]) throw new Error('请先准备媒体文件');
+    await runTask(shareMedia(files[0]));
+    setResult('分享面板已关闭');
+  };
+  const clearFiles = async () => {
+    await removeTemporaryFiles(files);
+    setFiles([]);
+    setPreview(undefined);
+    setResult('临时文件已清理');
+  };
+  const start = (operation: () => Promise<void>) => {
+    if (!busy) void executeOperation(operation());
+  };
+  const renderAlbum = useCallback(
+    ({ item }: { item: MediaAlbum }) => (
+      <AlbumItem
+        album={item}
+        active={albumId === item.id}
+        onPress={chooseAlbum}
+      />
+    ),
+    [albumId, chooseAlbum],
+  );
+  const showPreview = useCallback((file: MediaFile) => setPreview(file), []);
+  const renderPrepared = useCallback(
+    ({ item }: { item: MediaFile }) => (
+      <PreparedItem file={item} onPress={showPreview} />
+    ),
+    [showPreview],
+  );
+  const toggleSelected = useCallback(
+    (id: string) =>
+      setSelected((current) =>
+        current.includes(id)
+          ? current.filter((value) => value !== id)
+          : [...current, id],
+      ),
+    [],
+  );
+  const authorizePress = () => start(authorizeLibrary);
+  const photoPress = () => setCameraType('image');
+  const videoPress = () => setCameraType('video');
+  const nextPagePress = () => start(() => loadAssets(false));
+  const preparePress = () => start(prepareSelectedFiles);
+  const cancelPress = () => {
+    activeTask?.cancel();
+  };
+  const compressPress = () => start(compressFirstFile);
+  const savePress = () => start(saveFirstFile);
+  const sharePress = () => start(shareFirstFile);
+  const clearPress = () => start(clearFiles);
 
   return (
     <ScrollView
@@ -235,151 +305,157 @@ export function MediaTestScreen() {
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
-      <Stack.Title>媒体能力测试</Stack.Title>
-      <View style={styles.section}>
-        <Text style={styles.title}>选择与预览</Text>
-        <Field label="数量（1–20）" value={count} onChangeText={setCount} />
-        <Text style={styles.label}>媒体类型</Text>
-        <Segments
-          values={MEDIA_TYPES}
-          active={mediaType}
-          onPress={(value) => toggle(setMediaType, mediaType, value)}
-        />
-        <Text style={styles.label}>来源</Text>
-        <Segments
-          values={SOURCE_TYPES}
-          active={sourceType}
-          onPress={(value) => toggle(setSourceType, sourceType, value)}
-        />
-        <Field
-          label="录像上限（3–60 秒）"
-          value={duration}
-          onChangeText={setDuration}
-        />
-        <View style={styles.row}>
-          <Text style={styles.label}>原图</Text>
-          <Switch value={original} onValueChange={setOriginal} />
-        </View>
-        <Text style={styles.label}>相机方向</Text>
-        <Segments
-          values={['back', 'front']}
-          active={[camera]}
-          onPress={setCamera}
-        />
-        <View style={styles.actions}>
-          <Pressable style={styles.primary} onPress={choose}>
-            <Text style={styles.primaryText}>选择媒体</Text>
-          </Pressable>
-          <Pressable style={styles.secondary} onPress={preview}>
-            <Text style={styles.secondaryText}>预览结果</Text>
-          </Pressable>
-        </View>
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.title}>图片压缩</Text>
-        <Field
-          label="质量（0–100）"
-          value={imageQuality}
-          onChangeText={setImageQuality}
-        />
-        <Field
-          label="目标宽度"
-          value={imageWidth}
-          onChangeText={setImageWidth}
-        />
-        <Field
-          label="目标高度"
-          value={imageHeight}
-          onChangeText={setImageHeight}
-        />
-        <Pressable style={styles.primary} onPress={testImageCompression}>
-          <Text style={styles.primaryText}>选择图片并压缩</Text>
+      <Stack.Title>媒体能力诊断</Stack.Title>
+      <View style={styles.toolbar}>
+        <Pressable style={styles.primary} onPress={authorizePress}>
+          <Text style={styles.primaryText}>授权并加载</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={photoPress}>
+          <Text style={styles.buttonText}>拍照</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={videoPress}>
+          <Text style={styles.buttonText}>录像</Text>
         </Pressable>
       </View>
-      <View style={styles.section}>
-        <Text style={styles.title}>视频压缩</Text>
-        <Text style={styles.label}>质量档位</Text>
-        <Segments
-          values={VIDEO_QUALITIES}
-          active={[videoQuality]}
-          onPress={setVideoQuality}
-        />
-        <Field label="码率（kbps）" value={bitrate} onChangeText={setBitrate} />
-        <Field label="输出帧率上限" value={fps} onChangeText={setFps} />
-        <Field
-          label="分辨率比例（0–1）"
-          value={resolution}
-          onChangeText={setResolution}
-        />
-        <Pressable style={styles.primary} onPress={testVideoCompression}>
-          <Text style={styles.primaryText}>选择视频并压缩</Text>
+      <FlatList
+        horizontal
+        data={albums}
+        keyExtractor={(album) => album.id ?? 'recent'}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.albums}
+        renderItem={renderAlbum}
+      />
+      <View style={styles.grid}>
+        {assets.map((asset) => (
+          <AssetItem
+            key={asset.id}
+            asset={asset}
+            active={selectedIds.has(asset.id)}
+            onToggle={toggleSelected}
+          />
+        ))}
+      </View>
+      <View style={styles.toolbar}>
+        <Pressable
+          style={styles.button}
+          onPress={nextPagePress}
+          disabled={nextOffset === null}
+        >
+          <Text style={styles.buttonText}>下一页</Text>
+        </Pressable>
+        <Pressable style={styles.primary} onPress={preparePress}>
+          <Text style={styles.primaryText}>准备所选 ({selected.length})</Text>
+        </Pressable>
+        {activeTask ? (
+          <Pressable style={styles.danger} onPress={cancelPress}>
+            <Text style={styles.primaryText}>取消任务</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <FlatList
+        horizontal
+        data={files}
+        keyExtractor={(file) => file.uri}
+        contentContainerStyle={styles.prepared}
+        renderItem={renderPrepared}
+      />
+      <View style={styles.toolbar}>
+        <Pressable style={styles.button} onPress={compressPress}>
+          <Text style={styles.buttonText}>压缩首项</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={savePress}>
+          <Text style={styles.buttonText}>保存</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={sharePress}>
+          <Text style={styles.buttonText}>分享</Text>
+        </Pressable>
+        <Pressable style={styles.danger} onPress={clearPress}>
+          <Text style={styles.primaryText}>清理</Text>
         </Pressable>
       </View>
       <View style={styles.result}>
-        <Text style={styles.resultTitle}>{busy ? '处理中' : '结果摘要'}</Text>
+        <Text style={styles.resultTitle}>{busy ? '处理中' : '结果'}</Text>
         <Text selectable style={styles.resultText}>
           {result}
         </Text>
       </View>
+      <MediaCamera
+        visible={Boolean(cameraType)}
+        type={cameraType ?? 'image'}
+        onCapture={handleCapture}
+        onClose={() => setCameraType(undefined)}
+      />
+      <Preview file={preview} onClose={() => setPreview(undefined)} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f3f4f6' },
-  content: { padding: 16, gap: 14, paddingBottom: 48 },
-  section: { backgroundColor: '#fff', borderRadius: 8, padding: 16, gap: 12 },
-  title: { color: '#111827', fontSize: 17, fontWeight: '700' },
-  label: { color: '#4b5563', fontSize: 13 },
-  field: { gap: 6 },
-  input: {
-    minHeight: 42,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    color: '#111827',
-    backgroundColor: '#fff',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  segments: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  segment: {
-    minHeight: 36,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-  },
-  segmentActive: { borderColor: '#15803d', backgroundColor: '#ecfdf5' },
-  segmentText: { color: '#4b5563' },
-  segmentTextActive: { color: '#166534', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 10 },
+  screen: { flex: 1, backgroundColor: '#f4f4f5' },
+  content: { padding: 16, paddingBottom: 48, gap: 14 },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primary: {
     minHeight: 42,
-    paddingHorizontal: 16,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#15803d',
+    paddingHorizontal: 14,
     borderRadius: 6,
+    backgroundColor: '#166534',
   },
   primaryText: { color: '#fff', fontWeight: '600' },
-  secondary: {
+  button: {
     minHeight: 42,
-    paddingHorizontal: 16,
-    alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#15803d',
+    paddingHorizontal: 14,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#71717a',
+    backgroundColor: '#fff',
   },
-  secondaryText: { color: '#166534', fontWeight: '600' },
-  result: { backgroundColor: '#111827', borderRadius: 8, padding: 16, gap: 8 },
-  resultTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  resultText: { color: '#e5e7eb', lineHeight: 21 },
+  buttonText: { color: '#27272a', fontWeight: '600' },
+  danger: {
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    backgroundColor: '#b91c1c',
+  },
+  albums: { gap: 8 },
+  album: {
+    paddingHorizontal: 12,
+    minHeight: 36,
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#e4e4e7',
+  },
+  activeAlbum: { backgroundColor: '#bbf7d0' },
+  albumText: { color: '#27272a' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  asset: {
+    width: '31.5%',
+    aspectRatio: 1,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  activeAsset: { borderColor: '#15803d' },
+  thumbnail: { width: '100%', height: '100%' },
+  assetType: {
+    position: 'absolute',
+    right: 4,
+    bottom: 4,
+    color: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 4,
+    fontSize: 11,
+  },
+  prepared: { gap: 8 },
+  file: { width: 132, gap: 5 },
+  fileImage: { width: 132, height: 96, borderRadius: 6 },
+  fileText: { color: '#3f3f46', fontSize: 12 },
+  result: { padding: 14, borderRadius: 8, backgroundColor: '#18181b', gap: 6 },
+  resultTitle: { color: '#fff', fontWeight: '700' },
+  resultText: { color: '#e4e4e7' },
+  preview: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+  previewMedia: { width: '100%', height: '100%' },
+  previewClose: { position: 'absolute', top: 48, right: 20, padding: 12 },
+  previewCloseText: { color: '#fff', fontWeight: '700' },
 });

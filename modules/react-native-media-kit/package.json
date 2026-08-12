@@ -1,0 +1,44 @@
+{
+  "name": "react-native-media-kit",
+  "version": "0.1.0",
+  "description": "UI-free media workflows for Expo applications.",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo-file-system": "catalog:",
+    "expo-media-library": "catalog:",
+    "expo-sharing": "catalog:",
+    "react-native-nitro-compressor": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "media"
+  ],
+  "license": "MIT",
+  "private": true
+}

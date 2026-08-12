@@ -35,6 +35,7 @@
     "react-modal-sheet": "^5.6.0",
     "react-native": "catalog:",
     "react-native-components": "workspace:*",
+    "react-native-media-kit": "workspace:*",
     "react-native-nitro-compressor": "workspace:*",
     "react-native-css-interop": "0.2.6",
     "react-native-diagnostics": "workspace:*",
