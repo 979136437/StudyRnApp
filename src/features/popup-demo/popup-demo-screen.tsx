@@ -1,3 +1,4 @@
+/* Legacy demo retained as inactive source during the popup-kit rewrite.
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import {
@@ -123,3 +124,5 @@ export function PopupDemoScreen(): React.JSX.Element {
     </ScrollView>
   );
 }
+*/
+export { PopupDemoScreen } from './popup-test-screen';

@@ -1,40 +1,34 @@
 # react-native-popup-kit
 
-项目内统一的 Popup、Toast、Loading 与 Modal 能力。模块提供全局 API、局部 Provider 和作用域 hooks。
+基于 React Native `Modal` 与 Reanimated 的层叠及 FIFO 弹窗管理器。
 
 ```tsx
 import {
+  PopupDisplayMode,
+  PopupMode,
   PopupProvider,
-  closePopup,
-  showModal,
-  useToast,
+  hidePopup,
+  showPopup,
+  usePopup,
 } from 'react-native-popup-kit';
 
-const task = showModal({ content: '确认继续？', title: '提示' });
-closePopup(task.id);
+<PopupProvider>{children}</PopupProvider>;
 
-function LocalArea({ children }: React.PropsWithChildren) {
-  return <PopupProvider scope="local">{children}</PopupProvider>;
-}
+const id = await showPopup({
+  children: <Content />,
+  displayMode: PopupDisplayMode.STACK,
+  mode: PopupMode.CENTER,
+  popupStyle: { backgroundColor: '#fff' },
+  overlayStyle: { backgroundColor: 'rgba(0, 0, 0, 0.5)' },
+  overlayContent: <CustomOverlay />,
+});
+await hidePopup(id);
 ```
 
-全局展示 API 需要根级 `PopupProvider scope="global"`。hooks 默认操作最近的 Provider；`closePopup` 与 `closeAllPopups` 可跨作用域关闭实例。
+`overlayContent` 只负责视觉内容，不接管触摸事件；遮罩点击关闭仍由 popup-kit 控制。可以按需传入项目已有的 `BlurView`，未传入时继续使用默认半透明遮罩。
 
-所有可见弹窗都会铺满根渲染宿主并拦截底层交互。局部 Provider 仍维护独立作用域，但其渲染层会提升到最近的根宿主，避免被局部容器或滚动区域裁切。`mask` 只控制遮罩颜色是否可见；即使设为 `false`，透明拦截层仍会阻止触摸穿透。
+`displayMode` 默认为 `PopupDisplayMode.QUEUE`，按 FIFO 顺序展示。父子弹窗或必须立即覆盖当前弹窗时，显式使用 `PopupDisplayMode.STACK`；多个 stack 按调用时间排序，最后调用者位于最上层。
 
-Toast 与 Loading 不提供 `mask` 参数，始终不显示背景遮罩，但显示期间仍会阻止页面操作。
+公开的 `PopupDisplayMode` 与 `PopupMode` 字面量对象用于避免业务代码散落字符串，同时仍兼容直接传入原有字符串值。
 
-每种展示 API 都可通过 `component` 覆盖默认内容组件，视觉配置跟随当前调用，不依赖全局 Theme：
-
-```tsx
-import { Text } from 'react-native';
-import { showToast, type ToastComponentProps } from 'react-native-popup-kit';
-
-function SavedToast({ options }: ToastComponentProps) {
-  return <Text>{options.title}</Text>;
-}
-
-showToast({ title: '已保存', component: SavedToast });
-```
-
-Toast、Loading 和 Modal 中用于展示的 `title`、`content`、`cancelText`、`confirmText` 均支持 `ReactNode`。传入字符串或数字时使用默认文字样式，传入组件时保留组件自身结构与样式。
+模块级 API 控制最外层 `PopupProvider`。嵌套 `PopupProvider` 会创建独立的局部管理域，其后代通过 `usePopup()` 获取局部控制器。每个 Provider 的 queue 只显示队首，stack 会立即显示；不同 Provider 之间互不阻塞。

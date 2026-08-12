@@ -1,3 +1,4 @@
+/* Legacy demo retained as inactive source during the popup-kit rewrite.
 import { Text, View } from 'react-native';
 import type { PopupComponentProps } from 'react-native-popup-kit';
 
@@ -15,3 +16,5 @@ export function BottomPopupExample({
     </View>
   );
 }
+*/
+export {};

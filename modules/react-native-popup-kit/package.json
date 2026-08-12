@@ -1,7 +1,7 @@
 {
   "name": "react-native-popup-kit",
-  "version": "0.1.0",
-  "description": "Scoped popup, toast, loading, and modal APIs for React Native.",
+  "version": "1.0.0",
+  "description": "Stacked and queued global and local popup management for React Native.",
   "main": "src/index.ts",
   "module": "src/index.ts",
   "types": "src/index.ts",
@@ -28,27 +28,23 @@
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-reanimated": "catalog:",
-    "react-native-safe-area-context": "catalog:",
     "react-native-worklets": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
-    "@types/react-test-renderer": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-reanimated": "catalog:",
-    "react-native-safe-area-context": "catalog:",
     "react-native-worklets": "catalog:",
-    "react-test-renderer": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "keywords": [
     "react-native",
+    "modal",
     "popup",
-    "toast",
-    "loading",
-    "modal"
+    "queue",
+    "stack"
   ],
   "license": "MIT",
   "private": true

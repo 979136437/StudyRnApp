@@ -1,27 +1,12 @@
 import { use } from 'react';
 
-import type { LoadingApi, ModalApi, PopupApi, ToastApi } from '../types';
-import { PopupContext } from './context';
+import type { PopupController } from '../types';
+import { PopupContext } from './popup-context';
 
-export function usePopup(): PopupApi {
-  const api = use(PopupContext);
-  if (api === null) {
-    throw new Error('usePopup 必须在 PopupProvider 内使用');
+export function usePopup(): PopupController {
+  const context = use(PopupContext);
+  if (context === null) {
+    throw new Error('usePopup must be used inside PopupProvider.');
   }
-  return api;
-}
-
-export function useToast(): ToastApi {
-  const api = usePopup();
-  return { showToast: api.showToast, hideToast: api.hideToast };
-}
-
-export function useLoading(): LoadingApi {
-  const api = usePopup();
-  return { showLoading: api.showLoading, hideLoading: api.hideLoading };
-}
-
-export function useModal(): ModalApi {
-  const api = usePopup();
-  return { showModal: api.showModal };
+  return context.controller;
 }

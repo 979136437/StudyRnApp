@@ -1,1 +1,1 @@
-export { PopupDemoScreen } from './popup-demo-screen';
+export { PopupDemoScreen } from './popup-test-screen';

@@ -30,7 +30,7 @@ function RootProviders({ children }: PropsWithChildren) {
           <MediaCacheProvider strategy={mediaCacheStrategy} defaultEnabled>
             <RequestProvider request={request}>
               <KeyboardProvider>
-                <PopupProvider scope="global">{children}</PopupProvider>
+                <PopupProvider>{children}</PopupProvider>
               </KeyboardProvider>
             </RequestProvider>
           </MediaCacheProvider>
