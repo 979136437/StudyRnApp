@@ -51,6 +51,7 @@
     "react-native-pager-view": "8.0.2",
     "react-native-popover-view": "^6.1.0",
     "react-native-popup-kit": "workspace:*",
+    "react-native-responsive-units": "workspace:*",
     "react-native-reanimated": "catalog:",
     "react-native-reanimated-carousel": "catalog:",
     "react-native-reanimated-dnd": "^2.0.0",
@@ -97,6 +98,7 @@
     "run:ios": "expo run:ios --device",
     "postinstall": "pnpm doctor",
     "reInstall": "rimraf node_modules && rimraf pnpm-lock.yaml && pnpm install",
+    "reStart": "pnpm reInstall && pnpm start:clean",
     "react-doctor": "npx react-doctor@latest"
   },
   "private": true,

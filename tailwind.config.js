@@ -4,7 +4,7 @@ import { components } from './plugins/tailwindcss';
 module.exports = {
   content: [
     './src/**/*.{js,jsx,ts,tsx}',
-    './modules/react-native-components/src/**/*.{js,jsx,ts,tsx}',
+    './modules/**/src/**/*.{js,jsx,ts,tsx}',
   ],
   presets: [require('nativewind/preset')],
   theme: {
