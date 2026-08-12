@@ -7,6 +7,7 @@ import {
   DEFAULT_CONFIRM_TEXT,
   resolveModalAction,
 } from '../modal/modal-options';
+import { resolveModalCustomContent } from '../modal/modal-render';
 import type { ModalOptions } from '../modal/types';
 
 interface DefaultModalProps {
@@ -27,9 +28,11 @@ export function DefaultModal({
   options,
 }: DefaultModalProps): React.ReactNode {
   const [confirming, setConfirming] = useState(false);
-  const confirmation = useRef(
-    createModalConfirmationController(options),
-  ).current;
+  const confirmationRef = useRef<
+    ReturnType<typeof createModalConfirmationController> | undefined
+  >(undefined);
+  confirmationRef.current ??= createModalConfirmationController(options);
+  const confirmation = confirmationRef.current;
   const confirm = resolveModalAction(options.confirm, DEFAULT_CONFIRM_TEXT);
   const cancel = resolveModalAction(options.cancel, DEFAULT_CANCEL_TEXT);
 
@@ -49,26 +52,15 @@ export function DefaultModal({
     void close();
   }, [close, confirmation]);
 
-  const footer = options.footerRender?.({
-    cancel,
-    confirm,
-    confirming,
-    onCancel,
-    onConfirm,
-  });
-  const renderedModal = options.render?.({
+  const customContent = resolveModalCustomContent(options, {
     cancel,
     close,
     confirm,
     confirming,
-    content: options.content,
     onCancel,
     onConfirm,
-    showCancel: options.showCancel ?? true,
-    title: options.title,
   });
-
-  if (options.render !== undefined) return renderedModal;
+  if (customContent.kind === 'modal') return customContent.node;
 
   return (
     <View accessibilityViewIsModal style={styles.root}>
@@ -104,7 +96,7 @@ export function DefaultModal({
           </Pressable>
         </View>
       ) : (
-        footer
+        customContent.node
       )}
     </View>
   );

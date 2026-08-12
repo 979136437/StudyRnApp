@@ -26,7 +26,7 @@ export class PopupStore<T> {
   private stack: PopupItem<T>[] = [];
   private closingIds = new Set<string>();
   private listeners = new Set<Listener>();
-  private pendingHide = new Map<string, Array<() => void>>();
+  private pendingHide = new Map<string, (() => void)[]>();
   private disposed = false;
   private snapshot: PopupStoreSnapshot<T> = {
     closingIds: EMPTY_CLOSING_IDS,

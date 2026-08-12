@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 
 import {
@@ -32,55 +26,74 @@ function getControllerKey(controller: InternalPopupController): number {
   return nextControllerKey;
 }
 
-interface StoreObserverProps {
-  controller: InternalPopupController;
-  onSnapshot(
-    controller: InternalPopupController,
-    snapshot: PopupStoreSnapshot<ResolvedPopupOptions> | null,
-  ): void;
+interface ControllerSnapshotSource {
+  getSnapshot(): readonly PopupStoreSnapshot<ResolvedPopupOptions>[];
+  subscribe(listener: () => void): () => void;
 }
 
-function StoreObserver({
-  controller,
-  onSnapshot,
-}: StoreObserverProps): React.JSX.Element | null {
-  const snapshot = useSyncExternalStore(
-    controller.store.subscribe,
-    controller.store.getSnapshot,
-    controller.store.getSnapshot,
+function createControllerSnapshotSource(
+  controllers: readonly InternalPopupController[],
+): ControllerSnapshotSource {
+  let snapshot = controllers.map((controller) =>
+    controller.store.getSnapshot(),
   );
+  const listeners = new Set<() => void>();
+  let unsubscribers: (() => void)[] = [];
 
-  useEffect(() => {
-    onSnapshot(controller, snapshot);
-    return () => onSnapshot(controller, null);
-  }, [controller, onSnapshot, snapshot]);
+  const update = (): void => {
+    const next = controllers.map((controller) =>
+      controller.store.getSnapshot(),
+    );
+    if (
+      next.length === snapshot.length &&
+      next.every((value, index) => value === snapshot[index])
+    )
+      return;
+    snapshot = next;
+    for (const listener of listeners) listener();
+  };
 
-  return null;
+  return {
+    getSnapshot: () => snapshot,
+    subscribe(listener): () => void {
+      listeners.add(listener);
+      if (listeners.size === 1) {
+        unsubscribers = controllers.map((controller) =>
+          controller.store.subscribe(update),
+        );
+        update();
+      }
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size > 0) return;
+        for (const unsubscribe of unsubscribers) unsubscribe();
+        unsubscribers = [];
+      };
+    },
+  };
 }
 
 export function PopupHost({ controllers }: PopupHostProps): React.JSX.Element {
-  const [snapshots, setSnapshots] = useState(
-    () =>
-      new Map<
-        InternalPopupController,
-        PopupStoreSnapshot<ResolvedPopupOptions>
-      >(),
+  const snapshotSource = useMemo(
+    () => createControllerSnapshotSource(controllers),
+    [controllers],
   );
-
-  const updateSnapshot = useCallback<StoreObserverProps['onSnapshot']>(
-    (controller, snapshot) => {
-      setSnapshots((current) => {
-        if (snapshot !== null && current.get(controller) === snapshot) {
-          return current;
-        }
-        const next = new Map(current);
-        if (snapshot === null) next.delete(controller);
-        else next.set(controller, snapshot);
-        return next;
-      });
-    },
-    [],
+  const controllerSnapshots = useSyncExternalStore(
+    snapshotSource.subscribe,
+    snapshotSource.getSnapshot,
+    snapshotSource.getSnapshot,
   );
+  const snapshots = useMemo(() => {
+    const next = new Map<
+      InternalPopupController,
+      PopupStoreSnapshot<ResolvedPopupOptions>
+    >();
+    controllers.forEach((controller, index) => {
+      const snapshot = controllerSnapshots[index];
+      if (snapshot !== undefined) next.set(controller, snapshot);
+    });
+    return next;
+  }, [controllerSnapshots, controllers]);
 
   const activeLayers = useMemo(
     () => getActivePopupLayers(controllers, snapshots),
@@ -90,13 +103,6 @@ export function PopupHost({ controllers }: PopupHostProps): React.JSX.Element {
 
   return (
     <>
-      {controllers.map((controller) => (
-        <StoreObserver
-          controller={controller}
-          key={getControllerKey(controller)}
-          onSnapshot={updateSnapshot}
-        />
-      ))}
       {activeLayers.length === 0 ? null : (
         <Modal
           animationType="none"

@@ -1,4 +1,11 @@
-import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  use,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import { registerGlobalPopupController } from '../api/popup-api';
 import { PopupHost } from '../components/PopupHost';
@@ -40,11 +47,18 @@ export function PopupProvider({
     [controller, rootRegisterController],
   );
 
+  useLayoutEffect(() => {
+    if (parentContext !== null) return;
+    const unregister = registerGlobalPopupController(controller);
+    return () => {
+      unregister();
+      controller.dispose();
+    };
+  }, [controller, parentContext]);
+
   useEffect(() => {
-    const unregister =
-      parentContext === null
-        ? registerGlobalPopupController(controller)
-        : parentContext.registerController(controller);
+    if (parentContext === null) return;
+    const unregister = parentContext.registerController(controller);
     return () => {
       unregister();
       controller.dispose();

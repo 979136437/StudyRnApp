@@ -4,10 +4,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'modules/react-native-popup-kit/src/core/**/*.test.ts',
-      'modules/react-native-popup-kit/src/components/**/*.test.ts',
-      'modules/react-native-popup-kit/src/modal/**/*.test.ts',
-      'modules/react-native-popup-kit/src/toast/**/*.test.ts',
+      'src/api/**/*.test.ts',
+      'src/api/**/*.test.tsx',
+      'src/core/**/*.test.ts',
+      'src/components/**/*.test.ts',
+      'src/modal/**/*.test.ts',
+      'src/toast/**/*.test.ts',
     ],
   },
 });
