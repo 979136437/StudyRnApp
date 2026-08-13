@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import {
   height,
-  px2dp,
   rpx,
   useResponsiveUpdate,
   width,
@@ -123,7 +122,7 @@ export function ResponsiveUnitsTestScreen(): React.JSX.Element {
   const viewportWidth = width(1);
   const viewportHeight = height(1);
   const convertedRpx = rpx(designValue);
-  const convertedPx2dp = px2dp(designValue);
+  const convertedPx2dp = rpx(designValue);
   const selectedWidth = width(widthRatio);
   const selectedHeight = height(heightRatio);
 
